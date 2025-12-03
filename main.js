@@ -5,7 +5,7 @@ const isProd = process.env.APP_ENV === 'production';
 
 const appUrl = isProd 
     ? 'https://sonacove.com/meet' 
-    : 'https://sonacove.catfurr.workers.dev/meet';
+    : 'https://a6eb6923-sona-app.catfurr.workers.dev/meet';
 
 console.log(`🚀 Launching in [${isProd ? 'PRODUCTION' : 'STAGING'}] mode.`);
 console.log(`🔗 Loading: ${appUrl}`);
