@@ -6,10 +6,14 @@ To install dependencies:
 bun install
 ```
 
-To run:
+To build the .exe
 
 ```bash
-bun run index.ts
+bun run dist
 ```
+
+This will create a `dist` folder containing `Sonacove Meet Setup 1.0.0.exe`.
+
+------
 
 This project was created using `bun init` in bun v1.3.4. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
