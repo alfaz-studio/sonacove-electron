@@ -1,18 +1,32 @@
 {
-  "name": "sonacove-electron",
-  "version": "1.0.0",
+  "name": "sonacove-meets",
+  "version": "1.0.1",
+  "description": "Sonacove Meeting App",
   "main": "main.js",
+  "author": "Alfaz Studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alfaz-studio/sonacove-electron.git"
+  },
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "build": "electron-builder",
+    "deploy": "electron-builder --publish always"
   },
   "build": {
     "appId": "com.sonacove.meet",
-    "productName": "Sonacove Meet",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "alfaz-studio",
+        "repo": "sonacove-electron"
+      }
+    ],
     "win": {
-      "target": "nsis",
-      "icon": "icon.ico"
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
     }
   },
   "devDependencies": {
@@ -20,6 +34,8 @@
     "electron-builder": "^25.0.0"
   },
   "dependencies": {
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2"
   }
 }
