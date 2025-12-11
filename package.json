@@ -1,6 +1,7 @@
 {
   "name": "sonacove-meets",
-  "version": "1.0.1",
+  "productName": "Sonacove Meet",  
+  "version": "1.0.2",
   "description": "Sonacove Meeting App",
   "main": "main.js",
   "author": "Alfaz Studio",
@@ -15,7 +16,9 @@
   },
   "build": {
     "appId": "com.sonacove.meet",
-    "icon": "build/icon.ico",
+    "directories": {
+      "buildResources": "build"
+    },
     "publish": [
       {
         "provider": "github",
@@ -23,14 +26,13 @@
         "repo": "sonacove-electron"
       }
     ],
-    "directories": {
-      "buildResources": "build"
-    },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "build/icon.icns"
     }
   },
   "devDependencies": {
