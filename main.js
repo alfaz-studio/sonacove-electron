@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, shell, desktopCapturer, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
+const path = require('path')
 require('dotenv').config();
 
 autoUpdater.logger = log;
@@ -9,17 +10,26 @@ log.info('App starting...');
 
 const isProd = (process.env.APP_ENV || 'production') === 'production';
 
+if (!isProd) {
+    app.commandLine.appendSwitch('ignore-certificate-errors');
+    app.commandLine.appendSwitch('allow-insecure-localhost');
+}
+
+
 const URLS = {
     production: {
         landing: 'https://sonacove.com/meet',
-        allowedHosts: ['sonacove.com'] 
+        allowedHosts: [
+            'sonacove.com',
+            'auth.sonacove.com'
+        ] 
     },
     staging: {
-        landing: 'https://dfd2a4f8-sonacove.catfurr.workers.dev/dashboard-demo',
-        meetRoot: 'https://a6eb6923-sona-app.catfurr.workers.dev',
+        landing: 'https://646e861a-sonacove.catfurr.workers.dev/dashboard-demo',
+        meetRoot: 'https://d973e338-sona-app.catfurr.workers.dev',
         allowedHosts: [
-            'dfd2a4f8-sonacove.catfurr.workers.dev', 
-            'a6eb6923-sona-app.catfurr.workers.dev',
+            '646e861a-sonacove.catfurr.workers.dev', 
+            'd973e338-sona-app.catfurr.workers.dev',
             'staj.sonacove.com'
         ]
     }
@@ -50,11 +60,13 @@ function createWindow() {
         height: 720,
         title: "Sonacove Meet",
         autoHideMenuBar: true,
+        icon: path.join(__dirname, 'build', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: true,
-        }
+        },
+        partition: 'persist:sonacove' 
     });
 
     mainWindow.setMenu(null);
