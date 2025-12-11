@@ -1,7 +1,7 @@
 {
   "name": "sonacove-meets",
   "productName": "Sonacove Meet",  
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Sonacove Meeting App",
   "main": "main.js",
   "author": "Alfaz Studio",
@@ -23,7 +23,8 @@
       {
         "provider": "github",
         "owner": "alfaz-studio",
-        "repo": "sonacove-electron"
+        "repo": "sonacove-electron",
+        "releaseType": "release"
       }
     ],
     "win": {
