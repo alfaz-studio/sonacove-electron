@@ -1,7 +1,7 @@
 {
   "name": "sonacove-meets",
   "productName": "Sonacove Meet",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Sonacove Meeting App",
   "main": "main.js",
   "author": "Alfaz Studio",
@@ -29,42 +29,42 @@
         "releaseType": "release"
       }
     ],
-  "win": {
-    "target": "nsis",
-    "icon": "build/icon.ico",
-    "artifactName": "${productName}-Setup.${ext}"
-  },
-  "mac": {
-    "target": "dmg",
-    "icon": "build/icon.icns",
-    "artifactName": "${productName}.${ext}" 
-  },
-  "dmg": {
-    "contents": [
-      {
-        "x": 130,
-        "y": 220
-      },
-      {
-        "x": 410,
-        "y": 220,
-        "type": "link",
-        "path": "/Applications"
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-Setup.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns",
+      "artifactName": "${productName}.${ext}"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
       }
-    ],
-    "window": {
-      "width": 540,
-      "height": 380
-    }
-  },
-  "protocols": [
+    },
+    "protocols": [
       {
         "name": "Sonacove Meet Protocol",
         "schemes": [
-          "sonacove" 
+          "sonacove"
         ]
       }
-  ]
+    ]
   },
   "devDependencies": {
     "electron": "^33.0.0",
