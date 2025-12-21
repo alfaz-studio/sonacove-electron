@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('jitsiNodeAPI', {
     ipc: {
         send: (channel, data, options) => {
-            const validChannels = ['toggle-annotation', 'set-ignore-mouse-events'];
+            const validChannels = ['toggle-annotation', 'set-ignore-mouse-events', 'nav-to-home'];
             if (validChannels.includes(channel)) {
                 ipcRenderer.send(channel, data, options);
             }

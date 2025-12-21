@@ -78,6 +78,28 @@ function setupNavigation(win) {
     const handleNav = (url, event) => {
         const parsedUrl = new URL(url);
 
+
+        // Redirect to new Dashboard close page
+        if (parsedUrl.pathname.includes('/static/close')) {
+            if (event) event.preventDefault();
+
+            const landingUrl = new URL(currentConfig.landing);
+            
+            // Remove trailing slash if present on landing pathname
+            const basePath = landingUrl.pathname.endsWith('/') 
+                ? landingUrl.pathname.slice(0, -1) 
+                : landingUrl.pathname;
+                
+            const closePageUrl = `${landingUrl.origin}${basePath}/close`;
+
+            console.log(`🔀 Hangup Detected. Redirecting to: ${closePageUrl}`);
+
+            setImmediate(() => {
+                win.loadURL(closePageUrl);
+            });
+            return 'redirected';
+        }
+
         if (!isProd && parsedUrl.pathname.startsWith('/meet')) {
             if (parsedUrl.hostname !== new URL(currentConfig.meetRoot).hostname) {
                 if (event) event.preventDefault();
