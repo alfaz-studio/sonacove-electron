@@ -14,7 +14,7 @@
     "build": "electron-builder",
     "build:staging": "electron-builder --config.extraMetadata.appEnv=staging",
     "build:prod": "electron-builder --config.extraMetadata.appEnv=production",
-    "deploy": "electron-builder --config.extraMetadata.appEnv=staging --publish always"
+    "deploy": "electron-builder --config.extraMetadata.appEnv=production --publish always"
   },
   "build": {
     "appId": "com.sonacove.meet",
