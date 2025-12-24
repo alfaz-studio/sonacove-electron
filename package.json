@@ -1,7 +1,7 @@
 {
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Sonacove Meeting App",
   "main": "main.js",
   "author": "Alfaz Studio",
@@ -37,7 +37,11 @@
     "mac": {
       "target": "dmg",
       "icon": "build/icon.icns",
-      "artifactName": "${productName}.${ext}"
+      "artifactName": "${productName}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
       "contents": [
