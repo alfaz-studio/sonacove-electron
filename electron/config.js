@@ -17,11 +17,11 @@ const URLS = {
     },
     staging: {
         landing: 'https://sonacove.catfurr.workers.dev/dashboard',
-        meetRoot: 'https://e87c09f6-sona-app.catfurr.workers.dev',
+        meetRoot: 'https://ad60ea0a-sona-app.catfurr.workers.dev',
         // meetRoot: 'https://localhost:5173',
         allowedHosts: [
             'sonacove.catfurr.workers.dev',
-            'e87c09f6-sona-app.catfurr.workers.dev',
+            'ad60ea0a-sona-app.catfurr.workers.dev',
             'staj.sonacove.com',
             'localhost'
         ]
