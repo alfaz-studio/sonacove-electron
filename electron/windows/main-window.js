@@ -96,8 +96,14 @@ function setupNavigation(win) {
     const handleNav = (url, event) => {
         const parsedUrl = new URL(url);
 
+        // If navigating to the Auth domain, open in browser
+        if (parsedUrl.hostname === currentConfig.authHost) {
+            console.log(`🔐 Auth URL detected. Opening in browser: ${url}`);
+            if (event) event.preventDefault();
+            shell.openExternal(url);
+            return 'deny';
+        }
 
-        // Redirect to new Dashboard close page
         if (parsedUrl.pathname.includes('/static/close')) {
             if (event) event.preventDefault();
 

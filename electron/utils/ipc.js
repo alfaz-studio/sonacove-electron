@@ -1,4 +1,4 @@
-const { ipcMain, BrowserWindow } = require('electron');
+const { ipcMain, BrowserWindow, shell } = require('electron');
 const { getMainWindow } = require('../windows/main-window');
 const { toggleOverlay } = require('../windows/overlay-window');
 const { currentConfig } = require('../config'); 
@@ -18,6 +18,12 @@ function setupIpcHandlers() {
         if (win) {
             win.setIgnoreMouseEvents(ignore, { forward: true });
         }
+    });
+
+    // Open External URL
+    ipcMain.on('open-external', (event, url) => {
+        console.log(`🌍 Opening external URL: ${url}`);
+        shell.openExternal(url);
     });
 
     // Home Navigation

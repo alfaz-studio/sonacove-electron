@@ -45,6 +45,26 @@ function processDeepLinkOnStartup() {
 function navigateDeepLink(deepLink) {
     console.log("🔗 Received Deep Link:", deepLink);
 
+    // Check if this is an Auth Callback
+    if (deepLink.includes('auth-callback')) {
+        handleAuthCallback(deepLink);
+        return;
+    }
+
+if (deepLink.includes('logout-callback')) {
+        const win = getMainWindow();
+        if (win) {
+            console.log("📤 Sending 'auth-logout-complete' to renderer");
+            
+            if (win.isMinimized()) win.restore();
+            win.focus();
+
+            setTimeout(() => {
+                win.webContents.send('auth-logout-complete');
+            }, 500);
+        }
+        return;
+    }
     try {
         let rawPath = deepLink.replace('sonacove://', '');
         
@@ -64,6 +84,29 @@ function navigateDeepLink(deepLink) {
         }
     } catch (error) {
         console.error("❌ Error parsing deep link:", error);
+    }
+}
+
+function handleAuthCallback(deepLink) {
+    try {
+        const urlObj = new URL(deepLink.replace('sonacove://', 'https://')); // Hack to use URL parser
+        const payload = urlObj.searchParams.get('payload');
+        
+        if (payload) {
+            const user = JSON.parse(decodeURIComponent(payload));
+            const win = getMainWindow();
+            
+            if (win) {
+                // Send tokens to Renderer to save in LocalStorage
+                win.webContents.send('auth-token-received', user);
+                
+                // Focus the window
+                if (win.isMinimized()) win.restore();
+                win.focus();
+            }
+        }
+    } catch (e) {
+        console.error("Auth Parsing Error", e);
     }
 }
 
