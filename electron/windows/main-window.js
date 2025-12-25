@@ -1,4 +1,4 @@
-const { BrowserWindow, shell, desktopCapturer} = require('electron');
+const { BrowserWindow, dialog, shell, desktopCapturer } = require('electron');
 const path = require('path');
 const { isProd, currentConfig } = require('../config');
 
@@ -37,6 +37,24 @@ function createMainWindow(onClose) {
     mainWindow.loadURL(currentConfig.landing);
 
     if (!isProd) mainWindow.webContents.openDevTools();
+
+    mainWindow.webContents.on('will-prevent-unload', (event) => {
+        const choice = dialog.showMessageBoxSync(mainWindow, {
+            type: 'question',
+            buttons: ['Leave', 'Stay'],
+            title: 'Leave Meeting?',
+            message: 'You are currently in a meeting. Are you sure you want to quit?',
+            defaultId: 0,
+            cancelId: 1
+        });
+
+        const leave = (choice === 0);
+        
+        if (leave) {
+            // User clicked 'Leave'. 
+            event.preventDefault();
+        }
+    });
 
     // --- Permissions & Screen Share ---
     setupPermissions();

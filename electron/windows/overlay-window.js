@@ -25,12 +25,16 @@ function toggleOverlay(mainWindow, data) {
     const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
     const { x, y, width, height } = currentScreen.bounds;
 
+    // Detect Mac
+    const isMac = process.platform === 'darwin';
+
     annotationWindow = new BrowserWindow({
         x, y, width, height,
         transparent: true,
         frame: false,
         alwaysOnTop: true,
         hasShadow: false,
+        simpleFullscreen: isMac,
         fullscreen: false, // False to respect taskbar z-index
         resizable: false,
         skipTaskbar: true, // Key for "Single App" feel
@@ -43,8 +47,12 @@ function toggleOverlay(mainWindow, data) {
         }
     });
 
-    // Windows Fix: Ensure it stays on top of taskbar
-    annotationWindow.setAlwaysOnTop(true, "screen-saver");
+    if (!isMac) {
+        annotationWindow.setAlwaysOnTop(true, "screen-saver");
+    } else {
+        annotationWindow.setAlwaysOnTop(true, "floating");
+        annotationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    }
 
     // Construct URL
     const joinUrl = new URL(roomUrl);

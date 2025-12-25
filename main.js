@@ -1,4 +1,4 @@
-const { app } = require('electron');
+const { app, Menu } = require('electron');
 const log = require('electron-log');
 
 const { isProd } = require('./electron/config');
@@ -15,6 +15,8 @@ const { createMainWindow, getMainWindow } = require('./electron/windows/main-win
 const { closeOverlay } = require('./electron/windows/overlay-window');
 
 log.info('App starting...');
+
+Menu.setApplicationMenu(null); // disable default menu
 
 // --- GLOBAL SETTINGS ---
 if (!isProd) {
