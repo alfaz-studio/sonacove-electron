@@ -8,7 +8,7 @@ function createMainWindow(onClose) {
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 720,
-        title: "Sonacove Meet",
+        title: "Sonacove Meets",
         autoHideMenuBar: true,
         icon: path.join(__dirname, '../../build/icon.png'),
         webPreferences: {

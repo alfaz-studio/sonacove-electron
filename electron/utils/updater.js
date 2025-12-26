@@ -19,7 +19,7 @@ function initUpdater() {
         dialog.showMessageBox({
             type: 'info',
             title: 'Update Ready',
-            message: 'A new version of Sonacove Meet has been downloaded. Quit and install now?',
+            message: 'A new version of Sonacove Meets has been downloaded. Quit and install now?',
             buttons: ['Yes', 'Later']
         }).then((result) => {
             if (result.response === 0) {
