@@ -35,7 +35,10 @@
       "artifactName": "${productName}-Setup.${ext}"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.icns",
       "artifactName": "${productName}.${ext}",
       "hardenedRuntime": true,

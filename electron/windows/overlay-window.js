@@ -34,15 +34,17 @@ function toggleOverlay(mainWindow, data) {
         frame: false,
         alwaysOnTop: true,
         hasShadow: false,
-        simpleFullscreen: isMac,
-        fullscreen: false, // False to respect taskbar z-index
+        simpleFullscreen: false, 
+        enableLargerThanScreen: true,
+        roundedCorners: false,
+        type: isMac ? 'panel' : 'toolbar', 
+        fullscreen: false,
         resizable: false,
-        skipTaskbar: true, // Key for "Single App" feel
+        skipTaskbar: true,
         icon: path.join(__dirname, '../../build/icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            // Adjust path relative to this file
             preload: path.join(__dirname, '../../preload.js'),
         }
     });
@@ -50,8 +52,10 @@ function toggleOverlay(mainWindow, data) {
     if (!isMac) {
         annotationWindow.setAlwaysOnTop(true, "screen-saver");
     } else {
-        annotationWindow.setAlwaysOnTop(true, "floating");
+        annotationWindow.setAlwaysOnTop(true, "screen-saver"); 
         annotationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        
+        annotationWindow.setBounds({ x, y, width, height });
     }
 
     // Construct URL
