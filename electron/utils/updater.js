@@ -10,6 +10,10 @@ function initUpdater() {
     
     autoUpdater.checkForUpdatesAndNotify();
 
+    autoUpdater.on('error', (err) => {
+        log.error('Updater Error:', err);
+    });
+
     autoUpdater.on('update-available', () => {
         log.info('Update available.');
     });
