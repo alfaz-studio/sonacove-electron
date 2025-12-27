@@ -51,6 +51,7 @@ function toggleOverlay(mainWindow, data) {
 
     if (!isMac) {
         annotationWindow.setAlwaysOnTop(true, "screen-saver");
+        annotationWindow.setBounds({ x, y, width, height });
     } else {
         annotationWindow.setAlwaysOnTop(true, "screen-saver"); 
         annotationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
