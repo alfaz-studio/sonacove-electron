@@ -19,7 +19,6 @@ const URLS = {
     staging: {
         meetRoot: ' https://73e97a54-sona-app.catfurr.workers.dev',
         landing: 'https://2a74eb17-sonacove.catfurr.workers.dev/dashboard',
-        // meetRoot: 'https://localhost:5173',
         authHost: 'staj.sonacove.com',
         allowedHosts: [
             'sonacove.catfurr.workers.dev',
