@@ -5,29 +5,38 @@ const {
     getPopupTarget,
     setupPictureInPictureMain,
     setupRemoteControlMain,
-    setupPowerMonitorMain,
-    setupScreenSharingMain
+    setupPowerMonitorMain
 } = require('@jitsi/electron-sdk');
 const {
     BrowserWindow,
     Menu,
     app,
-    ipcMain
+    ipcMain,
+    desktopCapturer,
+    dialog
 } = require('electron');
 const contextMenu = require('electron-context-menu');
-const debug = require('electron-debug');
 const isDev = require('electron-is-dev');
 const { autoUpdater } = require('electron-updater');
 const windowStateKeeper = require('electron-window-state');
 const path = require('path');
 const process = require('process');
-const URL = require('url');
+const nodeURL = require('url');
 
 const config = require('./app/features/config');
+const sonacoveConfig = require('./app/features/sonacove/config');
+const {
+    registerProtocol,
+    navigateDeepLink,
+    setupMacDeepLinkListener,
+    processDeepLinkOnStartup
+} = require('./app/features/sonacove/deep-link');
+const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
+const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
-const pkgJson = require('./package.json');
 
-const showDevTools = Boolean(process.env.SHOW_DEV_TOOLS) || (process.argv.indexOf('--show-dev-tools') > -1);
+
+registerProtocol();
 
 // For enabling remote control, please change the ENABLE_REMOTE_CONTROL flag in
 // app/features/conference/components/Conference.js to true as well
@@ -42,6 +51,11 @@ const disabledFeatures = [
 ];
 
 app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
+
+if (isDev) {
+    app.commandLine.appendSwitch('ignore-certificate-errors');
+    app.commandLine.appendSwitch('allow-insecure-localhost');
+}
 
 // Enable Opus RED field trial.
 app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-Audio-Red-For-Opus/Enabled/');
@@ -64,13 +78,6 @@ contextMenu({
     showSaveImageAs: false,
     showInspectElement: true,
     showServices: false
-});
-
-// Enable DevTools also on release builds to help troubleshoot issues. Don't
-// show them automatically though.
-debug({
-    isEnabled: true,
-    showDevTools
 });
 
 /**
@@ -190,13 +197,6 @@ function createJitsiMeetWindow() {
     // Path to root directory.
     const basePath = isDev ? __dirname : app.getAppPath();
 
-    // URL for index.html which will be our entry point.
-    const indexURL = URL.format({
-        pathname: path.resolve(basePath, './build/index.html'),
-        protocol: 'file:',
-        slashes: true
-    });
-
     // Options used when creating the main Jitsi Meet window.
     // Use a preload script in order to provide node specific functionality
     // to a isolated BrowserWindow in accordance with electron security
@@ -206,6 +206,7 @@ function createJitsiMeetWindow() {
         y: windowState.y,
         width: windowState.width,
         height: windowState.height,
+        title: 'Sonacove Meets',
         icon: path.resolve(basePath, './resources/icon.png'),
         minWidth: 800,
         minHeight: 600,
@@ -215,7 +216,8 @@ function createJitsiMeetWindow() {
             contextIsolation: false,
             nodeIntegration: false,
             preload: path.resolve(basePath, './build/preload.js'),
-            sandbox: false
+            sandbox: false,
+            webSecurity: false
         }
     };
 
@@ -235,9 +237,87 @@ function createJitsiMeetWindow() {
         return { action: 'deny' };
     };
 
+
+    if (!process.mas) {
+        // Setup Logger
+        autoUpdater.logger = require('electron-log');
+        autoUpdater.logger.transports.file.level = 'info';
+
+        // Check for updates
+        autoUpdater.checkForUpdatesAndNotify();
+
+        // Add the Dialog Listener
+        autoUpdater.on('update-downloaded', info => {
+            dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Update Ready',
+                message: `Version ${info.version} has been downloaded. Quit and install now?`,
+                buttons: [ 'Yes', 'Later' ]
+            }).then(result => {
+                if (result.response === 0) {
+                    autoUpdater.quitAndInstall();
+                }
+            });
+        });
+    }
+
     mainWindow = new BrowserWindow(options);
+
+    // Prevent Close during Meeting
+    mainWindow.webContents.on('will-prevent-unload', event => {
+        const choice = dialog.showMessageBoxSync(mainWindow, {
+            type: 'question',
+            buttons: [ 'Leave', 'Stay' ],
+            title: 'Leave Meeting?',
+            message: 'You are currently in a meeting. Are you sure you want to quit?',
+            defaultId: 0,
+            cancelId: 1
+        });
+
+        const leave = choice === 0;
+
+        if (leave) {
+            event.preventDefault();
+        }
+    });
+
+    // Enable Screen Sharing
+    mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+        desktopCapturer.getSources({ types: [ 'screen', 'window' ] })
+        .then(sources => {
+            callback({ video: sources[0],
+                audio: 'loopback' });
+        })
+        .catch(err => {
+            console.error('Error getting sources:', err);
+            callback(null);
+        });
+    });
+
+    // Navigation Router (Dashboard -> Meeting)
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        const parsedUrl = new URL(url);
+
+        if (parsedUrl.pathname.startsWith('/meet')) {
+
+            const meetRootUrl = new URL(sonacoveConfig.currentConfig.meetRoot);
+
+            if (parsedUrl.hostname !== meetRootUrl.hostname) {
+                event.preventDefault();
+
+                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${parsedUrl.pathname}${parsedUrl.search}`;
+
+                setImmediate(() => {
+                    mainWindow.loadURL(targetUrl);
+                });
+            }
+        }
+    });
+
+    setupSonacoveIPC(ipcMain, mainWindow);
+
     windowState.manage(mainWindow);
-    mainWindow.loadURL(indexURL);
+    mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
 
     mainWindow.webContents.setWindowOpenHandler(windowOpenHandler);
 
@@ -251,7 +331,7 @@ function createJitsiMeetWindow() {
     };
 
     mainWindow.webContents.session.webRequest.onBeforeSendHeaders(fileFilter, (details, callback) => {
-        const requestedPath = path.resolve(URL.fileURLToPath(details.url));
+        const requestedPath = path.resolve(nodeURL.fileURLToPath(details.url));
         const appBasePath = path.resolve(basePath);
 
         if (!requestedPath.startsWith(appBasePath)) {
@@ -324,12 +404,14 @@ function createJitsiMeetWindow() {
     initPopupsConfigurationMain(mainWindow);
     setupPictureInPictureMain(mainWindow);
     setupPowerMonitorMain(mainWindow);
-    setupScreenSharingMain(mainWindow, config.default.appName, pkgJson.build.appId);
     if (ENABLE_REMOTE_CONTROL) {
         setupRemoteControlMain(mainWindow);
     }
 
     mainWindow.on('closed', () => {
+        // Close the annotation overlay if it is open
+        closeOverlay();
+
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {
@@ -372,6 +454,16 @@ function handleProtocolCall(fullProtocolCall) {
     }
 
     const inputURL = fullProtocolCall.replace(appProtocolSurplus, '');
+
+    if (
+        fullProtocolCall.includes('auth-callback')
+        || fullProtocolCall.includes('payload')
+        || fullProtocolCall.includes('logout-callback')
+    ) {
+        navigateDeepLink(fullProtocolCall);
+
+        return;
+    }
 
     if (app.isReady() && mainWindow === null) {
         createJitsiMeetWindow();
@@ -419,7 +511,11 @@ app.on('certificate-error',
     }
 );
 
-app.on('ready', createJitsiMeetWindow);
+app.on('ready', () => {
+    createJitsiMeetWindow();
+    setupMacDeepLinkListener();
+    processDeepLinkOnStartup();
+});
 
 if (isDev) {
     app.on('ready', createWebRTCInternalsWindow);

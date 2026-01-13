@@ -1,12 +1,17 @@
 {
-  "name": "jitsi-meet-electron",
-  "version": "2025.10.0",
-  "description": "Electron application for Jitsi Meet",
+  "name": "sonacove-meets",
+  "productName": "Sonacove Meets",
+  "author": "Alfaz Studio",
+  "version": "1.1.0",
+  "description": "Sonacove Meeting App",
   "main": "./build/main.js",
-  "productName": "Jitsi Meet",
-  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zaid0412/jitsi-meet-electron.git"
+  },
   "scripts": {
     "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron ./build/main.js\"",
+    "start:prod": "npm run build && npx electron-builder --dir",
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",
     "lint-fix": "eslint . --fix",
@@ -15,117 +20,55 @@
     "postinstall": "patch-package",
     "watch": "webpack --config ./webpack.renderer.js --mode development --watch --watch-options-poll=1000"
   },
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "build": {
-    "appId": "org.jitsi.jitsi-meet",
-    "productName": "Jitsi Meet",
-    "generateUpdatesFilesForAllChannels": true,
-    "npmRebuild": false,
+    "appId": "com.sonacove.meet",
+    "productName": "Sonacove Meets",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "alfaz-studio",
+        "repo": "sonacove-electron"
+      }
+    ],
     "files": [
-      "build",
-      "resources",
-      "!app",
-      "!main.js"
+      "build/**/*",
+      "resources/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "protocols": [
+      {
+        "name": "Sonacove Meet Protocol",
+        "schemes": [
+          "sonacove"
+        ]
+      }
     ],
     "mac": {
-      "artifactName": "jitsi-meet.${ext}",
-      "target": [
-        {
-          "arch": "universal",
-          "target": "dmg"
-        },
-        {
-          "arch": "universal",
-          "target": "zip"
-        }
-      ],
-      "category": "public.app-category.video",
-      "darkModeSupport": true,
+      "category": "public.app-category.video-conferencing",
+      "hardenedRuntime": true,
       "entitlements": "resources/entitlements.mac.plist",
       "extendInfo": {
-        "NSCameraUsageDescription": "Jitsi Meet requires access to your camera in order to make video-calls.",
-        "NSMicrophoneUsageDescription": "Jitsi Meet requires access to your microphone in order to make calls (audio/video).",
-        "LSMultipleInstancesProhibited": true
+        "NSCameraUsageDescription": "Sonacove requires access to your camera for meetings.",
+        "NSMicrophoneUsageDescription": "Sonacove requires access to your microphone for meetings.",
+        "NSScreenCaptureUsageDescription": "Sonacove requires access to record your screen for sharing.", 
+        "NSAppleEventsUsageDescription": "Sonacove requires scripting access to control other applications."
       }
     },
-    "mas": {
-      "entitlements": "resources/entitlements.mas.plist",
-      "entitlementsInherit": "resources/entitlements.mas.inherit.plist",
-      "hardenedRuntime": false
-    },
-    "linux": {
-      "artifactName": "jitsi-meet-${arch}.${ext}",
-      "category": "VideoConference;AudioVideo;Audio;Video;Network",
-      "description": "Jitsi Meet Desktop App",
-      "executableName": "jitsi-meet",
-      "target": [
-        {
-          "arch": "x64",
-          "target": "AppImage"
-        },
-        {
-          "arch": "x64",
-          "target": "deb"
-        },
-        {
-          "arch": "arm64",
-          "target": "AppImage"
-        },
-        {
-          "arch": "arm64",
-          "target": "deb"
-        }
-      ]
-    },
     "win": {
-      "artifactName": "jitsi-meet.${ext}",
-      "target": [
-        {
-          "arch": [
-            "ia32",
-            "x64",
-            "arm64"
-          ],
-          "target": "nsis"
-        }
-      ]
+      "target": "nsis"
     },
     "directories": {
       "buildResources": "resources"
-    },
-    "protocols": [
-      {
-        "name": "jitsi-protocol",
-        "role": "Viewer",
-        "schemes": [
-          "jitsi-meet"
-        ]
-      }
-    ]
+    }
   },
-  "pre-commit": [
-    "lint"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/jitsi/jitsi-meet-electron"
-  },
-  "keywords": [
-    "jingle",
-    "webrtc",
-    "xmpp",
-    "electron",
-    "jitsi-meet"
-  ],
-  "author": "Jitsi Team <support@jitsi.org>",
-  "readmeFilename": "README.md",
-  "license": "Apache-2.0",
   "dependencies": {
     "@jitsi/electron-sdk": "9.0.7",
     "electron-debug": "^3.2.0",
+    "electron-log": "^5.0.0",
     "electron-reload": "^1.5.0",
+    "electron-updater": "6.6.2",
+    "electron-window-state": "^5.0.3",
     "prop-types": "^15.8.1"
   },
   "devDependencies": {
@@ -153,14 +96,11 @@
     "babel-loader": "^8.2.3",
     "concurrently": "5.1.0",
     "css-loader": "^6.7.1",
-    "electron": "39.2.7",
+    "electron": "30.1.0",
     "electron-builder": "26.0.12",
     "electron-context-menu": "^2.5.0",
     "electron-is-dev": "^1.2.0",
-    "electron-log": "^4.3.2",
     "electron-react-devtools": "0.5.3",
-    "electron-updater": "6.6.2",
-    "electron-window-state": "^5.0.3",
     "eslint": "^8.57.0",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-jsdoc": "^50.6.1",
