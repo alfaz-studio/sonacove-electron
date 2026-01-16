@@ -23,11 +23,12 @@
   "build": {
     "appId": "com.sonacove.meet",
     "productName": "Sonacove Meets",
-    "publish": [
+"publish": [
       {
         "provider": "github",
         "owner": "Zaid0412",
-        "repo": "jitsi-meet-electron"
+        "repo": "jitsi-meet-electron",
+        "releaseType": "release"
       }
     ],
     "files": [
