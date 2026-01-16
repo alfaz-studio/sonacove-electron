@@ -23,7 +23,7 @@
   "build": {
     "appId": "com.sonacove.meet",
     "productName": "Sonacove Meets",
-"publish": [
+  "publish": [
       {
         "provider": "github",
         "owner": "Zaid0412",
