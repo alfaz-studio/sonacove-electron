@@ -2,12 +2,12 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "2025.14.0",
+  "version": "1.1.0",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Zaid0412/jitsi-meet-electron.git"
+    "url": "https://github.com/alfaz-studio/sonacove-electron.git"
   },
   "scripts": {
     "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron ./build/main.js\"",
@@ -26,9 +26,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "Zaid0412",
-        "repo": "jitsi-meet-electron",
-        "releaseType": "release"
+        "owner": "alfaz-studio",
+        "repo": "sonacove-electron"
       }
     ],
     "files": [
