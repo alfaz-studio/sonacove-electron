@@ -241,10 +241,6 @@ function createJitsiMeetWindow() {
         autoUpdater.logger = require('electron-log');
         autoUpdater.logger.transports.file.level = 'info';
 
-        // Check for updates
-        autoUpdater.checkForUpdatesAndNotify();
-
-        // Add the Dialog Listener
         autoUpdater.on('update-downloaded', info => {
             dialog.showMessageBox(mainWindow, {
                 type: 'info',
@@ -257,6 +253,12 @@ function createJitsiMeetWindow() {
                 }
             });
         });
+
+        autoUpdater.on('error', (err) => {
+            console.error('Updater Error:', err);
+        });
+
+        autoUpdater.checkForUpdates();
     }
 
     mainWindow = new BrowserWindow(options);
