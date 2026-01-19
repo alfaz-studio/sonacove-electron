@@ -296,6 +296,26 @@ function createJitsiMeetWindow() {
     mainWindow.webContents.on('will-navigate', (event, url) => {
         const parsedUrl = new URL(url);
 
+        if (parsedUrl.pathname.includes('/static/close')) {
+            if (event) event.preventDefault();
+
+            const landingUrl = new URL(sonacoveConfig.currentConfig.landing);
+            
+            // Remove trailing slash if present on landing pathname
+            const basePath = landingUrl.pathname.endsWith('/') 
+                ? landingUrl.pathname.slice(0, -1) 
+                : landingUrl.pathname;
+                
+            const closePageUrl = `${landingUrl.origin}${basePath}/close`;
+
+            console.log(`🔀 Hangup Detected. Redirecting to: ${closePageUrl}`);
+
+            setImmediate(() => {
+                mainWindow.loadURL(closePageUrl);
+            });
+            return 'redirected';
+        }
+
         if (parsedUrl.pathname.startsWith('/meet')) {
             const meetRootUrl = new URL(sonacoveConfig.currentConfig.meetRoot);
 
