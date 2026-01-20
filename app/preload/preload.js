@@ -73,8 +73,8 @@ if (typeof Headers === 'undefined') {
         }
         
         *[Symbol.iterator]() {
-            for (const [key, value] of this._map) {
-                yield [key, value];
+            for (const [ key, value ] of this._map) {
+                yield [ key, value ];
             }
         }
     };

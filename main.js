@@ -254,7 +254,7 @@ function createJitsiMeetWindow() {
             });
         });
 
-        autoUpdater.on('error', (err) => {
+        autoUpdater.on('error', err => {
             console.error('Updater Error:', err);
         });
 
@@ -299,8 +299,9 @@ function createJitsiMeetWindow() {
         const parsedUrl = new URL(url);
 
         if (parsedUrl.pathname.includes('/static/close')) {
-            if (event) event.preventDefault();
-
+            if (event) {
+                event.preventDefault();
+            }
             const landingUrl = new URL(sonacoveConfig.currentConfig.landing);
             
             // Remove trailing slash if present on landing pathname

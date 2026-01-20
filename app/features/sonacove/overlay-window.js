@@ -130,6 +130,8 @@ function toggleOverlay(mainWindow, data) {
     const cleanup = (reason = 'overlay-closed') => {
         const mw = getMainWindow();
 
+        restoreMainWindow();
+
         if (mw && !mw.isDestroyed()) {
             mw.webContents.send('notify-overlay-closed', {
                 reason,
@@ -155,8 +157,11 @@ function toggleOverlay(mainWindow, data) {
 function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
+        
         annotationWindow.close();
         annotationWindow = null;
+
+        restoreMainWindow();
 
         if (notifyOthers) {
             const mw = getMainWindow();
@@ -194,6 +199,31 @@ function closeViewersWhiteboards(sharerId) {
             sharerId,
             reason: 'screenshare-stopped'
         });
+    }
+}
+
+/**
+ * Forcefully brings the main window back to the front and ensures the Dock icon is visible.
+ */
+function restoreMainWindow() {
+    const mw = getMainWindow();
+    
+    // 1. Force the Dock icon to reappear (Mac specific)
+    if (process.platform === 'darwin') {
+        app.dock.show();
+    }
+
+    if (mw && !mw.isDestroyed()) {
+        // 2. If it was minimized, restore it
+        if (mw.isMinimized()) {
+            mw.restore();
+        }
+        
+        // 3. Force it to be visible (in case it was hidden)
+        mw.show();
+        
+        // 4. Give it focus
+        mw.focus();
     }
 }
 
