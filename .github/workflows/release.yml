@@ -1,0 +1,122 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [test-release]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Check if this is a version bump commit
+        id: check
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          if [[ "$COMMIT_MSG" == "chore: bump version to"*"[skip ci]" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping release - this is a version bump commit"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Get current version
+        id: version
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Increment version
+        id: increment
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          # Get the last tag on the branch
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          CURRENT_VERSION="${{ steps.version.outputs.current_version }}"
+          
+          if [ -z "$LAST_TAG" ]; then
+            # No tags exist, use current version
+            NEW_VERSION="$CURRENT_VERSION"
+            echo "No existing tags found, using current version: $NEW_VERSION"
+          else
+            # Always increment patch for simplicity
+            LAST_VERSION=${LAST_TAG#v}
+            IFS='.' read -ra VERSION_PARTS <<< "$LAST_VERSION"
+            MAJOR=${VERSION_PARTS[0]}
+            MINOR=${VERSION_PARTS[1]}
+            PATCH=$((VERSION_PARTS[2] + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            echo "Incrementing patch version: $LAST_VERSION -> $NEW_VERSION"
+          fi
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Update package.json version
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          npm version ${{ steps.increment.outputs.new_version }} --no-git-tag-version --allow-same-version
+        
+      - name: Build application
+        if: steps.check.outputs.skip != 'true'
+        run: npm run build
+        
+      - name: Create distribution
+        if: steps.check.outputs.skip != 'true'
+        run: npm run dist
+        
+      - name: Commit version bump
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.increment.outputs.new_version }} [skip ci]" || true
+          
+      - name: Push changes
+        if: steps.check.outputs.skip != 'true'
+        run: git push origin main
+        
+      - name: Create tag
+        if: steps.check.outputs.skip != 'true'
+        run: git tag v${{ steps.increment.outputs.new_version }}
+        
+      - name: Push tag
+        if: steps.check.outputs.skip != 'true'
+        run: git push origin v${{ steps.increment.outputs.new_version }}
+        
+      - name: Create Release
+        if: steps.check.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.increment.outputs.new_version }}
+          name: Release ${{ steps.increment.outputs.new_version }}
+          files: |
+            dist/*.exe
+            dist/*-Setup.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
