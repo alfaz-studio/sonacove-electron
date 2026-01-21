@@ -194,6 +194,7 @@ function createJitsiMeetWindow() {
 
     // Path to root directory.
     const basePath = isDev ? __dirname : app.getAppPath();
+    const appPath = app.getAppPath();
 
     // Options used when creating the main Jitsi Meet window.
     // Use a preload script in order to provide node specific functionality
@@ -213,7 +214,7 @@ function createJitsiMeetWindow() {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
             nodeIntegration: false,
-            preload: path.resolve(basePath, './build/preload.js'),
+            preload: path.join(appPath, 'preload.js'),
             sandbox: false,
             webSecurity: false
         }
@@ -282,17 +283,34 @@ function createJitsiMeetWindow() {
     });
 
     // Enable Screen Sharing
-    mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer.getSources({ types: [ 'screen', 'window' ] })
-        .then(sources => {
-            callback({ video: sources[0],
-                audio: 'loopback' });
-        })
-        .catch(err => {
-            console.error('Error getting sources:', err);
-            callback(null);
-        });
-    });
+ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
+    console.log('🖥️ Main: Received screen sharing request:', options);
+    
+    const validOptions = {
+        types: options?.types || ['screen', 'window'],
+        thumbnailSize: options?.thumbnailSize || { width: 300, height: 300 },
+        fetchWindowIcons: true
+    };
+
+    try {
+        const sources = await desktopCapturer.getSources(validOptions);
+        console.log(`✅ Main: Found ${sources.length} sources`);
+        
+        const mappedSources = sources.map(source => ({
+            id: source.id,
+            name: source.name,
+            thumbnail: {
+                dataUrl: source.thumbnail.toDataURL()
+            }
+        }));
+        
+        console.log('✅ Main: Returning sources:', mappedSources.map(s => s.name));
+        return mappedSources;
+    } catch (error) {
+        console.error('❌ Main: Error getting desktop sources:', error);
+        return [];
+    }
+});
 
     // Navigation Router (Dashboard -> Meeting)
     mainWindow.webContents.on('will-navigate', (event, url) => {

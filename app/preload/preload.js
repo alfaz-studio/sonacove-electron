@@ -127,7 +127,7 @@ function setupRenderer(api, options = {}) {
     setupPowerMonitorRender(api);
 }
 
-window.jitsiNodeAPI = {
+window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
     ipc: {
@@ -165,3 +165,59 @@ window.jitsiNodeAPI = {
         }
     }
 };
+
+window.JitsiMeetElectron = {
+    /**
+     * Get sources available for desktop sharing.
+     *
+     * @param {Function} callback - Callback with sources.
+     * @param {Function} errorCallback - Callback for errors.
+     * @param {Object} options - Options for getting sources.
+     * @param {Array<string>} options.types - Types of sources ('screen', 'window').
+     * @param {Object} options.thumbnailSize - Thumbnail dimensions.
+     */
+    obtainDesktopStreams: (callback, errorCallback, options = {}) => {
+        console.log('🖥️ Renderer: Requesting desktop sources...', options);
+        
+        ipcRenderer.invoke('jitsi-screen-sharing-get-sources', options)
+            .then(sources => {
+                console.log(`✅ Renderer: Received ${sources.length} sources`);
+                callback(sources);
+            })
+            .catch(error => {
+                console.error('❌ Renderer: Error getting sources:', error);
+                if (errorCallback) {
+                    errorCallback(error);
+                }
+            });
+    }
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+    // Ensure APP object exists
+    if (!window.APP) {
+        window.APP = {};
+    }
+    
+    if (!window.APP.API) {
+        window.APP.API = {};
+    }
+    
+    window.APP.API.requestDesktopSources = (options) => {
+        return new Promise((resolve, reject) => {
+            window.JitsiMeetElectron.obtainDesktopStreams(
+                (sources) => {
+                    console.log('✅ APP.API: Desktop sources obtained:', sources.length);
+                    resolve({ sources });
+                },
+                (error) => {
+                    console.error('❌ APP.API: Error obtaining sources:', error);
+                    reject({ error });
+                },
+                options
+            );
+        });
+    };
+    
+    console.log('✅ APP.API.requestDesktopSources registered');
+});
