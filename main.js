@@ -22,7 +22,6 @@ const windowStateKeeper = require('electron-window-state');
 const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
-const fs = require('fs');
 
 const config = require('./app/features/config');
 const sonacoveConfig = require('./app/features/sonacove/config');
