@@ -87,6 +87,7 @@ function toggleOverlay(mainWindow, data) {
     });
 
     if (isMac) {
+        app.dock.show();
         annotationWindow.setAlwaysOnTop(true, 'screen-saver');
         annotationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
         annotationWindow.setBounds({ x,

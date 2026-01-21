@@ -127,7 +127,7 @@ function setupRenderer(api, options = {}) {
     setupPowerMonitorRender(api);
 }
 
-window.jitsiNodeAPI = {
+window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
     ipc: {
