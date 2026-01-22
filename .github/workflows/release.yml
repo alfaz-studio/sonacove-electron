@@ -29,32 +29,48 @@ jobs:
         
       - name: Increment version and Tag
         id: versioning
+        shell: bash
         run: |
-          # Configure Git
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
 
-          # Get version logic
           CURRENT_VERSION=$(node -p "require('./package.json').version")
+          
+          # Get the last tag, if none exists, default to v0.0.0
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           LAST_VERSION=${LAST_TAG#v}
 
-          # Logic: If package.json version is same as last tag, increment patch.
-          # Otherwise, use package.json version.
+          echo "Current package.json version: $CURRENT_VERSION"
+          echo "Last git tag version: $LAST_VERSION"
+
           if [ "$CURRENT_VERSION" = "$LAST_VERSION" ]; then
+            echo "Version matches last tag. Bumping patch..."
             npm version patch --no-git-tag-version
             NEW_VERSION=$(node -p "require('./package.json').version")
           else
+            echo "Version is already ahead of last tag. Using current version."
             NEW_VERSION=$CURRENT_VERSION
           fi
           
-          echo "new_version=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          # Output for other steps if needed
+          echo "target_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           
-          # Commit and Push (Bypasses Ruleset because of RELEASE_TOKEN)
-          git add package.json package-lock.json
-          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
-          git push origin test-release-logic
+          # 1. Commit changes to package.json if any
+          if [ -n "$(git status --porcelain package.json package-lock.json)" ]; then
+            echo "Changes detected, committing..."
+            git add package.json package-lock.json
+            git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+            # REMINDER: Change this to 'main' when you are done testing!
+            git push origin test-release-logic
+          else
+            echo "No changes to package.json, skipping commit."
+          fi
           
-          # Create and Push Tag (This triggers the next workflow)
-          git tag v$NEW_VERSION
-          git push origin v$NEW_VERSION
+          # 2. Create and push the tag
+          if ! git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Creating tag v$NEW_VERSION"
+            git tag "v$NEW_VERSION"
+            git push origin "v$NEW_VERSION"
+          else
+            echo "Tag v$NEW_VERSION already exists."
+          fi
