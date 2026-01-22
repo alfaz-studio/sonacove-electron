@@ -6,7 +6,12 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    
     permissions:
       contents: write
       
@@ -16,7 +21,8 @@ jobs:
         with:
           fetch-depth: 0
           
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxtst-dev libpng-dev
@@ -24,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
           
       - name: Install dependencies
@@ -34,7 +40,7 @@ jobs:
         id: check
         run: |
           COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-          if [[ "$COMMIT_MSG" == "chore: bump version to"*"[skip ci]" ]]; then
+          if [[ "$COMMIT_MSG" == *"chore: bump version to"*"[skip ci]"* ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "Skipping release - this is a version bump commit"
           else
@@ -79,60 +85,34 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: |
           npm version ${{ steps.increment.outputs.new_version }} --no-git-tag-version --allow-same-version
-        
-      - name: Build application
+          
+      - name: Build and Release
         if: steps.check.outputs.skip != 'true'
-        run: npm run build
-        
-      - name: Create distribution (no auto-publish)
-        if: steps.check.outputs.skip != 'true'
-        run: npm run dist -- --publish never
-        
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }} 
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+        run: npm run dist -- --publish=always
+          
       - name: Commit version bump
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add package.json package-lock.json
           git commit -m "chore: bump version to ${{ steps.increment.outputs.new_version }} [skip ci]" || true
-        
+          
       - name: Push changes
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
         run: git push origin test-release
         
       - name: Create tag
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
         run: git tag v${{ steps.increment.outputs.new_version }}
         
       - name: Push tag
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
         run: git push origin v${{ steps.increment.outputs.new_version }}
-        
-      - name: Debug environment
-        if: steps.check.outputs.skip != 'true'
-        run: |
-          echo "Available environment variables (token-related):"
-          env | grep -i token || echo "No token vars found"
-          # show existence only (won't reveal secret contents)
-          echo "Secret GH_TOKEN exists: ${{ secrets.GH_TOKEN != '' }}"
-          echo "Secret GITHUB_TOKEN exists: ${{ secrets.GITHUB_TOKEN != '' }}"
-          
-      - name: Create Release
-        if: steps.check.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          # Create release with actual electron-builder file patterns
-          gh release create v${{ steps.increment.outputs.new_version }} \
-            --title "Release ${{ steps.increment.outputs.new_version }}" \
-            --generate-notes \
-            dist/"Sonacove Meets-Setup".exe \
-            dist/"Sonacove Meets".dmg \
-            dist/*.AppImage \
-            dist/*.deb \
-            dist/*.snap
-          
-      - name: Clear electron-builder cache
-        if: steps.check.outputs.skip != 'true'
-        run: |
-          rm -rf /home/runner/.cache/electron-builder || true
