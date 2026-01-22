@@ -117,21 +117,18 @@ jobs:
           echo "Secret GH_TOKEN exists: ${{ secrets.GH_TOKEN != '' }}"
           echo "Secret GITHUB_TOKEN exists: ${{ secrets.GITHUB_TOKEN != '' }}"
           
-      - name: Create Release (draft) and upload artifacts
+      - name: Create Release
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # List all files in dist
+          find dist -type f -exec basename {} \; | sort > /tmp/files.txt
+          
           gh release create v${{ steps.increment.outputs.new_version }} \
             --title "Release ${{ steps.increment.outputs.new_version }}" \
             --generate-notes \
-            --draft \
-            dist/*.exe \
-            dist/*-Setup.exe \
-            dist/*.dmg \
-            dist/*.AppImage \
-            dist/*.deb
+            $(cat /tmp/files.txt | sed 's/^/--c /tmp/files.txt && rm /tmp/files.txt
           
       - name: Clear electron-builder cache
         if: steps.check.outputs.skip != 'true'
