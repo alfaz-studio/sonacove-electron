@@ -34,6 +34,7 @@ jobs:
         
       - name: Check if this is a version bump commit
         id: check
+        shell: bash
         run: |
           COMMIT_MSG=$(git log -1 --pretty=format:"%s")
           if [[ "$COMMIT_MSG" == *"chore: bump version to"*"[skip ci]"* ]]; then
@@ -46,6 +47,7 @@ jobs:
       - name: Get current version
         id: version
         if: steps.check.outputs.skip != 'true'
+        shell: bash
         run: |
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
@@ -53,6 +55,7 @@ jobs:
       - name: Increment version
         id: increment
         if: steps.check.outputs.skip != 'true'
+        shell: bash
         run: |
           # Get the last tag on the branch
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
@@ -95,6 +98,7 @@ jobs:
           
       - name: Commit version bump
         if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
+        shell: bash
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -103,12 +107,15 @@ jobs:
           
       - name: Push changes
         if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
+        shell: bash
         run: git push origin test-release
         
       - name: Create tag
         if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
+        shell: bash
         run: git tag v${{ steps.increment.outputs.new_version }}
         
       - name: Push tag
         if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
+        shell: bash
         run: git push origin v${{ steps.increment.outputs.new_version }}
