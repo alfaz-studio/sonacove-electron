@@ -122,11 +122,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # Create release with all dist files
+          # Create release with specific file patterns only
           gh release create v${{ steps.increment.outputs.new_version }} \
             --title "Release ${{ steps.increment.outputs.new_version }}" \
             --generate-notes \
-            dist/*
+            dist/*.exe \
+            dist/*-Setup.exe \
+            dist/*.dmg \
+            dist/*.AppImage \
+            dist/*.deb \
+            dist/*.snap
           
       - name: Clear electron-builder cache
         if: steps.check.outputs.skip != 'true'
