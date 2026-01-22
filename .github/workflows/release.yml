@@ -26,12 +26,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
         
-      - name: Get current version
-        id: version
-        run: |
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          
+       - name: Get current version
+         id: version
+         run: |
+           CURRENT_VERSION=$(node -p "require('./package.json').version")
+           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
        - name: Increment version
          id: increment
          run: |
