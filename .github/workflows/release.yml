@@ -3,6 +3,7 @@ name: Auto Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   release:
@@ -55,25 +56,13 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag_name=v$NEW_VERSION" >> $GITHUB_OUTPUT
           
-      - name: Update package.json version
-        run: npm version ${{ steps.increment.outputs.new_version }} --no-git-tag-version
-        
-      - name: Build application
-        run: npm run build
-        
-      - name: Create distribution
-        run: npm run dist
-        
-      - name: Commit version bump
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add package.json package-lock.json
-          git commit -m "chore: bump version to ${{ steps.increment.outputs.new_version }} [skip ci]"
-          
-      - name: Push changes
-        run: git push origin main
-          
+       - name: Build application
+         run: npm run build
+
+       - name: Create distribution
+         run: npm run dist
+
+
       - name: Create tag
         run: git tag v${{ steps.increment.outputs.new_version }}
         
