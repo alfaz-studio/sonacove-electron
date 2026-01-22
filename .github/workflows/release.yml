@@ -16,14 +16,17 @@ jobs:
         with:
           fetch-depth: 0
           
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          
-      - name: Install dependencies
-        run: npm ci
+       - name: Setup Node.js
+         uses: actions/setup-node@v4
+         with:
+           node-version: '22'
+           cache: 'npm'
+
+       - name: Install system dependencies (Linux)
+         run: sudo apt-get update && sudo apt-get install -y libx11-dev zlib1g-dev libpng-dev libxtst-dev
+
+       - name: Install dependencies
+         run: npm ci
         
       - name: Get current version
         id: version
