@@ -2,7 +2,7 @@ name: Auto Release
 
 on:
   push:
-    branches: [test-release]
+    branches: [main]
 
 jobs:
   release:
@@ -108,7 +108,7 @@ jobs:
       - name: Push changes
         if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
         shell: bash
-        run: git push origin test-release
+        run: git push origin ${{ github.ref_name }}
         
       - name: Create tag
         if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
