@@ -237,6 +237,7 @@ function createJitsiMeetWindow() {
 
 
     if (!process.mas) {
+        // Setup Logger
         autoUpdater.logger = require('electron-log');
         autoUpdater.logger.transports.file.level = 'info';
 
