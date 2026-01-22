@@ -23,9 +23,9 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-       - name: Install Dependencies
-         # 'npm ci' is faster and cleaner for build servers than 'npm install'
-         run: npm ci
+      - name: Install Dependencies
+        # 'npm ci' is faster and cleaner for build servers than 'npm install'
+        run: npm ci
 
        - name: Set version from tag
          run: echo "EB_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
