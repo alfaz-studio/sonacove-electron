@@ -1,16 +1,19 @@
-name: Auto Versioning
+name: Unified Auto Release
 
 on:
   push:
-    branches: [test-release-logic]
+    branches: [main, test-release-logic]
   workflow_dispatch:
 
 jobs:
+  # JOB 1: Handles versioning and tagging
   version:
     runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.versioning.outputs.target_version }}
+      skipped: ${{ steps.versioning.outputs.skipped }}
     permissions:
       contents: write
-      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,11 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
           
-      - name: Install dependencies
-        run: npm ci
-        
       - name: Increment version and Tag
         id: versioning
         shell: bash
@@ -34,32 +33,61 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
 
+          # Avoid loops: if the last commit was a bump, stop here
+          if [[ "$(git log -1 --pretty=format:%s)" == *"chore: bump version"* ]]; then
+            echo "skipped=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          
           if git rev-parse "v$CURRENT_VERSION" >/dev/null 2>&1; then
-            echo "Tag v$CURRENT_VERSION already exists. Forcing a patch bump..."
             npm version patch --no-git-tag-version
             NEW_VERSION=$(node -p "require('./package.json').version")
           else
-            echo "v$CURRENT_VERSION is a new version. Using it."
             NEW_VERSION=$CURRENT_VERSION
           fi
           
-          echo "target_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "target_version=v$NEW_VERSION" >> $GITHUB_OUTPUT
           
-          # COMMIT AND PUSH USING THE TOKEN EXPLICITLY
-          if [ -n "$(git status --porcelain package.json package-lock.json)" ]; then
-            echo "Changes detected, committing..."
-            git add package.json package-lock.json
-            git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
-            
-            # This line ensures the push uses your RELEASE_TOKEN
-            git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git test-release-logic
-          else
-            echo "No changes to package.json."
-          fi
+          # Push the version bump commit
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
           
-          # PUSH THE TAG USING THE TOKEN EXPLICITLY
-          echo "Creating and pushing tag v$NEW_VERSION"
+          # Create and push the tag
           git tag "v$NEW_VERSION"
           git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git "v$NEW_VERSION"
+
+  # JOB 2: Handles the actual Building (Windows/Mac)
+  build:
+    needs: version
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out the NEW tag
+        uses: actions/checkout@v4
+        with:
+          # We check out the tag that was JUST created in the previous job
+          ref: ${{ needs.version.outputs.new_tag }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build and Release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }} # Use your PAT here too
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }} 
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+        run: npm run dist -- --publish=always
