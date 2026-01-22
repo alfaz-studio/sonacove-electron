@@ -126,12 +126,11 @@ jobs:
           gh release create v${{ steps.increment.outputs.new_version }} \
             --title "Release ${{ steps.increment.outputs.new_version }}" \
             --generate-notes \
-            dist/Sonacove-Meets-*.exe \
-            dist/Sonacove-Meets-*.exe \
-            dist/Sonacove-Meets-*.dmg \
-            dist/Sonacove-Meets-*.AppImage \
-            dist/Sonacove-Meets-*.deb \
-            dist/sonacove-meets_*.snap
+            dist/"Sonacove Meets-Setup".exe \
+            dist/"Sonacove Meets".dmg \
+            dist/*.AppImage \
+            dist/*.deb \
+            dist/*.snap
           
       - name: Clear electron-builder cache
         if: steps.check.outputs.skip != 'true'
