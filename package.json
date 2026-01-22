@@ -2,7 +2,7 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
