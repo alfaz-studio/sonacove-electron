@@ -108,6 +108,13 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: git push origin v${{ steps.increment.outputs.new_version }}
         
+      - name: Debug environment
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          echo "Available environment variables:"
+          env | grep -i token || echo "No token vars found"
+          echo "Secret GH_TOKEN exists: ${{ secrets.GH_TOKEN != '' }}"
+          
       - name: Create Release
         if: steps.check.outputs.skip != 'true'
         env:
