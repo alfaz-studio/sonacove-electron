@@ -197,3 +197,4 @@ please join the [community forum].
 [`jitsi-meet-electron-sdk` `README`]: https://github.com/jitsi/jitsi-meet-electron-sdk/blob/master/README.md
 [community forum]: https://community.jitsi.org/
 [LICENSE]: LICENSE
+
