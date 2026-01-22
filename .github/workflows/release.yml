@@ -84,9 +84,9 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: npm run build
         
-      - name: Create distribution
+      - name: Create distribution (no auto-publish)
         if: steps.check.outputs.skip != 'true'
-        run: npm run dist
+        run: npm run dist -- --publish never
         
       - name: Commit version bump
         if: steps.check.outputs.skip != 'true'
@@ -111,28 +111,27 @@ jobs:
       - name: Debug environment
         if: steps.check.outputs.skip != 'true'
         run: |
-          echo "Available environment variables:"
+          echo "Available environment variables (token-related):"
           env | grep -i token || echo "No token vars found"
+          # show existence only (won't reveal secret contents)
           echo "Secret GH_TOKEN exists: ${{ secrets.GH_TOKEN != '' }}"
+          echo "Secret GITHUB_TOKEN exists: ${{ secrets.GITHUB_TOKEN != '' }}"
           
-      - name: Create Release
+      - name: Create Release (draft) and upload artifacts
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create v${{ steps.increment.outputs.new_version }} \
             --title "Release ${{ steps.increment.outputs.new_version }}" \
             --generate-notes \
+            --draft \
             dist/*.exe \
             dist/*-Setup.exe \
             dist/*.dmg \
             dist/*.AppImage \
             dist/*.deb
-          
-      - name: Clear electron-builder cache
-        if: steps.check.outputs.skip != 'true'
-        run: |
-          rm -rf /home/runner/.cache/electron-builder || true
           
       - name: Clear electron-builder cache
         if: steps.check.outputs.skip != 'true'
