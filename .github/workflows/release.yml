@@ -16,6 +16,11 @@ jobs:
         with:
           fetch-depth: 0
           
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxtst-dev libpng-dev
+          
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -90,10 +95,10 @@ jobs:
           git config --local user.name "GitHub Action"
           git add package.json package-lock.json
           git commit -m "chore: bump version to ${{ steps.increment.outputs.new_version }} [skip ci]" || true
-          
+        
       - name: Push changes
         if: steps.check.outputs.skip != 'true'
-        run: git push origin main
+        run: git push origin test-release
         
       - name: Create tag
         if: steps.check.outputs.skip != 'true'
