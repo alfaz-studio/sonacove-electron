@@ -122,16 +122,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # Create release with specific file patterns only
+          # Create release with actual electron-builder file patterns
           gh release create v${{ steps.increment.outputs.new_version }} \
             --title "Release ${{ steps.increment.outputs.new_version }}" \
             --generate-notes \
-            dist/*.exe \
-            dist/*-Setup.exe \
-            dist/*.dmg \
-            dist/*.AppImage \
-            dist/*.deb \
-            dist/*.snap
+            dist/Sonacove-Meets-*.exe \
+            dist/Sonacove-Meets-*.exe \
+            dist/Sonacove-Meets-*.dmg \
+            dist/Sonacove-Meets-*.AppImage \
+            dist/Sonacove-Meets-*.deb \
+            dist/sonacove-meets_*.snap
           
       - name: Clear electron-builder cache
         if: steps.check.outputs.skip != 'true'
