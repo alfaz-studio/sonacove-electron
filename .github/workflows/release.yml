@@ -10,7 +10,7 @@ jobs:
     
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
     
     permissions:
       contents: write
@@ -21,11 +21,7 @@ jobs:
         with:
           fetch-depth: 0
           
-      - name: Install system dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libx11-dev libxtst-dev libpng-dev
+
           
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -98,7 +94,7 @@ jobs:
         run: npm run dist -- --publish=always
           
       - name: Commit version bump
-        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -106,13 +102,13 @@ jobs:
           git commit -m "chore: bump version to ${{ steps.increment.outputs.new_version }} [skip ci]" || true
           
       - name: Push changes
-        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
         run: git push origin test-release
         
       - name: Create tag
-        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
         run: git tag v${{ steps.increment.outputs.new_version }}
         
       - name: Push tag
-        if: steps.check.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+        if: steps.check.outputs.skip != 'true' && matrix.os == 'macos-latest'
         run: git push origin v${{ steps.increment.outputs.new_version }}
