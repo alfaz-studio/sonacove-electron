@@ -110,21 +110,17 @@ jobs:
         
       - name: Create Release
         if: steps.check.outputs.skip != 'true'
-        uses: actions/create-release@v1
-        with:
-          tag_name: v${{ steps.increment.outputs.new_version }}
-          release_name: Release ${{ steps.increment.outputs.new_version }}
-          files: |
-            dist/*.exe
-            dist/*-Setup.exe
-            dist/*.dmg
-            dist/*.AppImage
-            dist/*.deb
-          generate_release_notes: true
-          draft: false
-          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          gh release create v${{ steps.increment.outputs.new_version }} \
+            --title "Release ${{ steps.increment.outputs.new_version }}" \
+            --generate-notes \
+            dist/*.exe \
+            dist/*-Setup.exe \
+            dist/*.dmg \
+            dist/*.AppImage \
+            dist/*.deb
           
       - name: Clear electron-builder cache
         if: steps.check.outputs.skip != 'true'
