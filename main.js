@@ -308,7 +308,7 @@ function createJitsiMeetWindow() {
             const basePath = landingUrl.pathname.endsWith('/') 
                 ? landingUrl.pathname.slice(0, -1) 
                 : landingUrl.pathname;
-                
+
             const closePageUrl = `${landingUrl.origin}${basePath}/close`;
 
             console.log(`🔀 Hangup Detected. Redirecting to: ${closePageUrl}`);
@@ -316,6 +316,7 @@ function createJitsiMeetWindow() {
             setImmediate(() => {
                 mainWindow.loadURL(closePageUrl);
             });
+
             return 'redirected';
         }
 
