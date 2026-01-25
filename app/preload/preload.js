@@ -127,6 +127,26 @@ function setupRenderer(api, options = {}) {
     setupPowerMonitorRender(api);
 }
 
+// Intercept getUserMedia to track the last selected screenshare source
+const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+navigator.mediaDevices.getUserMedia = async (constraints) => {
+    if (constraints && constraints.video && typeof constraints.video === 'object') {
+        let sourceId = null;
+
+        if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
+            sourceId = constraints.video.mandatory.chromeMediaSourceId;
+        } else if (constraints.video.chromeMediaSourceId) {
+            sourceId = constraints.video.chromeMediaSourceId;
+        }
+
+        if (sourceId) {
+            window._lastScreenshareSourceId = sourceId;
+        }
+    }
+
+    return originalGetUserMedia(constraints);
+};
+
 window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
@@ -161,6 +181,13 @@ window.sonacoveElectronAPI = {
             if (!whitelistedIpcChannels.includes(channel)) {
                 return;
             }
+
+            if (channel === 'toggle-annotation' && args[0] && typeof args[0] === 'object') {
+                const sourceId = window._lastScreenshareSourceId;
+
+                args[0].isWindowSharing = sourceId ? sourceId.startsWith('window:') : false;
+            }
+
             ipcRenderer.send(channel, ...args);
         }
     }
