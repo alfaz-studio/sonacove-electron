@@ -283,8 +283,6 @@ function createJitsiMeetWindow() {
 
     // Enable Screen Sharing
 ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
-    console.log('🖥️ Main: Received screen sharing request:', options);
-
     const validOptions = {
         types: options?.types || ['screen', 'window'],
         thumbnailSize: options?.thumbnailSize || { width: 300, height: 300 },
@@ -303,7 +301,6 @@ ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
             }
         }));
 
-        console.log('✅ Main: Returning sources:', mappedSources.map(s => s.name));
         return mappedSources;
     } catch (error) {
         console.error('❌ Main: Error getting desktop sources:', error);

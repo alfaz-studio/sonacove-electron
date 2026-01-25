@@ -33,8 +33,6 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
-    console.log('DEBUG: toggleOverlay data:', JSON.stringify(data, null, 2));
-
     const { roomUrl, collabDetails, collabServerUrl, isWindowSharing } = data;
 
     // Only allow annotation if the user is sharing their entire screen
