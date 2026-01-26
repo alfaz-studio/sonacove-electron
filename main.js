@@ -282,17 +282,31 @@ function createJitsiMeetWindow() {
     });
 
     // Enable Screen Sharing
-    mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer.getSources({ types: [ 'screen', 'window' ] })
-        .then(sources => {
-            callback({ video: sources[0],
-                audio: 'loopback' });
-        })
-        .catch(err => {
-            console.error('Error getting sources:', err);
-            callback(null);
-        });
-    });
+ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
+    const validOptions = {
+        types: options?.types || ['screen', 'window'],
+        thumbnailSize: options?.thumbnailSize || { width: 300, height: 300 },
+        fetchWindowIcons: true
+    };
+
+    try {
+        const sources = await desktopCapturer.getSources(validOptions);
+        console.log(`✅ Main: Found ${sources.length} sources`);
+
+        const mappedSources = sources.map(source => ({
+            id: source.id,
+            name: source.name,
+            thumbnail: {
+                dataUrl: source.thumbnail.toDataURL()
+            }
+        }));
+
+        return mappedSources;
+    } catch (error) {
+        console.error('❌ Main: Error getting desktop sources:', error);
+        return [];
+    }
+});
 
     // Navigation Router (Dashboard -> Meeting)
     mainWindow.webContents.on('will-navigate', (event, url) => {

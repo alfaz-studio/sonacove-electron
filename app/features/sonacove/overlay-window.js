@@ -33,7 +33,12 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
-    const { roomUrl, collabDetails, collabServerUrl } = data;
+    const { roomUrl, collabDetails, collabServerUrl, isWindowSharing } = data;
+
+    // Only allow annotation if the user is sharing their entire screen
+    if (isWindowSharing) {
+        return;
+    }
 
     if (!collabDetails?.roomId || !collabDetails?.roomKey) {
         console.error('❌ Cannot open annotation: Missing Collab Details.');

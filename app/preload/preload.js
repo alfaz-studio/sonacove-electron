@@ -56,6 +56,27 @@ function setupRenderer(api, options = {}) {
     setupPowerMonitorRender(api);
 }
 
+// Intercept getUserMedia to track the last selected screenshare source
+const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+navigator.mediaDevices.getUserMedia = async (constraints) => {
+    if (constraints && constraints.video && typeof constraints.video === 'object') {
+        let sourceId = null;
+
+        if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
+            sourceId = constraints.video.mandatory.chromeMediaSourceId;
+        } else if (constraints.video.chromeMediaSourceId) {
+            sourceId = constraints.video.chromeMediaSourceId;
+        }
+
+        if (sourceId) {
+            window._lastScreenshareSourceId = sourceId;
+        }
+    }
+
+    return originalGetUserMedia(constraints);
+};
+
+
 window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
@@ -90,7 +111,72 @@ window.sonacoveElectronAPI = {
             if (!whitelistedIpcChannels.includes(channel)) {
                 return;
             }
+
+            if (channel === 'toggle-annotation' && args[0] && typeof args[0] === 'object') {
+                const sourceId = window._lastScreenshareSourceId;
+                const isWindow = sourceId ? sourceId.startsWith('window:') : false;
+
+                console.log(`DEBUG: PRELOAD: Augmenting toggle-annotation. SourceId: ${sourceId}, isWindowSharing: ${isWindow}`);
+                args[0].isWindowSharing = isWindow;
+            }
+
             ipcRenderer.send(channel, ...args);
         }
     }
 };
+
+window.JitsiMeetElectron = {
+    /**
+     * Get sources available for desktop sharing.
+     *
+     * @param {Function} callback - Callback with sources.
+     * @param {Function} errorCallback - Callback for errors.
+     * @param {Object} options - Options for getting sources.
+     * @param {Array<string>} options.types - Types of sources ('screen', 'window').
+     * @param {Object} options.thumbnailSize - Thumbnail dimensions.
+     */
+    obtainDesktopStreams: (callback, errorCallback, options = {}) => {
+        console.log('🖥️ Renderer: Requesting desktop sources...', options);
+
+        ipcRenderer.invoke('jitsi-screen-sharing-get-sources', options)
+            .then(sources => {
+                console.log(`✅ Renderer: Received ${sources.length} sources`);
+                callback(sources);
+            })
+            .catch(error => {
+                console.error('❌ Renderer: Error getting sources:', error);
+                if (errorCallback) {
+                    errorCallback(error);
+                }
+            });
+    }
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+    // Ensure APP object exists
+    if (!window.APP) {
+        window.APP = {};
+    }
+
+    if (!window.APP.API) {
+        window.APP.API = {};
+    }
+
+    window.APP.API.requestDesktopSources = (options) => {
+        return new Promise((resolve, reject) => {
+            window.JitsiMeetElectron.obtainDesktopStreams(
+                (sources) => {
+                    console.log('✅ APP.API: Desktop sources obtained:', sources.length);
+                    resolve({ sources });
+                },
+                (error) => {
+                    console.error('❌ APP.API: Error obtaining sources:', error);
+                    reject({ error });
+                },
+                options
+            );
+        });
+    };
+
+    console.log('✅ APP.API.requestDesktopSources registered');
+});
