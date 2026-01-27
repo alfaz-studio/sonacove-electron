@@ -10,7 +10,18 @@ let annotationWindow = null;
  * @returns {BrowserWindow|undefined} The main window instance.
  */
 function getMainWindow() {
-    return BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.getTitle() === 'Sonacove Meets');
+    const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed());
+    
+    // 1. Try by title
+    const byTitle = windows.find(w => w.getTitle().includes('Sonacove'));
+    if (byTitle) return byTitle;
+
+    // 4. Try by visibility
+    const visible = windows.find(w => w.isVisible());
+    if (visible) return visible;
+
+    // 5. Fallback
+    return windows[0];
 }
 
 /**
@@ -18,65 +29,71 @@ function getMainWindow() {
  *
  * @param {BrowserWindow} mainWindow - The parent/main window instance.
  * @param {Object} data - Configuration data for the overlay.
- * @param {string} data.roomUrl - The base URL for the room.
- * @param {Object} data.collabDetails - The room ID and key for the whiteboard.
- * @param {string} data.collabServerUrl - The server URL for the whiteboard.
  * @returns {void}
  */
 function toggleOverlay(mainWindow, data) {
-    if (annotationWindow) {
-        if (!annotationWindow.isDestroyed()) {
-            annotationWindow.destroy();
+    const { enabled, roomUrl, collabDetails, collabServerUrl, annotationsUrl } = data;
+
+    // Explicit Close OR Toggle if open and no explicit 'enabled'.
+    // IMPORTANT: If we are toggling off (enabled !== true), we must return immediately,
+    // otherwise we'll fall through and try to reopen with missing details (e.g. empty payload {}).
+    if (enabled === false) {
+        if (annotationWindow) {
+            closeOverlay(true, 'manual');
         }
-        annotationWindow = null;
-
         return;
     }
 
-    const { roomUrl, collabDetails, collabServerUrl } = data;
-
-    if (!collabDetails?.roomId || !collabDetails?.roomKey) {
-        console.error('❌ Cannot open annotation: Missing Collab Details.');
-
+    if (annotationWindow && enabled !== true) {
+        closeOverlay(true, 'manual');
         return;
     }
 
-    const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
+    if (annotationWindow && !annotationWindow.isDestroyed()) {
+        annotationWindow.focus();
+        return;
+    }
+
+    if (!roomUrl || !collabDetails?.roomId || !collabDetails?.roomKey) {
+        console.error('❌ Cannot open annotation: Missing Required Details.', { roomUrl, hasDetails: !!collabDetails });
+        return;
+    }
+
+    // Resolve active window for screen matching
+    const activeMainWindow = (mainWindow && !mainWindow.isDestroyed()) ? mainWindow : getMainWindow();
+    const currentScreen = screen.getDisplayMatching(activeMainWindow ? activeMainWindow.getBounds() : screen.getPrimaryDisplay().bounds);
     const { x, y, width, height } = currentScreen.bounds;
     const isMac = process.platform === 'darwin';
+
+    console.log(`🖌️ Launching Overlay on Screen: ${currentScreen.label} at ${x},${y} (${width}x${height})`);
 
     const possiblePaths = [
         path.join(app.getAppPath(), 'build', 'preload.js'),
         path.join(app.getAppPath(), 'preload.js'),
         path.join(__dirname, 'preload.js'),
-        path.join(__dirname, '../../../../build/preload.js')
+        path.join(__dirname, '..', '..', 'build', 'preload.js'),
+        path.join(__dirname, '..', '..', '..', 'build', 'preload.js'),
+        path.join(__dirname, '..', '..', '..', '..', 'build', 'preload.js')
     ];
 
     const preloadPath = possiblePaths.find(p => fs.existsSync(p));
 
-    if (preloadPath) {
-        console.log(`✅ Annotation Overlay using preload: ${preloadPath}`);
-    } else {
-        console.error('❌ CRITICAL: Could not find preload.js! Overlay will be broken.');
-        console.error('Searched in:', possiblePaths);
-    }
-
     annotationWindow = new BrowserWindow({
-        x,
-        y,
-        width,
-        height,
+        x: Math.floor(x),
+        y: Math.floor(y),
+        width: Math.floor(width),
+        height: Math.floor(height),
         transparent: true,
         frame: false,
         alwaysOnTop: true,
         hasShadow: false,
         enableLargerThanScreen: true,
         roundedCorners: false,
-        fullscreen: false,
+        fullscreen: !isMac, // Fullscreen helps alignment on Windows/Linux
         resizable: false,
         skipTaskbar: true,
         show: false,
-        icon: path.join(__dirname, '../../../resources/icon.png'),
+        backgroundColor: '#00000000',
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: false,
@@ -90,29 +107,33 @@ function toggleOverlay(mainWindow, data) {
         app.dock.show();
         annotationWindow.setAlwaysOnTop(true, 'screen-saver');
         annotationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-        annotationWindow.setBounds({ x,
-            y,
-            width,
-            height });
-
+        annotationWindow.setBounds({ 
+            x: Math.floor(x), 
+            y: Math.floor(y), 
+            width: Math.floor(width), 
+            height: Math.floor(height) 
+        });
     } else {
-
         annotationWindow.setAlwaysOnTop(true, 'screen-saver');
-        annotationWindow.setBounds({ x,
-            y,
-            width,
-            height });
+        annotationWindow.setFullScreen(true);
     }
 
-    const joinUrl = new URL(roomUrl);
+    // Prefer a fully prebuilt annotationsUrl (provided by the renderer) because it can include
+    // the screenshare capture dimensions (sourceWidth/sourceHeight) which we need for pixel-perfect alignment.
+    if (annotationsUrl) {
+        console.log(`🖌️ Opening Annotations Overlay (annotationsUrl): ${annotationsUrl}`);
+        annotationWindow.loadURL(annotationsUrl);
+    } else {
+        const joinUrl = new URL(roomUrl);
 
-    joinUrl.searchParams.set('standalone', 'true');
-    joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
-    joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
-    joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
+        joinUrl.searchParams.set('standalone', 'true');
+        joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
+        joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
+        joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
 
-    console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
-    annotationWindow.loadURL(joinUrl.toString());
+        console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
+        annotationWindow.loadURL(joinUrl.toString());
+    }
 
     globalShortcut.register('Alt+X', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
@@ -159,7 +180,8 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
         
-        annotationWindow.close();
+        // annotationWindow.close();
+        annotationWindow.destroy()
         annotationWindow = null;
 
         restoreMainWindow();
@@ -231,4 +253,5 @@ function restoreMainWindow() {
 module.exports = { toggleOverlay,
     closeOverlay,
     getOverlayWindow,
+    getMainWindow,
     closeViewersWhiteboards };

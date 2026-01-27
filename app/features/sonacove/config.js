@@ -12,10 +12,10 @@ const URLS = {
         defaultServerURL: 'https://sonacove.com'
     },
     staging: {
-        landing: 'https://sonacove.catfurr.workers.dev/dashboard',
+        landing: 'https://localhost:5173/meet/test',
         // landing: 'http://localhost:4321/dashboard',
-        meetRoot: 'https://ca832c9c-sona-app.catfurr.workers.dev/meet',
-        // meetRoot: 'https://localhost:5173/meet/',
+        // meetRoot: 'https://6e90b3fc-sona-app.catfurr.workers.dev/meet/test',
+        meetRoot: 'https://localhost:5173/meet/test',
         authHost: 'staj.sonacove.com',
         allowedHosts: ['ca832c9c-sona-app.catfurr.workers.dev', 'localhost', 'sonacove.catfurr.workers.dev', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
         defaultServerURL: 'https://sonacove.com'

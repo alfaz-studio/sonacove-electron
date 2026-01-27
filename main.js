@@ -335,7 +335,7 @@ function createJitsiMeetWindow() {
         }
     });
 
-    setupSonacoveIPC(ipcMain, mainWindow);
+    setupSonacoveIPC(ipcMain);
 
     windowState.manage(mainWindow);
     mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
