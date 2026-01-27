@@ -25,9 +25,6 @@ function setupSonacoveIPC(ipcMain) {
     ipcMain.on('toggle-annotation', (event, data, ...args) => {
         let config = data;
 
-        // Support for Jitsi's standard signatures:
-        // 1. send('toggle-annotation', enabled, roomUrl, collabDetails, serverUrl)
-        // 2. send('toggle-annotation', { enabled, roomUrl, ... })
         if (typeof data === 'boolean') {
             config = {
                 enabled: data,

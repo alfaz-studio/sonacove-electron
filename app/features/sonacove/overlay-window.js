@@ -129,8 +129,6 @@ function toggleOverlay(mainWindow, data) {
         annotationWindow.setFullScreen(true);
     }
 
-    // Prefer a fully prebuilt annotationsUrl (provided by the renderer) because it can include
-    // the screenshare capture dimensions (sourceWidth/sourceHeight) which we need for pixel-perfect alignment.
     if (annotationsUrl) {
         console.log(`🖌️ Opening Annotations Overlay (annotationsUrl): ${annotationsUrl}`);
         annotationWindow.loadURL(annotationsUrl);
