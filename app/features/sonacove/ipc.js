@@ -1,4 +1,4 @@
-const { BrowserWindow, shell, ipcMain: ipc } = require('electron');
+const { BrowserWindow, shell } = require('electron');
 
 const sonacoveConfig = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay-window');
@@ -45,9 +45,10 @@ function setupSonacoveIPC(ipcMain) {
         }
 
         console.log('🖌️ IPC: toggle-annotation received.', config);
-        
+
         // Find main window dynamically to handle refreshes
         const mw = getMainWindow();
+
         toggleOverlay(mw, config);
     });
 
@@ -57,13 +58,19 @@ function setupSonacoveIPC(ipcMain) {
     // Show Overlay
     ipcMain.on('show-overlay', () => {
         const overlay = getOverlayWindow();
-        if (overlay) overlay.show();
+
+        if (overlay) {
+            overlay.show();
+        }
     });
 
     // Click-through logic
     ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
         const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) win.setIgnoreMouseEvents(ignore, { forward: true });
+
+        if (win) {
+            win.setIgnoreMouseEvents(ignore, { forward: true });
+        }
     });
 
     // Screenshare Cleanup
@@ -74,7 +81,10 @@ function setupSonacoveIPC(ipcMain) {
     // Navigation
     ipcMain.on('nav-to-home', () => {
         const mw = getMainWindow();
-        if (mw) mw.loadURL(sonacoveConfig.currentConfig.landing);
+
+        if (mw) {
+            mw.loadURL(sonacoveConfig.currentConfig.landing);
+        }
     });
 }
 

@@ -11,14 +11,20 @@ let annotationWindow = null;
  */
 function getMainWindow() {
     const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed());
-    
+
     // 1. Try by title
     const byTitle = windows.find(w => w.getTitle().includes('Sonacove'));
-    if (byTitle) return byTitle;
+
+    if (byTitle) {
+        return byTitle;
+    }
 
     // 4. Try by visibility
     const visible = windows.find(w => w.isVisible());
-    if (visible) return visible;
+
+    if (visible) {
+        return visible;
+    }
 
     // 5. Fallback
     return windows[0];
@@ -41,26 +47,31 @@ function toggleOverlay(mainWindow, data) {
         if (annotationWindow) {
             closeOverlay(true, 'manual');
         }
+
         return;
     }
 
     if (annotationWindow && enabled !== true) {
         closeOverlay(true, 'manual');
+
         return;
     }
 
     if (annotationWindow && !annotationWindow.isDestroyed()) {
         annotationWindow.focus();
+
         return;
     }
 
     if (!roomUrl || !collabDetails?.roomId || !collabDetails?.roomKey) {
-        console.error('❌ Cannot open annotation: Missing Required Details.', { roomUrl, hasDetails: !!collabDetails });
+        console.error('❌ Cannot open annotation: Missing Required Details.', { roomUrl,
+            hasDetails: Boolean(collabDetails) });
+
         return;
     }
 
     // Resolve active window for screen matching
-    const activeMainWindow = (mainWindow && !mainWindow.isDestroyed()) ? mainWindow : getMainWindow();
+    const activeMainWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : getMainWindow();
     const currentScreen = screen.getDisplayMatching(activeMainWindow ? activeMainWindow.getBounds() : screen.getPrimaryDisplay().bounds);
     const { x, y, width, height } = currentScreen.bounds;
     const isMac = process.platform === 'darwin';
@@ -107,11 +118,11 @@ function toggleOverlay(mainWindow, data) {
         app.dock.show();
         annotationWindow.setAlwaysOnTop(true, 'screen-saver');
         annotationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-        annotationWindow.setBounds({ 
-            x: Math.floor(x), 
-            y: Math.floor(y), 
-            width: Math.floor(width), 
-            height: Math.floor(height) 
+        annotationWindow.setBounds({
+            x: Math.floor(x),
+            y: Math.floor(y),
+            width: Math.floor(width),
+            height: Math.floor(height)
         });
     } else {
         annotationWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -179,9 +190,9 @@ function toggleOverlay(mainWindow, data) {
 function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
-        
+
         // annotationWindow.close();
-        annotationWindow.destroy()
+        annotationWindow.destroy();
         annotationWindow = null;
 
         restoreMainWindow();
@@ -227,10 +238,12 @@ function closeViewersWhiteboards(sharerId) {
 
 /**
  * Forcefully brings the main window back to the front and ensures the Dock icon is visible.
+ *
+ * @returns {void}
  */
 function restoreMainWindow() {
     const mw = getMainWindow();
-    
+
     // 1. Force the Dock icon to reappear (Mac specific)
     if (process.platform === 'darwin') {
         app.dock.show();
@@ -241,10 +254,10 @@ function restoreMainWindow() {
         if (mw.isMinimized()) {
             mw.restore();
         }
-        
+
         // 3. Force it to be visible (in case it was hidden)
         mw.show();
-        
+
         // 4. Give it focus
         mw.focus();
     }

@@ -106,28 +106,32 @@ function navigateDeepLink(deepLink) {
 
         try {
             const appHost = new URL(sonacoveConfig.currentConfig.landing).host; // e.g. sonacove.com
+
             if (rawPath.startsWith(appHost)) {
                 rawPath = rawPath.replace(appHost, '');
             }
         } catch (e) { /* ignore URL parsing error */ }
 
-        if (rawPath.startsWith('/')) rawPath = rawPath.substring(1);
-        if (rawPath.endsWith('/')) rawPath = rawPath.slice(0, -1);
+        if (rawPath.startsWith('/')) {
+            rawPath = rawPath.substring(1);
+        }
+        if (rawPath.endsWith('/')) {
+            rawPath = rawPath.slice(0, -1);
+        }
 
         const meetRoot = sonacoveConfig.currentConfig.meetRoot;
         let targetUrl = '';
 
         if (rawPath.startsWith('meet/')) {
             const meetRootOrigin = new URL(meetRoot).origin; // https://sonacove.com
+
             targetUrl = `${meetRootOrigin}/${rawPath}`;
-        }
-        else if (rawPath && rawPath !== '') {
+        } else if (rawPath && rawPath !== '') {
             // Ensure meetRoot doesn't have trailing slash for clean concatenation
             const cleanMeetRoot = meetRoot.endsWith('/') ? meetRoot.slice(0, -1) : meetRoot;
+
             targetUrl = `${cleanMeetRoot}/${rawPath}`;
-        }
-        // Case C: Empty path
-        else {
+        } else {
             targetUrl = sonacoveConfig.currentConfig.landing;
         }
 

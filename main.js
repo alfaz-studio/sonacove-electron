@@ -303,10 +303,10 @@ function createJitsiMeetWindow() {
                 event.preventDefault();
             }
             const landingUrl = new URL(sonacoveConfig.currentConfig.landing);
-            
+
             // Remove trailing slash if present on landing pathname
-            const basePath = landingUrl.pathname.endsWith('/') 
-                ? landingUrl.pathname.slice(0, -1) 
+            const basePath = landingUrl.pathname.endsWith('/')
+                ? landingUrl.pathname.slice(0, -1)
                 : landingUrl.pathname;
 
             const closePageUrl = `${landingUrl.origin}${basePath}/close`;
