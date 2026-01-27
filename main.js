@@ -683,7 +683,7 @@ function createJitsiMeetWindow() {
         }
     });
 
-    setupSonacoveIPC(ipcMain, mainWindow, {
+    setupSonacoveIPC(ipcMain, {
         showAboutDialog,
         checkForUpdatesManually,
         capture
