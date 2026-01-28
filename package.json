@@ -60,6 +60,15 @@
       "target": "nsis",
       "artifactName": "${productName}-Setup.${ext}"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "afterSign": "sign.js",
     "directories": {
       "buildResources": "resources"
     }
