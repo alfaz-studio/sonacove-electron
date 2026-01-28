@@ -164,7 +164,7 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
         
-        annotationWindow.close();
+        annotationWindow.destroy();
         annotationWindow = null;
 
         restoreMainWindow();
