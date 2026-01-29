@@ -38,7 +38,12 @@ function getMainWindow() {
  * @returns {void}
  */
 function toggleOverlay(mainWindow, data) {
-    const { enabled, roomUrl, collabDetails, collabServerUrl, annotationsUrl } = data;
+    const { enabled, roomUrl, collabDetails, collabServerUrl, annotationsUrl, isWindowSharing } = data;
+
+    // Only allow annotation if the user is sharing their entire screen
+    if (isWindowSharing) {
+        return;
+    }
 
     // Explicit Close OR Toggle if open and no explicit 'enabled'.
     // IMPORTANT: If we are toggling off (enabled !== true), we must return immediately,
@@ -57,15 +62,8 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
-    if (annotationWindow && !annotationWindow.isDestroyed()) {
-        annotationWindow.focus();
-
-        return;
-    }
-
-    if (!roomUrl || !collabDetails?.roomId || !collabDetails?.roomKey) {
-        console.error('❌ Cannot open annotation: Missing Required Details.', { roomUrl,
-            hasDetails: Boolean(collabDetails) });
+    if (!collabDetails?.roomId || !collabDetails?.roomKey) {
+        console.error('❌ Cannot open annotation: Missing Collab Details.');
 
         return;
     }
