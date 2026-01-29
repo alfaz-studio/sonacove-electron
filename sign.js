@@ -1,156 +1,211 @@
 const { spawn } = require('child_process');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
-// Azure Trusted Signing Configuration
 const AZURE_CONFIG = {
-  endpoint: 'https://eus.codesigning.azure.net/',
-  accountName: 'sonacovemeets',
-  certificateProfileName: 'SonacoveMeetsDesktopApp'
+    endpoint: 'https://eus.codesigning.azure.net/',
+    accountName: 'sonacovemeets',
+    certificateProfileName: 'SonacoveMeetsDesktopApp'
 };
 
-// Timestamp server (Microsoft's recommended)
 const TIMESTAMP_URL = 'http://timestamp.acs.microsoft.com';
 
-// Load Azure credentials
 function loadAzureCredentials() {
-  const possiblePaths = [
-    path.join(__dirname, '.azure-credentials.json'),
-    path.join(process.cwd(), '.azure-credentials.json'),
-    path.join(process.env.USERPROFILE || process.env.HOME, '.azure-credentials.json')
-  ];
+    const possiblePaths = [
+        path.join(__dirname, '.azure-credentials.json'),
+        path.join(process.cwd(), '.azure-credentials.json'),
+        path.join(process.env.USERPROFILE || process.env.HOME, '.azure-credentials.json')
+    ];
 
-  for (const credPath of possiblePaths) {
-    if (fs.existsSync(credPath)) {
-      console.log(`   Loading credentials from: ${credPath}`);
-      return JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    for (const credPath of possiblePaths) {
+        if (fs.existsSync(credPath)) {
+            console.log(`   Loading credentials from: ${credPath}`);
+
+            return JSON.parse(fs.readFileSync(credPath, 'utf8'));
+        }
     }
-  }
 
-  if (process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET && 
-      process.env.AZURE_TENANT_ID && process.env.AZURE_SUBSCRIPTION_ID) {
-    console.log('   Loading credentials from environment variables');
-    return {
-      clientId: process.env.AZURE_CLIENT_ID,
-      clientSecret: process.env.AZURE_CLIENT_SECRET,
-      tenantId: process.env.AZURE_TENANT_ID,
-      subscriptionId: process.env.AZURE_SUBSCRIPTION_ID
-    };
-  }
+    if (process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET
+      && process.env.AZURE_TENANT_ID && process.env.AZURE_SUBSCRIPTION_ID) {
+        console.log('   Loading credentials from environment variables');
 
-  throw new Error('Azure credentials not found!');
+        return {
+            clientId: process.env.AZURE_CLIENT_ID,
+            clientSecret: process.env.AZURE_CLIENT_SECRET,
+            tenantId: process.env.AZURE_TENANT_ID,
+            subscriptionId: process.env.AZURE_SUBSCRIPTION_ID
+        };
+    }
+
+    throw new Error('Azure credentials not found!');
 }
 
-async function signWithDotNetTool(filePath, credentials) {
-  return new Promise((resolve, reject) => {
-  const args = [
-  'code', 'trusted-signing',
-  '-tse', AZURE_CONFIG.endpoint,
-  '-tsa', AZURE_CONFIG.accountName,
-  '-tscp', AZURE_CONFIG.certificateProfileName,
-  '-fd', 'SHA256',
-  '-t', TIMESTAMP_URL,
-  '-v', 'debug',
-  filePath
-  ];
+async function signWithAzure(filePath, credentials) {
+    return new Promise((resolve, reject) => {
+        const args = [
+            'code', 'trusted-signing',
+            '-tse', AZURE_CONFIG.endpoint,
+            '-tsa', AZURE_CONFIG.accountName,
+            '-tscp', AZURE_CONFIG.certificateProfileName,
+            '-fd', 'SHA256',
+            '-t', TIMESTAMP_URL,
+            filePath
+        ];
 
-    console.log(`   Executing: sign code trusted-signing -tse ${AZURE_CONFIG.endpoint} -tsa ${AZURE_CONFIG.accountName} -tscp ${AZURE_CONFIG.certificateProfileName} "${path.basename(filePath)}"`);
+        const signProcess = spawn('sign', args, {
+            stdio: 'inherit',
+            env: {
+                ...process.env,
+                AZURE_TENANT_ID: credentials.tenantId,
+                AZURE_CLIENT_ID: credentials.clientId,
+                AZURE_CLIENT_SECRET: credentials.clientSecret
+            }
+        });
 
-    const signProcess = spawn('sign', args, {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        AZURE_TENANT_ID: credentials.tenantId,
-        AZURE_CLIENT_ID: credentials.clientId,
-        AZURE_CLIENT_SECRET: credentials.clientSecret
-      }
+        signProcess.on('close', code => {
+            if (code === 0) {
+                resolve();
+            } else {
+                reject(new Error(`Sign tool exited with code ${code}`));
+            }
+        });
+
+        signProcess.on('error', error => {
+            reject(error);
+        });
     });
-
-    signProcess.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Sign tool exited with code ${code}`));
-      }
-    });
-
-    signProcess.on('error', (error) => {
-      reject(error);
-    });
-  });
 }
 
 async function signFile(filePath, credentials) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
-  }
+    if (!fs.existsSync(filePath)) {
+        console.log(`   ⏭️  Skipped (not found): ${path.basename(filePath)}`);
 
-  console.log(`\n🔐 Signing: ${path.basename(filePath)}`);
-  console.log(`   Path: ${filePath}`);
+        return;
+    }
 
-  try {
-    await signWithDotNetTool(filePath, credentials);
-    console.log(`   ✅ Successfully signed!\n`);
-  } catch (error) {
-    throw new Error(`Failed to sign: ${error.message}`);
-  }
+    console.log(`   🔐 Signing: ${path.basename(filePath)}`);
+
+    try {
+        await signWithAzure(filePath, credentials);
+        console.log(`   ✅ Signed: ${path.basename(filePath)}`);
+    } catch (error) {
+        throw new Error(`Failed to sign ${path.basename(filePath)}: ${error.message}`);
+    }
 }
 
 async function installSignTool() {
-  return new Promise((resolve, reject) => {
-    console.log('   📦 Installing Microsoft sign tool...');
-    
-    const install = spawn('dotnet', ['tool', 'install', '--global', 'sign', '--prerelease'], {
-      stdio: 'inherit',
-      shell: true
-    });
+    return new Promise((resolve, reject) => {
+        console.log('   📦 Installing Microsoft sign tool...');
 
-    install.on('close', (code) => {
-      if (code === 0) {
-        console.log('   ✅ Sign tool installed\n');
-        resolve();
-      } else {
-        const update = spawn('dotnet', ['tool', 'update', '--global', 'sign', '--prerelease'], {
-          stdio: 'inherit',
-          shell: true
+        const install = spawn('dotnet', [ 'tool', 'install', '--global', 'sign', '--prerelease' ], {
+            stdio: 'inherit',
+            shell: true
         });
-        
-        update.on('close', (updateCode) => {
-          if (updateCode === 0) {
-            console.log('   ✅ Sign tool updated\n');
-            resolve();
-          } else {
-            reject(new Error('Failed to install/update sign tool'));
-          }
-        });
-      }
-    });
 
-    install.on('error', () => {
-      reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
+        install.on('close', code => {
+            if (code === 0) {
+                console.log('   ✅ Sign tool installed\n');
+                resolve();
+            } else {
+                console.log('   Attempting to update existing sign tool...');
+                const update = spawn('dotnet', [ 'tool', 'update', '--global', 'sign', '--prerelease' ], {
+                    stdio: 'inherit',
+                    shell: true
+                });
+
+                update.on('close', updateCode => {
+                    if (updateCode === 0) {
+                        console.log('   ✅ Sign tool updated\n');
+                        resolve();
+                    } else {
+                        reject(new Error('Failed to install/update sign tool'));
+                    }
+                });
+
+                update.on('error', error => {
+                    reject(error);
+                });
+            }
+        });
+
+        install.on('error', error => {
+            reject(error);
+        });
     });
-  });
 }
 
-// Main signing function
+async function checkAndInstallDotNetTools() {
+    return new Promise((resolve, reject) => {
+        console.log('🔍 Checking .NET SDK...');
+
+        const check = spawn('dotnet', [ '--version' ], { shell: true,
+            stdio: 'pipe' });
+        let version = '';
+
+        check.stdout.on('data', data => {
+            version += data.toString();
+        });
+
+        check.on('close', code => {
+            if (code !== 0) {
+                reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
+
+                return;
+            }
+
+            console.log(`   ✅ .NET SDK found (${version.trim()})`);
+            console.log('   Checking sign tool...');
+
+            const signCheck = spawn('sign', [ '--version' ], { shell: true,
+                stdio: 'pipe' });
+            let signFound = false;
+
+            signCheck.stdout.on('data', () => {
+                signFound = true;
+            });
+
+            signCheck.stderr.on('data', () => {
+                signFound = true;
+            });
+
+            signCheck.on('close', signCode => {
+                if (signFound || signCode === 0) {
+                    console.log('   ✅ Sign tool found\n');
+                    resolve();
+                } else {
+                    installSignTool().then(resolve)
+.catch(reject);
+                }
+            });
+
+            signCheck.on('error', () => {
+                installSignTool().then(resolve)
+.catch(reject);
+            });
+        });
+
+        check.on('error', error => {
+            reject(error);
+        });
+    });
+}
+
 exports.default = async function(context) {
-  if (process.platform !== 'win32') {
-    console.log('⏭️  Skipping code signing (not running on Windows)');
-    return;
-  }
+    if (process.platform !== 'win32') {
+        console.log('⏭️  Skipping code signing (not running on Windows)');
 
-  console.log('\n═══════════════════════════════════════════════════');
-  console.log('   Azure Trusted Signing - Sonacove Meets');
-  console.log('═══════════════════════════════════════════════════');
-  console.log(`Account: ${AZURE_CONFIG.accountName}`);
-  console.log(`Profile: ${AZURE_CONFIG.certificateProfileName}`);
-  console.log(`Endpoint: ${AZURE_CONFIG.endpoint}`);
-  console.log('═══════════════════════════════════════════════════\n');
+        return;
+    }
 
-  try {
-    console.log('📋 Loading Azure credentials...');
-    const credentials = loadAzureCredentials();
-    console.log('   ✅ Credentials loaded\n');
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('   Azure Trusted Signing - Sonacove Meets');
+    console.log('═══════════════════════════════════════════════════\n');
+
+    try {
+        console.log('📋 Loading Azure credentials...');
+        const credentials = loadAzureCredentials();
+
+        console.log('   ✅ Credentials loaded\n');
 
     console.log('🔍 Checking .NET SDK...');
     await new Promise((resolve, reject) => {
@@ -191,35 +246,57 @@ exports.default = async function(context) {
       });
     });
 
-    const appOutDir = context.appOutDir;
-    console.log(`📂 Scanning for executables in: ${appOutDir}\n`);
-    
-    const files = fs.readdirSync(appOutDir);
-    const exeFiles = files.filter(f => f.endsWith('.exe'));
-    
-    console.log(`Found ${exeFiles.length} executable(s) to sign`);
-    
-    for (const file of exeFiles) {
-      const filePath = path.join(appOutDir, file);
-      await signFile(filePath, credentials);
+    // HANDLE AFTER_SIGN (Unpacked executables)
+    if (context.appOutDir) {
+      const appOutDir = context.appOutDir;
+      console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
+      
+      const files = fs.readdirSync(appOutDir);
+      const exeFiles = files.filter(f => f.endsWith('.exe'));
+      
+      console.log(`Found ${exeFiles.length} executable(s) to sign`);
+      
+      for (const file of exeFiles) {
+        const filePath = path.join(appOutDir, file);
+        await signFile(filePath, credentials);
+      }
+
+      // Sign resources (e.g. elevate.exe)
+      const resourcesDir = path.join(appOutDir, 'resources');
+      if (fs.existsSync(resourcesDir)) {
+          const resourceFiles = fs.readdirSync(resourcesDir);
+          const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
+
+          if (resourceExes.length > 0) {
+              console.log(`\nFound ${resourceExes.length} resource executable(s):`);
+              for (const file of resourceExes) {
+                  const filePath = path.join(resourcesDir, file);
+                  await signFile(filePath, credentials);
+              }
+          }
+      }
+    } 
+    // HANDLE AFTER_ALL_ARTIFACT_BUILD (Installer)
+    else if (context.artifactPaths) {
+      console.log(`📂 Scanning for artifacts to sign...\n`);
+      const exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      
+      console.log(`Found ${exeArtifacts.length} artifact(s) to sign`);
+
+      for (const filePath of exeArtifacts) {
+        await signFile(filePath, credentials);
+      }
     }
 
-    console.log('═══════════════════════════════════════════════════');
+    console.log('\n═══════════════════════════════════════════════════');
     console.log('      ✅ Signing Completed Successfully');
     console.log('═══════════════════════════════════════════════════\n');
 
   } catch (error) {
-    console.error('\n═══════════════════════════════════════════════════');
-    console.error('      ❌ Signing Failed');
-    console.error('═══════════════════════════════════════════════════');
-    console.error(`Error: ${error.message}\n`);
-    
-    console.error('Setup Instructions:');
-    console.error('1. Install .NET SDK 8.0+: https://dotnet.microsoft.com/download');
-    console.error('2. Install sign tool: dotnet tool install --global sign --prerelease');
-    console.error('3. Verify service principal has "Trusted Signing Certificate Profile Signer" role');
-    console.error('4. Check certificate profile is active in Azure Portal\n');
-    
-    throw error;
-  }
+        console.error('\n═══════════════════════════════════════════════════');
+        console.error('      ❌ Signing Failed');
+        console.error('═══════════════════════════════════════════════════');
+        console.error(`Error: ${error.message}\n`);
+        throw error;
+    }
 };
