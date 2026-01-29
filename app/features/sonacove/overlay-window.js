@@ -66,7 +66,7 @@ function toggleOverlay(mainWindow, data) {
         console.error('Searched in:', possiblePaths);
     }
 
-    annotationWindow = new BrowserWindow({
+    const windowOptions = {
         x,
         y,
         width,
@@ -89,7 +89,14 @@ function toggleOverlay(mainWindow, data) {
             sandbox: false,
             preload: preloadPath
         }
-    });
+    };
+
+    // On macOS, use utility type to hide from Alt+Tab
+    if (process.platform === 'darwin') {
+        windowOptions.type = 'utility';
+    }
+
+    annotationWindow = new BrowserWindow(windowOptions);
 
     if (isMac) {
         app.dock.show();
@@ -164,7 +171,7 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
         
-        annotationWindow.close();
+        annotationWindow.destroy();
         annotationWindow = null;
 
         restoreMainWindow();
