@@ -84,9 +84,9 @@ contextMenu({
  * When in development mode:
  * - Enable automatic reloads
  */
-if (isDev) {
-    require('electron-reload')(path.join(__dirname, 'build'));
-}
+// if (isDev) {
+//     require('electron-reload')(path.join(__dirname, 'build'));
+// }
 
 /**
  * The window object that will load the iframe with Jitsi Meet.
