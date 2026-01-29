@@ -27,7 +27,8 @@
       {
         "provider": "github",
         "owner": "alfaz-studio",
-        "repo": "sonacove-electron"
+        "repo": "sonacove-electron",
+        "releaseType": "draft"
       }
     ],
     "files": [
