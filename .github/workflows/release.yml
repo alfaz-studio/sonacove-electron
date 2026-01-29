@@ -110,7 +110,8 @@ jobs:
         with:
           tag_name: ${{ needs.version.outputs.new_tag }}
           draft: true
-          files: ||
+           allowUpdates: true
+           files: |
             dist/*.exe
             dist/*.blockmap
             dist/latest.yml
