@@ -59,7 +59,8 @@
     "win": {
       "target": "nsis",
       "artifactName": "${productName}-Setup.${ext}",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "forceCodeSigning": true
     },
     "nsis": {
       "oneClick": false,
