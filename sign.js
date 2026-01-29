@@ -279,6 +279,11 @@ exports.default = async function(context) {
     // HANDLE AFTER_ALL_ARTIFACT_BUILD (Installer)
     else if (context.artifactPaths) {
       console.log(`📂 Scanning for artifacts to sign...\n`);
+      // When publishing is enabled, electron-builder might start uploading immediately.
+      // We are in afterAllArtifactBuild, which runs BEFORE publish if using electron-builder's standard publish workflow,
+      // BUT electron-builder might be doing parallel uploading or we might be fighting a race condition if not configured perfectly.
+      // However, usually afterAllArtifactBuild blocks publishing.
+      
       const exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
       
       console.log(`Found ${exeArtifacts.length} artifact(s) to sign`);
