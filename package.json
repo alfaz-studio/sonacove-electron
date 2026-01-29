@@ -2,7 +2,7 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "2025.15.17",
+  "version": "2025.15.14",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
@@ -27,8 +27,7 @@
       {
         "provider": "github",
         "owner": "alfaz-studio",
-        "repo": "sonacove-electron",
-        "releaseType": "draft"
+        "repo": "sonacove-electron"
       }
     ],
     "files": [
