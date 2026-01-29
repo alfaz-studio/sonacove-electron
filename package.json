@@ -58,7 +58,8 @@
     },
     "win": {
       "target": "nsis",
-      "artifactName": "${productName}-Setup.${ext}"
+      "artifactName": "${productName}-Setup.${ext}",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -68,7 +69,8 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
     },
-    "afterSign": "sign.js",
+    "afterPack": "sign.js",
+    "afterAllArtifactBuild": "sign-installer.js",
     "directories": {
       "buildResources": "resources"
     }
