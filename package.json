@@ -69,8 +69,8 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
     },
-    "afterPack": "sign.js",
-    "afterAllArtifactBuild": "sign-installer.js",
+    "afterSign": "sign.js",
+    "afterAllArtifactBuild": "sign.js",
     "directories": {
       "buildResources": "resources"
     }

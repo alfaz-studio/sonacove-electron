@@ -207,44 +207,92 @@ exports.default = async function(context) {
 
         console.log('   ✅ Credentials loaded\n');
 
-        await checkAndInstallDotNetTools();
-
-        // Only sign files in appOutDir (the packaged app)
-        const appOutDir = context.appOutDir;
-
-        console.log('📂 Scanning for executables to sign...\n');
-
-        const unpackedFiles = fs.readdirSync(appOutDir);
-        const mainExes = unpackedFiles.filter(f => f.endsWith('.exe'));
-
-        console.log(`Found ${mainExes.length} main executable(s):`);
-        for (const file of mainExes) {
-            const filePath = path.join(appOutDir, file);
-
-            await signFile(filePath, credentials);
+    console.log('🔍 Checking .NET SDK...');
+    await new Promise((resolve, reject) => {
+      const check = spawn('dotnet', ['--version'], { shell: true, stdio: 'pipe' });
+      let version = '';
+      check.stdout.on('data', (data) => { version += data.toString(); });
+      check.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
+        } else {
+          console.log(`   ✅ .NET SDK found (${version.trim()})`);
+          resolve();
         }
+      });
+      check.on('error', () => {
+        reject(new Error('.NET SDK not found'));
+      });
+    });
 
-        const resourcesDir = path.join(appOutDir, 'resources');
-
-        if (fs.existsSync(resourcesDir)) {
-            const resourceFiles = fs.readdirSync(resourcesDir);
-            const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
-
-            if (resourceExes.length > 0) {
-                console.log(`\nFound ${resourceExes.length} resource executable(s):`);
-                for (const file of resourceExes) {
-                    const filePath = path.join(resourcesDir, file);
-
-                    await signFile(filePath, credentials);
-                }
-            }
+    console.log('   Checking sign tool...');
+    await new Promise((resolve, reject) => {
+      const check = spawn('sign', ['--version'], { shell: true, stdio: 'pipe' });
+      let found = false;
+      check.stdout.on('data', () => { found = true; });
+      check.stderr.on('data', () => { found = true; });
+      check.on('close', () => {
+        if (found) {
+          console.log('   ✅ Sign tool found\n');
+          resolve();
+        } else {
+          // Try to install
+          installSignTool().then(resolve).catch(reject);
         }
+      });
+      check.on('error', () => {
+        // Try to install
+        installSignTool().then(resolve).catch(reject);
+      });
+    });
 
-        console.log('\n═══════════════════════════════════════════════════');
-        console.log('      ✅ Signing Completed Successfully');
-        console.log('═══════════════════════════════════════════════════\n');
+    // HANDLE AFTER_SIGN (Unpacked executables)
+    if (context.appOutDir) {
+      const appOutDir = context.appOutDir;
+      console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
+      
+      const files = fs.readdirSync(appOutDir);
+      const exeFiles = files.filter(f => f.endsWith('.exe'));
+      
+      console.log(`Found ${exeFiles.length} executable(s) to sign`);
+      
+      for (const file of exeFiles) {
+        const filePath = path.join(appOutDir, file);
+        await signFile(filePath, credentials);
+      }
 
-    } catch (error) {
+      // Sign resources (e.g. elevate.exe)
+      const resourcesDir = path.join(appOutDir, 'resources');
+      if (fs.existsSync(resourcesDir)) {
+          const resourceFiles = fs.readdirSync(resourcesDir);
+          const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
+
+          if (resourceExes.length > 0) {
+              console.log(`\nFound ${resourceExes.length} resource executable(s):`);
+              for (const file of resourceExes) {
+                  const filePath = path.join(resourcesDir, file);
+                  await signFile(filePath, credentials);
+              }
+          }
+      }
+    } 
+    // HANDLE AFTER_ALL_ARTIFACT_BUILD (Installer)
+    else if (context.artifactPaths) {
+      console.log(`📂 Scanning for artifacts to sign...\n`);
+      const exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      
+      console.log(`Found ${exeArtifacts.length} artifact(s) to sign`);
+
+      for (const filePath of exeArtifacts) {
+        await signFile(filePath, credentials);
+      }
+    }
+
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('      ✅ Signing Completed Successfully');
+    console.log('═══════════════════════════════════════════════════\n');
+
+  } catch (error) {
         console.error('\n═══════════════════════════════════════════════════');
         console.error('      ❌ Signing Failed');
         console.error('═══════════════════════════════════════════════════');
