@@ -20,6 +20,7 @@ const whitelistedIpcChannels = [
     'annotation-status',
     'toggle-click-through-request',
     'cleanup-whiteboards-for-viewers',
+    'notify-overlay-closed',
     'open-external',
     'pip-visibility-change',
     'pip-exited',
