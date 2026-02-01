@@ -445,7 +445,7 @@ ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
 
     mainWindow.on('closed', () => {
         // Close the annotation overlay if it is open
-        closeOverlay();
+        closeOverlay(false, 'app-shutdown');
 
         mainWindow = null;
     });
@@ -566,9 +566,9 @@ app.on('ready', () => {
     }, 500);
 });
 
-if (isDev) {
-    app.on('ready', createWebRTCInternalsWindow);
-}
+// if (isDev) {
+//     app.on('ready', createWebRTCInternalsWindow);
+// }
 
 app.on('second-instance', (event, commandLine) => {
     /**

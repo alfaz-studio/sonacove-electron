@@ -57,8 +57,9 @@ function setupRenderer(api, options = {}) {
 }
 
 // Intercept getUserMedia to track the last selected screenshare source
-const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-navigator.mediaDevices.getUserMedia = async (constraints) => {
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async (constraints) => {
     if (constraints && constraints.video && typeof constraints.video === 'object') {
         let sourceId = null;
 
@@ -73,8 +74,9 @@ navigator.mediaDevices.getUserMedia = async (constraints) => {
         }
     }
 
-    return originalGetUserMedia(constraints);
-};
+return originalGetUserMedia(constraints);
+    };
+}
 
 
 window.sonacoveElectronAPI = {
