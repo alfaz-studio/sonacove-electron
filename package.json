@@ -2,7 +2,7 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "2025.15.18",
+  "version": "2025.15.19",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
@@ -52,6 +52,7 @@
       "target": [
         { "target": "dmg", "arch": ["universal"] },
         { "target": "zip", "arch": ["universal"] }
+
       ],
       "extendInfo": {
         "NSCameraUsageDescription": "Sonacove requires access to your camera for meetings.",
