@@ -2,7 +2,7 @@ name: Unified Auto Release
 
 on:
   push:
-    branches: [main, mac-universal-ci-verify]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
