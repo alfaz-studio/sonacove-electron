@@ -49,6 +49,8 @@
       "hardenedRuntime": true,
       "entitlements": "resources/entitlements.mac.plist",
       "artifactName": "${productName}.${ext}",
+      "universalApp": true,
+      "target": [ "dmg", "zip" ],
       "extendInfo": {
         "NSCameraUsageDescription": "Sonacove requires access to your camera for meetings.",
         "NSMicrophoneUsageDescription": "Sonacove requires access to your microphone for meetings.",

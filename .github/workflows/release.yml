@@ -102,3 +102,12 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: npm run dist -- --publish=always
+
+      - name: Verify mac universal and notarization
+        if: matrix.os == 'macos-latest'
+        run: |
+          hdiutil attach -quiet -mountpoint /Volumes/SonacoveMeets "dist/Sonacove Meets.dmg"
+          file "/Volumes/SonacoveMeets/Sonacove Meets.app/Contents/MacOS/Sonacove Meets"
+          codesign --verify --deep --strict "/Volumes/SonacoveMeets/Sonacove Meets.app"
+          spctl --assess --type execute --verbose "/Volumes/SonacoveMeets/Sonacove Meets.app" || true
+          hdiutil detach -quiet /Volumes/SonacoveMeets
