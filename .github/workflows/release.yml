@@ -2,7 +2,7 @@ name: Unified Auto Release
 
 on:
   push:
-    branches: [main]
+    branches: [mac-universal-ci-verify]
   workflow_dispatch:
 
 jobs:
@@ -57,7 +57,7 @@ jobs:
           else
             git add package.json package-lock.json
             git commit -m "chore: bump version to $VERSION [skip ci]" || echo "Nothing to commit"
-            git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git main
+            git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git mac-universal-ci-verify
           fi
           
           # 5. Create and push the tag
