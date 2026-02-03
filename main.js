@@ -84,9 +84,9 @@ contextMenu({
  * When in development mode:
  * - Enable automatic reloads
  */
-// if (isDev) {
-//     require('electron-reload')(path.join(__dirname, 'build'));
-// }
+if (isDev) {
+    require('electron-reload')(path.join(__dirname, 'build'));
+}
 
 /**
  * The window object that will load the iframe with Jitsi Meet.
@@ -102,6 +102,28 @@ let webrtcInternalsWindow = null;
  */
 const appProtocolSurplus = `${config.default.appProtocolPrefix}://`;
 let pendingStartupDeepLink = null;
+
+/**
+ * Resolves the absolute path to the application icon based on the current platform
+ *
+ * @returns {string} The absolute path to the icon file (.ico for Windows, .png for others).
+ */
+const getIconPath = () => {
+    const ext = process.platform === 'win32' ? 'ico' : 'png';
+    const name = `icon.${ext}`;
+    const candidates = [
+        path.resolve(__dirname, 'resources', name),
+        path.join(app.getAppPath(), 'resources', name),
+        process.resourcesPath ? path.join(process.resourcesPath, name) : '',
+        process.resourcesPath ? path.join(process.resourcesPath, 'resources', name) : ''
+    ].filter(Boolean);
+    for (const p of candidates) {
+        try {
+            if (p && fs.existsSync(p)) return p;
+        } catch {}
+    }
+    return path.resolve(__dirname, 'resources', `icon.${ext}`);
+};
 
 /**
  * Sets the application menu. It is hidden on all platforms except macOS because
@@ -173,6 +195,11 @@ function setApplicationMenu() {
     }
 }
 
+// Set app icon globally for all windows including PiP
+if (process.platform !== 'darwin') {
+    app.setAppUserModelId('com.sonacove.meet');
+}
+
 /**
  * Opens new window with index.html(Jitsi Meet is loaded in iframe there).
  */
@@ -205,7 +232,7 @@ function createJitsiMeetWindow() {
         width: windowState.width,
         height: windowState.height,
         title: 'Sonacove Meets',
-        icon: path.resolve(basePath, './resources/icon.png'),
+        icon: getIconPath(),
         minWidth: 800,
         minHeight: 600,
         show: false,
@@ -466,6 +493,30 @@ ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
     handleProtocolCall(process.argv.pop());
 }
 
+// Handle PiP and child window icon configuration
+const setupChildWindowIcon = () => {
+    const iconPath = getIconPath();
+    
+    // Listen for all new BrowserWindow creations
+    app.on('web-contents-created', (event, contents) => {
+        // This handles windows opened via window.open()
+        contents.setWindowOpenHandler(({ url }) => {
+            return {
+                action: 'allow',
+                overrideBrowserWindowOptions: {
+                    icon: iconPath,
+                    show: true
+                }
+            };
+        });
+
+        // Listen for window creation on this webContents
+        contents.on('new-window', (event, url, frameName, disposition, options) => {
+            options.icon = iconPath;
+        });
+    });
+};
+
 /**
  * Opens new window with WebRTC internals.
  */
@@ -558,7 +609,14 @@ app.on('certificate-error',
 
 app.on('ready', () => {
     setupMacDeepLinkListener();
+    setupChildWindowIcon();
     createJitsiMeetWindow();
+
+    // Set app icon for all windows
+    if (process.platform !== 'darwin') {
+        const iconPath = getIconPath();
+        mainWindow.setIcon(iconPath);
+    }
 
     // Process deeplinks AFTER window creation
     setTimeout(() => {
