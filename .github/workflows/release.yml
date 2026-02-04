@@ -139,21 +139,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          # Install GitHub CLI if not available
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            apt update
-            apt install -y gh
-          fi
+          # Upload the signed files directly using GitHub CLI
+          # gh CLI is pre-installed on GitHub Actions runners
           
-          # Get the draft release ID for the current tag
-          RELEASE_ID=$(gh release view ${{ needs.version.outputs.new_tag }} --json id --jq .id --draft)
+          # Get the tag name
+          TAG_NAME=${{ needs.version.outputs.new_tag }}
           
           # Upload the signed files to the draft release
-          gh release upload $RELEASE_ID --clobber dist/Sonacove\ Meets-Setup.exe
-          gh release upload $RELEASE_ID --clobber dist/Sonacove\ Meets-Setup.exe.blockmap
-          gh release upload $RELEASE_ID --clobber dist/latest.yml
+          # Use --clobber to overwrite if they already exist
+          gh release upload $TAG_NAME --clobber dist/Sonacove\ Meets-Setup.exe
+          gh release upload $TAG_NAME --clobber dist/Sonacove\ Meets-Setup.exe.blockmap
+          gh release upload $TAG_NAME --clobber dist/latest.yml
         shell: bash
 
       - name: Verify mac universal and notarization
