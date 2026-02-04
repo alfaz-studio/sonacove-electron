@@ -280,24 +280,31 @@ exports.default = async function(context) {
     else {
       let exeArtifacts = [];
       
+      // Log the context for debugging
+      console.log(`📋 Context object keys: ${Object.keys(context)}`);
+      if (context.artifactPaths) {
+        console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
+      }
+      
       // Check if we have artifactPaths (from afterAllArtifactBuild)
       if (context.artifactPaths) {
         console.log(`📂 Scanning for artifacts to sign from context...\n`);
         exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
       } 
-      // Otherwise, scan the dist directory (for onBeforePublish)
-      else {
+      // Always scan the dist directory as fallback
+      const distDir = path.join(__dirname, 'dist');
+      if (fs.existsSync(distDir)) {
         console.log(`📂 Scanning for artifacts in dist directory...\n`);
-        const distDir = path.join(__dirname, 'dist');
-        if (fs.existsSync(distDir)) {
-          const files = fs.readdirSync(distDir);
-          exeArtifacts = files
-            .filter(f => f.endsWith('.exe'))
-            .map(f => path.join(distDir, f));
-        }
+        const files = fs.readdirSync(distDir);
+        const distExeArtifacts = files
+          .filter(f => f.endsWith('.exe'))
+          .map(f => path.join(distDir, f));
+        
+        // Merge artifacts from both sources (context and dist directory)
+        exeArtifacts = [...new Set([...exeArtifacts, ...distExeArtifacts])];
       }
       
-      console.log(`Found ${exeArtifacts.length} artifact(s) to sign`);
+      console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
       for (const filePath of exeArtifacts) {
         await signFile(filePath, credentials);
