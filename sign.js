@@ -276,17 +276,35 @@ exports.default = async function(context) {
           }
       }
     } 
-    // HANDLE AFTER_ALL_ARTIFACT_BUILD (Installer)
-    else if (context.artifactPaths) {
-      console.log(`📂 Scanning for artifacts to sign...\n`);
-      // When publishing is enabled, electron-builder might start uploading immediately.
-      // We are in afterAllArtifactBuild, which runs BEFORE publish if using electron-builder's standard publish workflow,
-      // BUT electron-builder might be doing parallel uploading or we might be fighting a race condition if not configured perfectly.
-      // However, usually afterAllArtifactBuild blocks publishing.
+    // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
+    else {
+      let exeArtifacts = [];
       
-      const exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      // Log the context for debugging
+      console.log(`📋 Context object keys: ${Object.keys(context)}`);
+      if (context.artifactPaths) {
+        console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
+      }
       
-      console.log(`Found ${exeArtifacts.length} artifact(s) to sign`);
+      // Check if we have artifactPaths (from afterAllArtifactBuild)
+      if (context.artifactPaths) {
+        console.log(`📂 Scanning for artifacts to sign from context...\n`);
+        exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      } 
+      // Always scan the dist directory as fallback
+      const distDir = path.join(__dirname, 'dist');
+      if (fs.existsSync(distDir)) {
+        console.log(`📂 Scanning for artifacts in dist directory...\n`);
+        const files = fs.readdirSync(distDir);
+        const distExeArtifacts = files
+          .filter(f => f.endsWith('.exe'))
+          .map(f => path.join(distDir, f));
+        
+        // Merge artifacts from both sources (context and dist directory)
+        exeArtifacts = [...new Set([...exeArtifacts, ...distExeArtifacts])];
+      }
+      
+      console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
       for (const filePath of exeArtifacts) {
         await signFile(filePath, credentials);
