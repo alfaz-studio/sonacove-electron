@@ -134,11 +134,27 @@ jobs:
           APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
         run: npm run dist
 
-      - name: Publish signed Windows installer
+      - name: Upload signed Windows installer to draft release
         if: matrix.os == 'windows-latest'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: npx electron-builder --publish always --projectDir . --prepackaged dist/win-unpacked --win nsis
+        run: |
+          # Install GitHub CLI if not available
+          if ! command -v gh &> /dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            apt update
+            apt install -y gh
+          fi
+          
+          # Get the draft release ID for the current tag
+          RELEASE_ID=$(gh release view ${{ needs.version.outputs.new_tag }} --json id --jq .id --draft)
+          
+          # Upload the signed files to the draft release
+          gh release upload $RELEASE_ID --clobber dist/Sonacove\ Meets-Setup.exe
+          gh release upload $RELEASE_ID --clobber dist/Sonacove\ Meets-Setup.exe.blockmap
+          gh release upload $RELEASE_ID --clobber dist/latest.yml
+        shell: bash
 
       - name: Verify mac universal and notarization
         if: matrix.os == 'macos-latest'
