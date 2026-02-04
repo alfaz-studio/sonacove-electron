@@ -102,7 +102,8 @@ jobs:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: npm run dist -- --publish=never
 
-      - name: Publish signed artifacts
+      - name: Publish signed artifacts (Windows)
+        if: matrix.os == 'windows-latest'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -110,6 +111,12 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: npx electron-builder --publish always --projectDir . --prepackaged dist/win-unpacked
+
+      - name: Publish signed artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: npx electron-builder --publish always --projectDir . --prepackaged dist/mac-unpacked
 
       - name: Verify mac universal and notarization
         if: matrix.os == 'macos-latest'
