@@ -276,15 +276,26 @@ exports.default = async function(context) {
           }
       }
     } 
-    // HANDLE AFTER_ALL_ARTIFACT_BUILD (Installer)
-    else if (context.artifactPaths) {
-      console.log(`📂 Scanning for artifacts to sign...\n`);
-      // When publishing is enabled, electron-builder might start uploading immediately.
-      // We are in afterAllArtifactBuild, which runs BEFORE publish if using electron-builder's standard publish workflow,
-      // BUT electron-builder might be doing parallel uploading or we might be fighting a race condition if not configured perfectly.
-      // However, usually afterAllArtifactBuild blocks publishing.
+    // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
+    else {
+      let exeArtifacts = [];
       
-      const exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      // Check if we have artifactPaths (from afterAllArtifactBuild)
+      if (context.artifactPaths) {
+        console.log(`📂 Scanning for artifacts to sign from context...\n`);
+        exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      } 
+      // Otherwise, scan the dist directory (for onBeforePublish)
+      else {
+        console.log(`📂 Scanning for artifacts in dist directory...\n`);
+        const distDir = path.join(__dirname, 'dist');
+        if (fs.existsSync(distDir)) {
+          const files = fs.readdirSync(distDir);
+          exeArtifacts = files
+            .filter(f => f.endsWith('.exe'))
+            .map(f => path.join(distDir, f));
+        }
+      }
       
       console.log(`Found ${exeArtifacts.length} artifact(s) to sign`);
 
