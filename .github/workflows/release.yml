@@ -105,7 +105,11 @@ jobs:
       - name: Publish signed artifacts
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: npx electron-builder --publish always --projectDir .
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: npx electron-builder --publish always --projectDir . --prepackaged dist/win-unpacked
 
       - name: Verify mac universal and notarization
         if: matrix.os == 'macos-latest'
