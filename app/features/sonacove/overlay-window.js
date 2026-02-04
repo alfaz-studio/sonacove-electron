@@ -81,7 +81,7 @@ function toggleOverlay(mainWindow, data) {
         resizable: false,
         skipTaskbar: true,
         show: false,
-        icon: path.join(__dirname, '../../../resources/icon.png'),
+        icon: path.join(app.getAppPath(), 'resources', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: false,
