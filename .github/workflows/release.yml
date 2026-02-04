@@ -147,8 +147,8 @@ jobs:
           
           # Upload the signed files to the draft release
           # Use --clobber to overwrite if they already exist
-          gh release upload $TAG_NAME --clobber dist/Sonacove\ Meets-Setup.exe
-          gh release upload $TAG_NAME --clobber dist/Sonacove\ Meets-Setup.exe.blockmap
+          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe
+          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe.blockmap
           gh release upload $TAG_NAME --clobber dist/latest.yml
         shell: bash
 
