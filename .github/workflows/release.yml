@@ -65,6 +65,27 @@ jobs:
           git tag "v$VERSION"
           git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git "v$VERSION"
 
+      - name: Create Draft Release
+        if: steps.versioning.outputs.skipped == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.RELEASE_TOKEN }}
+          script: |
+            const tag = '${{ steps.versioning.outputs.target_version }}';
+            const version = tag.replace('v', '');
+            
+            // Create draft release
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Version ${version}`,
+              body: 'Automatically generated draft release. Please add release notes.',
+              draft: true
+            });
+            
+            console.log(`Created draft release for tag ${tag}`);
+
   build:
     needs: version
     # Only run if versioning was successful and not skipped
