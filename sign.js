@@ -354,6 +354,27 @@ exports.default = async function(context) {
 
             console.log(`Found ${exeFiles.length} executable(s) to sign`);
 
+            // Embed icon into main executable BEFORE signing
+            // Modification after signing breaks the digital signature!
+            console.log('\n📎 Embedding icon into executables...');
+            const iconPath = path.join(__dirname, 'resources', 'icon.ico');
+
+            // Try multiple possible names for the main executable
+            const possibleNames = [
+                'Sonacove Meets.exe',
+                'Sonacove-Meets.exe',
+                'sonacove-meets.exe'
+            ];
+
+            for (const name of possibleNames) {
+                const exePath = path.join(appOutDir, name);
+
+                if (fs.existsSync(exePath)) {
+                    await embedIcon(exePath, iconPath);
+                }
+            }
+
+            // Sign all executables found (including the ones we just embedded icons into)
             for (const file of exeFiles) {
                 const filePath = path.join(appOutDir, file);
 
@@ -376,14 +397,6 @@ exports.default = async function(context) {
                     }
                 }
             }
-
-            // Embed icon into main executable after signing
-            console.log('\n📎 Embedding icon into executables...');
-            const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
-            const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-
-            await embedIcon(mainExePath, iconPath);
-
         }
 
         // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
@@ -418,16 +431,27 @@ exports.default = async function(context) {
 
             console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
-            for (const filePath of exeArtifacts) {
-                await signFile(filePath, credentials);
-            }
-
-            // Embed icon into artifacts after signing
-            console.log('\n📎 Embedding icon into application executable...');
+            // Embed icon into artifacts BEFORE signing
+            // Modification after signing breaks the digital signature!
+            console.log('\n📎 Embedding icon into application executable before signing...');
             const iconPath = path.join(__dirname, 'resources', 'icon.ico');
 
-            // IMPORTANT: Only embed icon into the main app exe, NOT the Setup.exe installer
-            // The setup.exe is just an installer and should not be modified
+            // 1. Embed in the main portable exe in win-unpacked
+            // This is the exe that NSIS will package into the installer
+            const portablePossibleNames = [
+                path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove Meets.exe'),
+                path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove-Meets.exe'),
+                path.join(__dirname, 'dist', 'win-unpacked', 'sonacove-meets.exe')
+            ];
+
+            for (const portableExePath of portablePossibleNames) {
+                if (fs.existsSync(portableExePath)) {
+                    console.log(`\n📎 Embedding icon into portable version: ${path.basename(portableExePath)}`);
+                    await embedIcon(portableExePath, iconPath);
+                }
+            }
+
+            // 2. Embed in artifacts if they are not installers
             for (const artifactPath of exeArtifacts) {
                 // Skip the Setup.exe installer - only embed into the portable exe
                 if (!artifactPath.includes('Setup')) {
@@ -435,13 +459,9 @@ exports.default = async function(context) {
                 }
             }
 
-            // Also embed in the main portable exe in win-unpacked
-            // This is the exe that NSIS will package into the installer
-            const portableExePath = path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove Meets.exe');
-
-            if (fs.existsSync(portableExePath)) {
-                console.log('\n📎 Embedding icon into portable version...');
-                await embedIcon(portableExePath, iconPath);
+            // 3. NOW SIGN EVERYTHING
+            for (const filePath of exeArtifacts) {
+                await signFile(filePath, credentials);
             }
         }
 
