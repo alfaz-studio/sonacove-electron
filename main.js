@@ -19,9 +19,15 @@ const contextMenu = require('electron-context-menu');
 const isDev = require('electron-is-dev');
 const { autoUpdater } = require('electron-updater');
 const windowStateKeeper = require('electron-window-state');
+const fs = require('fs');
 const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
+
+// Set app user model ID at the very top for Windows icon support
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.sonacove.meet');
+}
 
 const config = require('./app/features/config');
 const sonacoveConfig = require('./app/features/sonacove/config');
@@ -111,18 +117,38 @@ let pendingStartupDeepLink = null;
 const getIconPath = () => {
     const ext = process.platform === 'win32' ? 'ico' : 'png';
     const name = `icon.${ext}`;
-    const candidates = [
-        path.resolve(__dirname, 'resources', name),
-        path.join(app.getAppPath(), 'resources', name),
-        process.resourcesPath ? path.join(process.resourcesPath, name) : '',
-        process.resourcesPath ? path.join(process.resourcesPath, 'resources', name) : ''
-    ].filter(Boolean);
-    for (const p of candidates) {
-        try {
-            if (p && fs.existsSync(p)) return p;
-        } catch {}
+
+    // 1. Try Development Root (Where you run npm start)
+    const devPath = path.join(process.cwd(), 'resources', name);
+
+    if (fs.existsSync(devPath)) {
+        return devPath;
     }
-    return path.resolve(__dirname, 'resources', `icon.${ext}`);
+
+    // 2. Try Relative to main.js (Moving up from build folder)
+    const relativePath = path.resolve(__dirname, '..', 'resources', name);
+
+    if (fs.existsSync(relativePath)) {
+        return relativePath;
+    }
+
+    // 3. Try Production Path (Packaged app)
+    if (process.resourcesPath) {
+        const prodPath = path.join(process.resourcesPath, name);
+
+        if (fs.existsSync(prodPath)) {
+            return prodPath;
+        }
+    }
+
+    // 4. Ultimate Fallback: try app.getAppPath() but strip 'build' if present
+    let appPath = app.getAppPath();
+
+    if (appPath.endsWith('build')) {
+        appPath = path.resolve(appPath, '..');
+    }
+
+    return path.join(appPath, 'resources', name);
 };
 
 /**
@@ -195,11 +221,6 @@ function setApplicationMenu() {
     }
 }
 
-// Set app icon globally for all windows including PiP
-if (process.platform !== 'darwin') {
-    app.setAppUserModelId('com.sonacove.meet');
-}
-
 /**
  * Opens new window with index.html(Jitsi Meet is loaded in iframe there).
  */
@@ -220,7 +241,7 @@ function createJitsiMeetWindow() {
     });
 
     // Path to root directory.
-    const basePath = isDev ? __dirname : app.getAppPath();
+    const basePath = isDev ? process.cwd() : app.getAppPath();
 
     // Options used when creating the main Jitsi Meet window.
     // Use a preload script in order to provide node specific functionality
@@ -240,7 +261,9 @@ function createJitsiMeetWindow() {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
             nodeIntegration: false,
-            preload: path.resolve(basePath, './build/preload.js'),
+            preload: isDev
+                ? path.resolve(basePath, 'build', 'preload.js')
+                : path.resolve(basePath, 'build', 'preload.js'),
             sandbox: false,
             webSecurity: false
         }
@@ -290,6 +313,16 @@ function createJitsiMeetWindow() {
 
     mainWindow = new BrowserWindow(options);
 
+    // Set icon immediately after creating window for taskbar/PiP
+    if (process.platform !== 'darwin') {
+        const iconPath = getIconPath();
+
+        console.log(`🎯 Setting window icon: ${iconPath}`);
+        if (fs.existsSync(iconPath)) {
+            mainWindow.setIcon(iconPath);
+        }
+    }
+
     // Prevent Close during Meeting
     mainWindow.webContents.on('will-prevent-unload', event => {
         const choice = dialog.showMessageBoxSync(mainWindow, {
@@ -309,31 +342,36 @@ function createJitsiMeetWindow() {
     });
 
     // Enable Screen Sharing
-ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
-    const validOptions = {
-        types: options?.types || ['screen', 'window'],
-        thumbnailSize: options?.thumbnailSize || { width: 300, height: 300 },
-        fetchWindowIcons: true
-    };
+    ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
+        const validOptions = {
+            types: options?.types || [ 'screen', 'window' ],
+            thumbnailSize: options?.thumbnailSize || { width: 300,
+                height: 300 },
+            fetchWindowIcons: true
+        };
 
-    try {
-        const sources = await desktopCapturer.getSources(validOptions);
-        console.log(`✅ Main: Found ${sources.length} sources`);
+        try {
+            const sources = await desktopCapturer.getSources(validOptions);
 
-        const mappedSources = sources.map(source => ({
-            id: source.id,
-            name: source.name,
-            thumbnail: {
-                dataUrl: source.thumbnail.toDataURL()
-            }
-        }));
+            console.log(`✅ Main: Found ${sources.length} sources`);
 
-        return mappedSources;
-    } catch (error) {
-        console.error('❌ Main: Error getting desktop sources:', error);
-        return [];
-    }
-});
+            const mappedSources = sources.map(source => {
+                return {
+                    id: source.id,
+                    name: source.name,
+                    thumbnail: {
+                        dataUrl: source.thumbnail.toDataURL()
+                    }
+                };
+            });
+
+            return mappedSources;
+        } catch (error) {
+            console.error('❌ Main: Error getting desktop sources:', error);
+
+            return [];
+        }
+    });
 
     // Navigation Router (Dashboard -> Meeting)
     mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -344,10 +382,10 @@ ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
                 event.preventDefault();
             }
             const landingUrl = new URL(sonacoveConfig.currentConfig.landing);
-            
+
             // Remove trailing slash if present on landing pathname
-            const basePath = landingUrl.pathname.endsWith('/') 
-                ? landingUrl.pathname.slice(0, -1) 
+            const basePath = landingUrl.pathname.endsWith('/')
+                ? landingUrl.pathname.slice(0, -1)
                 : landingUrl.pathname;
 
             const closePageUrl = `${landingUrl.origin}${basePath}/close`;
@@ -496,7 +534,7 @@ ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
 // Handle PiP and child window icon configuration
 const setupChildWindowIcon = () => {
     const iconPath = getIconPath();
-    
+
     // Listen for all new BrowserWindow creations
     app.on('web-contents-created', (event, contents) => {
         // This handles windows opened via window.open()
@@ -611,12 +649,6 @@ app.on('ready', () => {
     setupMacDeepLinkListener();
     setupChildWindowIcon();
     createJitsiMeetWindow();
-
-    // Set app icon for all windows
-    if (process.platform !== 'darwin') {
-        const iconPath = getIconPath();
-        mainWindow.setIcon(iconPath);
-    }
 
     // Process deeplinks AFTER window creation
     setTimeout(() => {

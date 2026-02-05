@@ -72,6 +72,7 @@
     },
     "win": {
       "target": "nsis",
+      "icon": "resources/icon.ico",
       "artifactName": "Sonacove-Meets-Setup.${ext}",
       "signAndEditExecutable": false
     },
@@ -81,10 +82,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
     },
     "afterPack": "sign.js",
-    "afterAllArtifactBuild": "sign.js",
     "directories": {
       "buildResources": "resources"
     }
@@ -139,6 +141,7 @@
     "moment": "^2.29.2",
     "mousetrap": "^1.6.5",
     "patch-package": "8.0.1",
+    "rcedit": "^5.0.2",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-i18next": "^11.8.12",
