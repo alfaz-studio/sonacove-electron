@@ -10,7 +10,7 @@
     "url": "https://github.com/alfaz-studio/sonacove-electron.git"
   },
   "scripts": {
-    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron ./build/main.js\"",
+    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron .\"",
     "start:prod": "npm run build && npx electron-builder --dir",
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",

@@ -228,11 +228,6 @@ function createJitsiMeetWindow() {
     // Application menu.
     setApplicationMenu();
 
-    // Check for Updates.
-    if (!process.mas) {
-        autoUpdater.checkForUpdatesAndNotify();
-    }
-
     // Load the previous window state with fallback to defaults.
     const windowState = windowStateKeeper({
         defaultWidth: 800,
@@ -291,6 +286,23 @@ function createJitsiMeetWindow() {
         autoUpdater.logger = require('electron-log');
         autoUpdater.logger.transports.file.level = 'info';
 
+        // Configure Updater
+        autoUpdater.disableWebInstaller = true;
+        autoUpdater.autoDownload = true;
+        autoUpdater.autoInstallOnAppQuit = true;
+
+        autoUpdater.on('checking-for-update', () => {
+            console.log('🔎 Checking for update...');
+        });
+
+        autoUpdater.on('update-available', info => {
+            console.log(`✅ Update available: ${info.version}`);
+        });
+
+        autoUpdater.on('update-not-available', info => {
+            console.log('❌ Update not available.');
+        });
+
         autoUpdater.on('update-downloaded', info => {
             dialog.showMessageBox(mainWindow, {
                 type: 'info',
@@ -308,7 +320,10 @@ function createJitsiMeetWindow() {
             console.error('Updater Error:', err);
         });
 
-        autoUpdater.checkForUpdates();
+        // Only check for updates in production
+        if (!isDev) {
+            autoUpdater.checkForUpdates();
+        }
     }
 
     mainWindow = new BrowserWindow(options);
