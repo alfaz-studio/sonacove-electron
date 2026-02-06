@@ -2,7 +2,7 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "2025.15.38",
+  "version": "2025.15.1",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
@@ -10,7 +10,7 @@
     "url": "https://github.com/alfaz-studio/sonacove-electron.git"
   },
   "scripts": {
-    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron ./build/main.js\"",
+    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron .\"",
     "start:prod": "npm run build && npx electron-builder --dir",
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",

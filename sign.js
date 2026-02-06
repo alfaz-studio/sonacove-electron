@@ -1,6 +1,74 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+/**
+ * Calculates SHA512 hash of a file
+ * @param {string} filePath 
+ * @returns {Promise<string>} base64 encoded hash
+ */
+async function calculateSha512(filePath) {
+    return new Promise((resolve, reject) => {
+        const hash = crypto.createHash('sha512');
+        const stream = fs.createReadStream(filePath);
+
+        stream.on('data', data => hash.update(data));
+        stream.on('end', () => resolve(hash.digest('base64')));
+        stream.on('error', err => reject(err));
+    });
+}
+
+/**
+ * Updates latest.yml with new checksums and file sizes
+ * @param {string} distDir 
+ * @param {Array<string>} signedFiles 
+ */
+async function updateLatestYaml(distDir, signedFiles) {
+    const yamlPath = path.join(distDir, 'latest.yml');
+
+    if (!fs.existsSync(yamlPath)) {
+        console.log('   ⏭️  latest.yml not found, skipping checksum update');
+
+        return;
+    }
+
+    console.log('   📝 Updating latest.yml checksums...');
+    let content = fs.readFileSync(yamlPath, 'utf8');
+
+    for (const filePath of signedFiles) {
+        const fileName = path.basename(filePath);
+        const newSha512 = await calculateSha512(filePath);
+        const newSize = fs.statSync(filePath).size;
+
+        console.log(`      - ${fileName}: ${newSha512} (${newSize} bytes)`);
+
+        // 1. Update entry in files list (indented sha512 and size)
+        // files:
+        //   - url: fileName
+        //     sha512: ...
+        //     size: ...
+        const fileBlockRegex = new RegExp(`(-\\s*url:\\s*(?:\\.\\/)?${fileName.replace(/\./g, '\\.')}[\\s\\S]*?sha512:\\s*)[^\\s\\n]+`, 'g');
+
+        // Update entries in the 'files' list
+        content = content.replace(fileBlockRegex, `$1${newSha512}`);
+
+        const sizeBlockRegex = new RegExp(`(-\\s*url:\\s*(?:\\.\\/)?${fileName.replace(/\./g, '\\.')}[\\s\\S]*?size:\\s*)\\d+`, 'g');
+
+        content = content.replace(sizeBlockRegex, `$1${newSize}`);
+
+        // Also update root sha512 if this is the main artifact
+        const isMainArtifact = new RegExp(`^path:\\s*(?:\\.\\/)?${fileName.replace(/\./g, '\\.')}`, 'm').test(content);
+
+        if (isMainArtifact) {
+            const rootSha512Regex = /^sha512:\s*[a-zA-Z0-9+/=]+/m;
+            content = content.replace(rootSha512Regex, `sha512: ${newSha512}`);
+        }
+    }
+
+    fs.writeFileSync(yamlPath, content);
+    console.log('   ✅ latest.yml updated');
+}
 
 const AZURE_CONFIG = {
     endpoint: 'https://eus.codesigning.azure.net/',
@@ -402,6 +470,7 @@ exports.default = async function(context) {
         // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
         else {
             let exeArtifacts = [];
+            const distDir = context.outDir || path.join(__dirname, 'dist');
 
             // Log the context for debugging
             console.log(`📋 Context object keys: ${Object.keys(context)}`);
@@ -416,10 +485,8 @@ exports.default = async function(context) {
             }
 
             // Always scan the dist directory as fallback
-            const distDir = path.join(__dirname, 'dist');
-
             if (fs.existsSync(distDir)) {
-                console.log('📂 Scanning for artifacts in dist directory...\n');
+                console.log(`📂 Scanning for artifacts in dist directory: ${distDir}\n`);
                 const files = fs.readdirSync(distDir);
                 const distExeArtifacts = files
           .filter(f => f.endsWith('.exe'))
@@ -463,6 +530,9 @@ exports.default = async function(context) {
             for (const filePath of exeArtifacts) {
                 await signFile(filePath, credentials);
             }
+
+            // 4. Update latest.yml with new checksums
+            await updateLatestYaml(distDir, exeArtifacts);
         }
 
         console.log('\n═══════════════════════════════════════════════════');
