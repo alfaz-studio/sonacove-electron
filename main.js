@@ -18,7 +18,6 @@ const {
 const contextMenu = require('electron-context-menu');
 const isDev = require('electron-is-dev');
 const { autoUpdater } = require('electron-updater');
-
 const windowStateKeeper = require('electron-window-state');
 const fs = require('fs');
 const path = require('path');
@@ -321,9 +320,8 @@ function createJitsiMeetWindow() {
             console.error('Updater Error:', err);
         });
 
-        // Only check for updates in production or if forced
-        // CHANGED TEMPORARILY FOR LOCAL TESTING
-        if (!isDev || true) {
+        // Only check for updates in production
+        if (!isDev) {
             autoUpdater.checkForUpdates();
         }
     }
