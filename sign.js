@@ -1,74 +1,6 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-
-/**
- * Calculates SHA512 hash of a file
- * @param {string} filePath 
- * @returns {Promise<string>} base64 encoded hash
- */
-async function calculateSha512(filePath) {
-    return new Promise((resolve, reject) => {
-        const hash = crypto.createHash('sha512');
-        const stream = fs.createReadStream(filePath);
-
-        stream.on('data', data => hash.update(data));
-        stream.on('end', () => resolve(hash.digest('base64')));
-        stream.on('error', err => reject(err));
-    });
-}
-
-/**
- * Updates latest.yml with new checksums and file sizes
- * @param {string} distDir 
- * @param {Array<string>} signedFiles 
- */
-async function updateLatestYaml(distDir, signedFiles) {
-    const yamlPath = path.join(distDir, 'latest.yml');
-
-    if (!fs.existsSync(yamlPath)) {
-        console.log('   ⏭️  latest.yml not found, skipping checksum update');
-
-        return;
-    }
-
-    console.log('   📝 Updating latest.yml checksums...');
-    let content = fs.readFileSync(yamlPath, 'utf8');
-
-    for (const filePath of signedFiles) {
-        const fileName = path.basename(filePath);
-        const newSha512 = await calculateSha512(filePath);
-        const newSize = fs.statSync(filePath).size;
-
-        console.log(`      - ${fileName}: ${newSha512} (${newSize} bytes)`);
-
-        // 1. Update entry in files list (indented sha512 and size)
-        // files:
-        //   - url: fileName
-        //     sha512: ...
-        //     size: ...
-        const fileBlockRegex = new RegExp(`(-\\s*url:\\s*(?:\\.\\/)?${fileName.replace(/\./g, '\\.')}[\\s\\S]*?sha512:\\s*)[^\\s\\n]+`, 'g');
-
-        // Update entries in the 'files' list
-        content = content.replace(fileBlockRegex, `$1${newSha512}`);
-
-        const sizeBlockRegex = new RegExp(`(-\\s*url:\\s*(?:\\.\\/)?${fileName.replace(/\./g, '\\.')}[\\s\\S]*?size:\\s*)\\d+`, 'g');
-
-        content = content.replace(sizeBlockRegex, `$1${newSize}`);
-
-        // Also update root sha512 if this is the main artifact
-        const isMainArtifact = new RegExp(`^path:\\s*(?:\\.\\/)?${fileName.replace(/\./g, '\\.')}`, 'm').test(content);
-
-        if (isMainArtifact) {
-            const rootSha512Regex = /^sha512:\s*[a-zA-Z0-9+/=]+/m;
-            content = content.replace(rootSha512Regex, `sha512: ${newSha512}`);
-        }
-    }
-
-    fs.writeFileSync(yamlPath, content);
-    console.log('   ✅ latest.yml updated');
-}
 
 const AZURE_CONFIG = {
     endpoint: 'https://eus.codesigning.azure.net/',
@@ -164,32 +96,28 @@ async function signFile(filePath, credentials) {
 async function embedIcon(exePath, iconPath) {
     try {
         let rcedit;
-
         try {
             rcedit = require('rcedit');
         } catch (e) {
-            console.warn('   ⚠️  rcedit not available, skipping icon embedding');
-
+            console.warn(`   ⚠️  rcedit not available, skipping icon embedding`);
             return;
         }
 
         if (!fs.existsSync(exePath)) {
             console.log(`   ⏭️  Skipped (exe not found): ${path.basename(exePath)}`);
-
             return;
         }
 
         if (!fs.existsSync(iconPath)) {
             console.log(`   ⏭️  Skipped (icon not found): ${path.basename(iconPath)}`);
-
             return;
         }
 
         console.log(`   📎 Embedding icon in: ${path.basename(exePath)}`);
-
+        
         // Try different ways to call rcedit
         let success = false;
-
+        
         // Method 1: Direct function call
         if (typeof rcedit === 'function') {
             try {
@@ -199,7 +127,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 1 failed: ${e.message}`);
             }
         }
-
+        
         // Method 2: rcedit.default
         if (!success && rcedit.default && typeof rcedit.default === 'function') {
             try {
@@ -209,7 +137,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 2 failed: ${e.message}`);
             }
         }
-
+        
         // Method 3: rcedit.edit
         if (!success && typeof rcedit.edit === 'function') {
             try {
@@ -219,7 +147,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 3 failed: ${e.message}`);
             }
         }
-
+        
         // Method 4: Try all properties that might be functions
         if (!success) {
             for (const key of Object.keys(rcedit)) {
@@ -235,11 +163,11 @@ async function embedIcon(exePath, iconPath) {
                 }
             }
         }
-
+        
         if (success) {
             console.log(`   ✅ Icon embedded: ${path.basename(exePath)}`);
         } else {
-            console.warn('   ⚠️  Could not determine how to call rcedit - skipping icon embedding');
+            console.warn(`   ⚠️  Could not determine how to call rcedit - skipping icon embedding`);
         }
     } catch (error) {
         console.warn(`   ⚠️  Could not embed icon: ${error.message}`);
@@ -360,186 +288,143 @@ exports.default = async function(context) {
 
         console.log('   ✅ Credentials loaded\n');
 
-        console.log('🔍 Checking .NET SDK...');
-        await new Promise((resolve, reject) => {
-            const check = spawn('dotnet', [ '--version' ], { shell: true,
-                stdio: 'pipe' });
-            let version = '';
-
-            check.stdout.on('data', data => {
-                version += data.toString();
-            });
-            check.on('close', code => {
-                if (code !== 0) {
-                    reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
-                } else {
-                    console.log(`   ✅ .NET SDK found (${version.trim()})`);
-                    resolve();
-                }
-            });
-            check.on('error', () => {
-                reject(new Error('.NET SDK not found'));
-            });
-        });
-
-        console.log('   Checking sign tool...');
-        await new Promise((resolve, reject) => {
-            const check = spawn('sign', [ '--version' ], { shell: true,
-                stdio: 'pipe' });
-            let found = false;
-
-            check.stdout.on('data', () => {
-                found = true;
-            });
-            check.stderr.on('data', () => {
-                found = true;
-            });
-            check.on('close', () => {
-                if (found) {
-                    console.log('   ✅ Sign tool found\n');
-                    resolve();
-                } else {
-                    // Try to install
-                    installSignTool().then(resolve)
-.catch(reject);
-                }
-            });
-            check.on('error', () => {
-                // Try to install
-                installSignTool().then(resolve)
-.catch(reject);
-            });
-        });
-
-        // HANDLE AFTER_SIGN (Unpacked executables)
-        if (context.appOutDir) {
-            const appOutDir = context.appOutDir;
-
-            console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
-
-            const files = fs.readdirSync(appOutDir);
-            const exeFiles = files.filter(f => f.endsWith('.exe'));
-
-            console.log(`Found ${exeFiles.length} executable(s) to sign`);
-
-            // Embed icon into main executable BEFORE signing
-            // Modification after signing breaks the digital signature!
-            console.log('\n📎 Embedding icon into executables...');
-            const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-
-            // Try multiple possible names for the main executable
-            const possibleNames = [
-                'Sonacove Meets.exe',
-                'Sonacove-Meets.exe',
-                'sonacove-meets.exe'
-            ];
-
-            for (const name of possibleNames) {
-                const exePath = path.join(appOutDir, name);
-
-                if (fs.existsSync(exePath)) {
-                    await embedIcon(exePath, iconPath);
-                }
-            }
-
-            // Sign all executables found (including the ones we just embedded icons into)
-            for (const file of exeFiles) {
-                const filePath = path.join(appOutDir, file);
-
-                await signFile(filePath, credentials);
-            }
-
-            // Sign resources (e.g. elevate.exe)
-            const resourcesDir = path.join(appOutDir, 'resources');
-
-            if (fs.existsSync(resourcesDir)) {
-                const resourceFiles = fs.readdirSync(resourcesDir);
-                const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
-
-                if (resourceExes.length > 0) {
-                    console.log(`\nFound ${resourceExes.length} resource executable(s):`);
-                    for (const file of resourceExes) {
-                        const filePath = path.join(resourcesDir, file);
-
-                        await signFile(filePath, credentials);
-                    }
-                }
-            }
+    console.log('🔍 Checking .NET SDK...');
+    await new Promise((resolve, reject) => {
+      const check = spawn('dotnet', ['--version'], { shell: true, stdio: 'pipe' });
+      let version = '';
+      check.stdout.on('data', (data) => { version += data.toString(); });
+      check.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
+        } else {
+          console.log(`   ✅ .NET SDK found (${version.trim()})`);
+          resolve();
         }
+      });
+      check.on('error', () => {
+        reject(new Error('.NET SDK not found'));
+      });
+    });
 
-        // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
-        else {
-            let exeArtifacts = [];
-            const distDir = context.outDir || path.join(__dirname, 'dist');
+    console.log('   Checking sign tool...');
+    await new Promise((resolve, reject) => {
+      const check = spawn('sign', ['--version'], { shell: true, stdio: 'pipe' });
+      let found = false;
+      check.stdout.on('data', () => { found = true; });
+      check.stderr.on('data', () => { found = true; });
+      check.on('close', () => {
+        if (found) {
+          console.log('   ✅ Sign tool found\n');
+          resolve();
+        } else {
+          // Try to install
+          installSignTool().then(resolve).catch(reject);
+        }
+      });
+      check.on('error', () => {
+        // Try to install
+        installSignTool().then(resolve).catch(reject);
+      });
+    });
 
-            // Log the context for debugging
-            console.log(`📋 Context object keys: ${Object.keys(context)}`);
-            if (context.artifactPaths) {
-                console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
-            }
+    // HANDLE AFTER_SIGN (Unpacked executables)
+    if (context.appOutDir) {
+      const appOutDir = context.appOutDir;
+      console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
+      
+      const files = fs.readdirSync(appOutDir);
+      const exeFiles = files.filter(f => f.endsWith('.exe'));
+      
+      console.log(`Found ${exeFiles.length} executable(s) to sign`);
+      
+      for (const file of exeFiles) {
+        const filePath = path.join(appOutDir, file);
+        await signFile(filePath, credentials);
+      }
 
-            // Check if we have artifactPaths (from afterAllArtifactBuild)
-            if (context.artifactPaths) {
-                console.log('📂 Scanning for artifacts to sign from context...\n');
-                exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
-            }
+      // Sign resources (e.g. elevate.exe)
+      const resourcesDir = path.join(appOutDir, 'resources');
+      if (fs.existsSync(resourcesDir)) {
+          const resourceFiles = fs.readdirSync(resourcesDir);
+          const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
 
-            // Always scan the dist directory as fallback
-            if (fs.existsSync(distDir)) {
-                console.log(`📂 Scanning for artifacts in dist directory: ${distDir}\n`);
-                const files = fs.readdirSync(distDir);
-                const distExeArtifacts = files
+          if (resourceExes.length > 0) {
+              console.log(`\nFound ${resourceExes.length} resource executable(s):`);
+              for (const file of resourceExes) {
+                  const filePath = path.join(resourcesDir, file);
+                  await signFile(filePath, credentials);
+              }
+          }
+      }
+
+      // Embed icon into main executable after signing
+      console.log('\n📎 Embedding icon into executables...');
+      const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
+      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
+      await embedIcon(mainExePath, iconPath);
+
+    } 
+    // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
+    else {
+      let exeArtifacts = [];
+      
+      // Log the context for debugging
+      console.log(`📋 Context object keys: ${Object.keys(context)}`);
+      if (context.artifactPaths) {
+        console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
+      }
+      
+      // Check if we have artifactPaths (from afterAllArtifactBuild)
+      if (context.artifactPaths) {
+        console.log(`📂 Scanning for artifacts to sign from context...\n`);
+        exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+      } 
+      // Always scan the dist directory as fallback
+      const distDir = path.join(__dirname, 'dist');
+      if (fs.existsSync(distDir)) {
+        console.log(`📂 Scanning for artifacts in dist directory...\n`);
+        const files = fs.readdirSync(distDir);
+        const distExeArtifacts = files
           .filter(f => f.endsWith('.exe'))
           .map(f => path.join(distDir, f));
+        
+        // Merge artifacts from both sources (context and dist directory)
+        exeArtifacts = [...new Set([...exeArtifacts, ...distExeArtifacts])];
+      }
+      
+      console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
-                // Merge artifacts from both sources (context and dist directory)
-                exeArtifacts = [ ...new Set([ ...exeArtifacts, ...distExeArtifacts ]) ];
-            }
+      for (const filePath of exeArtifacts) {
+        await signFile(filePath, credentials);
+      }
 
-            console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
-
-            // Embed icon into artifacts BEFORE signing
-            // Modification after signing breaks the digital signature!
-            console.log('\n📎 Embedding icon into application executable before signing...');
-            const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-
-            // 1. Embed in the main portable exe in win-unpacked
-            // This is the exe that NSIS will package into the installer
-            const portablePossibleNames = [
-                path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove Meets.exe'),
-                path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove-Meets.exe'),
-                path.join(__dirname, 'dist', 'win-unpacked', 'sonacove-meets.exe')
-            ];
-
-            for (const portableExePath of portablePossibleNames) {
-                if (fs.existsSync(portableExePath)) {
-                    console.log(`\n📎 Embedding icon into portable version: ${path.basename(portableExePath)}`);
-                    await embedIcon(portableExePath, iconPath);
-                }
-            }
-
-            // 2. Embed in artifacts if they are not installers
-            for (const artifactPath of exeArtifacts) {
-                // Skip the Setup.exe installer - only embed into the portable exe
-                if (!artifactPath.includes('Setup')) {
-                    await embedIcon(artifactPath, iconPath);
-                }
-            }
-
-            // 3. NOW SIGN EVERYTHING
-            for (const filePath of exeArtifacts) {
-                await signFile(filePath, credentials);
-            }
-
-            // 4. Update latest.yml with new checksums
-            await updateLatestYaml(distDir, exeArtifacts);
+      // Embed icon into artifacts after signing
+      console.log('\n📎 Embedding icon into application executable...');
+      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
+      
+      // IMPORTANT: Only embed icon into the main app exe, NOT the Setup.exe installer
+      // The setup.exe is just an installer and should not be modified
+      for (const artifactPath of exeArtifacts) {
+        // Skip the Setup.exe installer - only embed into the portable exe
+        if (!artifactPath.includes('Setup')) {
+          await embedIcon(artifactPath, iconPath);
         }
+      }
+      
+      // Also embed in the main portable exe in win-unpacked
+      // This is the exe that NSIS will package into the installer
+      const portableExePath = path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove Meets.exe');
+      if (fs.existsSync(portableExePath)) {
+        console.log(`\n📎 Embedding icon into portable version...`);
+        await embedIcon(portableExePath, iconPath);
+      }
+    }
 
-        console.log('\n═══════════════════════════════════════════════════');
-        console.log('      ✅ Signing & Icon Embedding Completed Successfully');
-        console.log('═══════════════════════════════════════════════════\n');
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('      ✅ Signing & Icon Embedding Completed Successfully');
+    console.log('═══════════════════════════════════════════════════\n');
 
-    } catch (error) {
+  } catch (error) {
         console.error('\n═══════════════════════════════════════════════════');
         console.error('      ❌ Signing Failed');
         console.error('═══════════════════════════════════════════════════');
