@@ -336,7 +336,15 @@ exports.default = async function(context) {
       const exeFiles = files.filter(f => f.endsWith('.exe'));
       
       console.log(`Found ${exeFiles.length} executable(s) to sign`);
+
+      // EMBED ICON FIRST, BEFORE SIGNING
+      // This ensures the checksum matches what electron-builder calculates
+      console.log('\n📎 Embedding icon into executables BEFORE signing...');
+      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
+      const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
+      await embedIcon(mainExePath, iconPath);
       
+      // NOW SIGN (after embedding)
       for (const file of exeFiles) {
         const filePath = path.join(appOutDir, file);
         await signFile(filePath, credentials);
@@ -356,12 +364,6 @@ exports.default = async function(context) {
               }
           }
       }
-
-      // Embed icon into main executable after signing
-      console.log('\n📎 Embedding icon into executables...');
-      const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
-      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-      await embedIcon(mainExePath, iconPath);
 
     } 
     // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
@@ -394,29 +396,11 @@ exports.default = async function(context) {
       
       console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
+      // ONLY SIGN in this phase, do NOT embed or modify files
+      // The icon is already embedded in afterPack phase
+      // Modifying here would break the checksums
       for (const filePath of exeArtifacts) {
         await signFile(filePath, credentials);
-      }
-
-      // Embed icon into artifacts after signing
-      console.log('\n📎 Embedding icon into application executable...');
-      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-      
-      // IMPORTANT: Only embed icon into the main app exe, NOT the Setup.exe installer
-      // The setup.exe is just an installer and should not be modified
-      for (const artifactPath of exeArtifacts) {
-        // Skip the Setup.exe installer - only embed into the portable exe
-        if (!artifactPath.includes('Setup')) {
-          await embedIcon(artifactPath, iconPath);
-        }
-      }
-      
-      // Also embed in the main portable exe in win-unpacked
-      // This is the exe that NSIS will package into the installer
-      const portableExePath = path.join(__dirname, 'dist', 'win-unpacked', 'Sonacove Meets.exe');
-      if (fs.existsSync(portableExePath)) {
-        console.log(`\n📎 Embedding icon into portable version...`);
-        await embedIcon(portableExePath, iconPath);
       }
     }
 
