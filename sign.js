@@ -335,36 +335,17 @@ exports.default = async function(context) {
       const files = fs.readdirSync(appOutDir);
       const exeFiles = files.filter(f => f.endsWith('.exe'));
       
-      console.log(`Found ${exeFiles.length} executable(s) to sign`);
+      console.log(`Found ${exeFiles.length} executable(s)`);
 
-      // EMBED ICON FIRST, BEFORE SIGNING
-      // This ensures the checksum matches what electron-builder calculates
-      console.log('\n📎 Embedding icon into executables BEFORE signing...');
+      // EMBED ICON ONLY (do NOT sign here)
+      // Signing changes the file, breaking checksums
+      // We'll sign in afterAllArtifactBuild instead
+      console.log('\n📎 Embedding icon into executables...');
       const iconPath = path.join(__dirname, 'resources', 'icon.ico');
       const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
       await embedIcon(mainExePath, iconPath);
       
-      // NOW SIGN (after embedding)
-      for (const file of exeFiles) {
-        const filePath = path.join(appOutDir, file);
-        await signFile(filePath, credentials);
-      }
-
-      // Sign resources (e.g. elevate.exe)
-      const resourcesDir = path.join(appOutDir, 'resources');
-      if (fs.existsSync(resourcesDir)) {
-          const resourceFiles = fs.readdirSync(resourcesDir);
-          const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
-
-          if (resourceExes.length > 0) {
-              console.log(`\nFound ${resourceExes.length} resource executable(s):`);
-              for (const file of resourceExes) {
-                  const filePath = path.join(resourcesDir, file);
-                  await signFile(filePath, credentials);
-              }
-          }
-      }
-
+      console.log('\n⏭️  Skipping signing in afterPack phase (will sign in afterAllArtifactBuild)');
     } 
     // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
     else {
@@ -396,11 +377,25 @@ exports.default = async function(context) {
       
       console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
-      // ONLY SIGN in this phase, do NOT embed or modify files
-      // The icon is already embedded in afterPack phase
-      // Modifying here would break the checksums
+      // SIGN ALL ARTIFACTS (after checksums are locked in latest.yml)
+      console.log('\n🔐 Signing all artifacts...');
       for (const filePath of exeArtifacts) {
         await signFile(filePath, credentials);
+      }
+      
+      // Also sign resources if they exist
+      const resourcesDir = path.join(__dirname, 'dist', 'win-unpacked', 'resources');
+      if (fs.existsSync(resourcesDir)) {
+        const resourceFiles = fs.readdirSync(resourcesDir);
+        const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
+        
+        if (resourceExes.length > 0) {
+          console.log(`\nFound ${resourceExes.length} resource executable(s):`);
+          for (const file of resourceExes) {
+            const filePath = path.join(resourcesDir, file);
+            await signFile(filePath, credentials);
+          }
+        }
       }
     }
 
