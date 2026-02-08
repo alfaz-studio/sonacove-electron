@@ -167,6 +167,51 @@ async function embedIcon(exePath, iconPath) {
     }
 }
 
+async function installSignTool() {
+    return new Promise((resolve) => {
+        console.log('   📦 Installing sign tool...');
+        const install = spawn('dotnet', ['tool', 'install', '--global', 'sign', '--prerelease'], {
+            stdio: 'inherit',
+            shell: true
+        });
+        install.on('close', (code) => {
+            if (code === 0) {
+                console.log('   ✅ Sign tool installed\n');
+            } else {
+                console.log('   ⚠️  Failed to install sign tool\n');
+            }
+            resolve();
+        });
+        install.on('error', () => {
+            console.log('   ⚠️  Error installing sign tool\n');
+            resolve();
+        });
+    });
+}
+
+async function ensureSignToolInstalled() {
+    return new Promise((resolve) => {
+        const check = spawn('sign', ['--version'], { shell: true, stdio: 'pipe' });
+        let found = false;
+        
+        check.stdout.on('data', () => { found = true; });
+        check.stderr.on('data', () => { found = true; });
+        
+        check.on('close', (code) => {
+            if (found || code === 0) {
+                console.log('   ✅ Sign tool found\n');
+                resolve();
+            } else {
+                installSignTool().then(resolve);
+            }
+        });
+        
+        check.on('error', () => {
+            installSignTool().then(resolve);
+        });
+    });
+}
+
 exports.default = async function(context) {
     if (process.platform !== 'win32') {
         console.log('⏭️  Skipping (not running on Windows)');
@@ -207,21 +252,28 @@ exports.default = async function(context) {
             console.log('   ✅ Credentials loaded\n');
 
             // Check .NET SDK
-            await new Promise((resolve, reject) => {
+            console.log('🔍 Checking .NET SDK...');
+            await new Promise((resolve) => {
                 const check = spawn('dotnet', ['--version'], { shell: true, stdio: 'pipe' });
                 let version = '';
                 check.stdout.on('data', (data) => { version += data.toString(); });
                 check.on('close', (code) => {
                     if (code === 0) {
-                        console.log(`✅ .NET SDK: ${version.trim()}`);
-                        resolve();
+                        console.log(`   ✅ .NET SDK: ${version.trim()}\n`);
                     } else {
-                        console.log('⚠️  .NET SDK not found');
-                        resolve(); // Don't fail
+                        console.log('   ⚠️  .NET SDK not found\n');
                     }
+                    resolve();
                 });
-                check.on('error', () => resolve());
+                check.on('error', () => {
+                    console.log('   ⚠️  .NET SDK not found\n');
+                    resolve();
+                });
             });
+
+            // Ensure sign tool is installed (will auto-install if missing)
+            console.log('🔍 Checking sign tool...');
+            await ensureSignToolInstalled();
 
             // Find and sign all exe files in dist
             const distDir = path.join(__dirname, 'dist');
@@ -231,7 +283,7 @@ exports.default = async function(context) {
                     .map(f => path.join(distDir, f));
 
                 if (exeFiles.length > 0) {
-                    console.log(`\n🔐 Signing ${exeFiles.length} artifact(s)...\n`);
+                    console.log(`🔐 Signing ${exeFiles.length} artifact(s)...\n`);
                     for (const file of exeFiles) {
                         await signFile(file, credentials);
                     }
