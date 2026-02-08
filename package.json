@@ -87,6 +87,7 @@
       "uninstallerIcon": "resources/icon.ico"
     },
     "afterPack": "sign.js",
+    "afterAllArtifactBuild": "sign.js",
     "directories": {
       "buildResources": "resources"
     }
