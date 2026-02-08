@@ -52,13 +52,25 @@ async function signWithAzure(filePath, credentials) {
             filePath
         ];
 
-        const signProcess = spawn('sign', args, {
+        // Get the dotnet tools directory
+        let signToolPath = 'sign';
+        const userProfile = process.env.USERPROFILE || process.env.HOME;
+        const toolsDir = path.join(userProfile, '.dotnet', 'tools');
+        const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
+        
+        if (fs.existsSync(signExe)) {
+            signToolPath = signExe;
+            console.log(`   Using sign tool: ${signToolPath}`);
+        }
+
+        const signProcess = spawn(signToolPath, args, {
             stdio: 'inherit',
             env: {
                 ...process.env,
                 AZURE_TENANT_ID: credentials.tenantId,
                 AZURE_CLIENT_ID: credentials.clientId,
-                AZURE_CLIENT_SECRET: credentials.clientSecret
+                AZURE_CLIENT_SECRET: credentials.clientSecret,
+                PATH: `${toolsDir}${path.delimiter}${process.env.PATH}`
             }
         });
 
