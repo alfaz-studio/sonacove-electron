@@ -10,87 +10,18 @@
     "url": "https://github.com/alfaz-studio/sonacove-electron.git"
   },
   "scripts": {
-    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron .\"",
-    "start:prod": "npm run build && npx electron-builder --dir",
+    "start": "cross-env APP_ENV=staging webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron .\"",
+    "start:prod": "cross-env APP_ENV=production webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch:prod\" \"electron .\"",
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",
     "lint-fix": "eslint . --fix",
     "build": "webpack --config ./webpack.main.js --mode production && webpack --config ./webpack.renderer.js --mode production",
-    "dist": "npm run build && electron-builder",
+    "dist": "npm run dist:prod",
+    "dist:prod": "cross-env APP_ENV=production npm run build && electron-builder --config electron-builder-prod.json",
+    "dist:staging": "cross-env APP_ENV=staging npm run build && electron-builder --config electron-builder-staging.json",
     "postinstall": "patch-package",
-    "watch": "webpack --config ./webpack.renderer.js --mode development --watch --watch-options-poll=1000"
-  },
-  "build": {
-    "appId": "com.sonacove.meet",
-    "productName": "Sonacove Meets",
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "alfaz-studio",
-        "repo": "sonacove-electron"
-      }
-    ],
-    "files": [
-      "build/**/*",
-      "resources/**/*",
-      "package.json",
-      "node_modules/**/*"
-    ],
-    "protocols": [
-      {
-        "name": "Sonacove Meet Protocol",
-        "schemes": [
-          "sonacove"
-        ]
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.video-conferencing",
-      "hardenedRuntime": true,
-      "entitlements": "resources/entitlements.mac.plist",
-      "artifactName": "${productName}.${ext}",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "universal"
-          ]
-        }
-      ],
-      "extendInfo": {
-        "NSCameraUsageDescription": "Sonacove requires access to your camera for meetings.",
-        "NSMicrophoneUsageDescription": "Sonacove requires access to your microphone for meetings.",
-        "NSScreenCaptureUsageDescription": "Sonacove requires access to record your screen for sharing.",
-        "NSAppleEventsUsageDescription": "Sonacove requires scripting access to control other applications."
-      }
-    },
-    "win": {
-      "target": "nsis",
-      "icon": "resources/icon.ico",
-      "artifactName": "Sonacove-Meets-Setup.${ext}",
-      "signAndEditExecutable": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": false,
-      "installerIcon": "resources/icon.ico",
-      "uninstallerIcon": "resources/icon.ico"
-    },
-    "afterPack": "sign.js",
-    "afterAllArtifactBuild": "sign.js",
-    "directories": {
-      "buildResources": "resources"
-    }
+    "watch": "cross-env APP_ENV=staging webpack --config ./webpack.renderer.js --mode development --watch --watch-options-poll=1000",
+    "watch:prod": "cross-env APP_ENV=production webpack --config ./webpack.renderer.js --mode development --watch --watch-options-poll=1000"
   },
   "dependencies": {
     "@jitsi/electron-sdk": "9.0.7",
@@ -125,6 +56,7 @@
     "babel-eslint": "10.0.3",
     "babel-loader": "^8.2.3",
     "concurrently": "5.1.0",
+    "cross-env": "^10.1.0",
     "css-loader": "^6.7.1",
     "electron": "30.1.0",
     "electron-builder": "26.0.12",

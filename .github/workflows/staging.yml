@@ -1,0 +1,131 @@
+name: Staging Auto Release
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.versioning.outputs.target_version }}
+      skipped: ${{ steps.versioning.outputs.skipped }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          
+      - name: Increment version and Tag
+        id: versioning
+        shell: bash
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+
+          # Fetch tags
+          git fetch --tags origin
+
+          # Get version from package.json
+          VERSION=$(node -p "require('./package.json').version")
+          
+          # Append -staging to version if not present
+          if [[ ! $VERSION == *"-staging"* ]]; then
+            STAGING_VERSION="${VERSION}-staging.0"
+          else
+            STAGING_VERSION=$VERSION
+          fi
+
+          # Self-healing loop for staging tags
+          COUNT=0
+          BASE_VERSION=$(echo $STAGING_VERSION | cut -d'-' -f1)
+          STAGING_TAG="v${BASE_VERSION}-staging.$COUNT"
+          
+          while git rev-parse "$STAGING_TAG" >/dev/null 2>&1; do
+            COUNT=$((COUNT + 1))
+            STAGING_TAG="v${BASE_VERSION}-staging.$COUNT"
+          done
+
+          echo "Final Staging Tag: $STAGING_TAG"
+          echo "target_version=$STAGING_TAG" >> $GITHUB_OUTPUT
+          echo "skipped=false" >> $GITHUB_OUTPUT
+          
+          # Create and push the tag
+          git tag "$STAGING_TAG"
+          git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git "$STAGING_TAG"
+
+      - name: Create Staging Release
+        if: steps.versioning.outputs.skipped == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.RELEASE_TOKEN }}
+          script: |
+            const tag = '${{ steps.versioning.outputs.target_version }}';
+            
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Staging Build ${tag}`,
+              body: 'Automatically generated staging release.',
+              prerelease: true,
+              draft: false
+            });
+
+  build:
+    needs: version
+    if: needs.version.outputs.skipped == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Check out the staging tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.new_tag }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Staging
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          # Windows signing secrets (optional for staging, but keep if you want it signed)
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # macOS signing secrets
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }} 
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+        run: npm run dist:staging
+
+      - name: Upload signed Windows installer to staging release
+        if: matrix.os == 'windows-latest'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG_NAME=${{ needs.version.outputs.new_tag }}
+          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Staging-Setup.exe
+          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Staging-Setup.exe.blockmap
+          gh release upload $TAG_NAME --clobber dist/staging.yml
+        shell: bash

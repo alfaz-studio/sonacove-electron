@@ -24,13 +24,14 @@ const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
 
+const sonacoveConfig = require('./app/features/sonacove/config');
+
 // Set app user model ID at the very top for Windows icon support
 if (process.platform === 'win32') {
-    app.setAppUserModelId('com.sonacove.meet');
+    app.setAppUserModelId(sonacoveConfig.isProd ? 'com.sonacove.meet' : 'com.sonacove.meet.staging');
 }
 
 const config = require('./app/features/config');
-const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink,

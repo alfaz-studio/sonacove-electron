@@ -1,6 +1,6 @@
 const { app } = require('electron');
 
-const appEnv = process.env.APP_ENV || (app.isPackaged ? 'production' : 'staging');
+const appEnv = process.env.APP_ENV || (app && app.isPackaged ? 'production' : 'staging');
 const isProd = appEnv === 'production';
 
 const URLS = {

@@ -1,0 +1,72 @@
+{
+  "appId": "com.sonacove.meet",
+  "productName": "Sonacove Meets",
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "alfaz-studio",
+      "repo": "sonacove-electron"
+    }
+  ],
+  "files": [
+    "build/**/*",
+    "resources/**/*",
+    "package.json",
+    "node_modules/**/*"
+  ],
+  "protocols": [
+    {
+      "name": "Sonacove Meet Protocol",
+      "schemes": [
+        "sonacove"
+      ]
+    }
+  ],
+  "mac": {
+    "category": "public.app-category.video-conferencing",
+    "hardenedRuntime": true,
+    "entitlements": "resources/entitlements.mac.plist",
+    "artifactName": "${productName}.${ext}",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": [
+          "universal"
+        ]
+      },
+      {
+        "target": "zip",
+        "arch": [
+          "universal"
+        ]
+      }
+    ],
+    "extendInfo": {
+      "NSCameraUsageDescription": "Sonacove requires access to your camera for meetings.",
+      "NSMicrophoneUsageDescription": "Sonacove requires access to your microphone for meetings.",
+      "NSScreenCaptureUsageDescription": "Sonacove requires access to record your screen for sharing.",
+      "NSAppleEventsUsageDescription": "Sonacove requires scripting access to control other applications."
+    }
+  },
+  "win": {
+    "target": "nsis",
+    "icon": "resources/icon.ico",
+    "artifactName": "Sonacove-Meets-Setup.${ext}",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowElevation": true,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "resources/icon.ico",
+    "uninstallerIcon": "resources/icon.ico"
+  },
+  "afterPack": "sign.js",
+  "afterAllArtifactBuild": "sign.js",
+  "directories": {
+    "buildResources": "resources"
+  }
+}

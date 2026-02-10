@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 
 module.exports = {
     target: 'electron-main',
@@ -8,6 +9,11 @@ module.exports = {
         path: path.resolve('./build'),
         filename: '[name].js'
     },
+    plugins: [
+        new webpack.DefinePlugin({
+            'process.env.APP_ENV': JSON.stringify(process.env.APP_ENV || 'production')
+        })
+    ],
     node: {
         __dirname: true
     },

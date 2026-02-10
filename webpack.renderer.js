@@ -1,5 +1,6 @@
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const path = require('path');
+const webpack = require('webpack');
 
 const ELECTRON_VERSION = require('./package.json').devDependencies.electron;
 
@@ -15,6 +16,9 @@ module.exports = {
     plugins: [
         new HtmlWebpackPlugin({
             template: './app/index.html'
+        }),
+        new webpack.DefinePlugin({
+            'process.env.APP_ENV': JSON.stringify(process.env.APP_ENV || 'production')
         })
     ],
     output: {
