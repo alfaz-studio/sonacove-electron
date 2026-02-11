@@ -31,10 +31,8 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-
           # 1. Fetch tags so we know what already exists
           git fetch --tags origin
-
           # 2. Get the version from package.json
           VERSION=$(node -p "require('./package.json').version")
           
@@ -45,7 +43,6 @@ jobs:
             npm version patch --no-git-tag-version
             VERSION=$(node -p "require('./package.json').version")
           done
-
           echo "Final Version to be used: $VERSION"
           echo "target_version=v$VERSION" >> $GITHUB_OUTPUT
           echo "skipped=false" >> $GITHUB_OUTPUT # Tell Job 2 to run
@@ -66,7 +63,7 @@ jobs:
           git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git "v$VERSION"
 
       - name: Create Draft Release
-        if: steps.versioning.outputs.skipped == 'false'
+        if: ${{ steps.versioning.outputs.skipped == 'false' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.RELEASE_TOKEN }}
@@ -88,11 +85,13 @@ jobs:
 
   build:
     needs: version
-    if: needs.version.outputs.skipped == 'false'
+    if: ${{ needs.version.outputs.skipped == 'false' }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os:
+          - windows-latest
+          - macos-latest
     steps:
       - name: Check out the NEW tag
         uses: actions/checkout@v4
@@ -114,7 +113,7 @@ jobs:
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }} 
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -129,29 +128,29 @@ jobs:
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }} 
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
         run: npm run dist
 
-      - name: Upload signed Windows installer to draft release
+      - name: Regenerate and upload latest.yml (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          # Regenerate latest.yml with correct checksum from signed exe
+          # Regenerate latest.yml with CORRECT checksum from the SIGNED exe
           $file = "dist\Sonacove-Meets-Setup.exe"
           $hash = Get-FileHash -Path $file -Algorithm SHA512
           $sha512 = $hash.Hash.ToLower()
           $size = (Get-Item $file).Length
           $version = node -p "require('./package.json').version"
-          $releaseDate = Get-Date -Format "yyyy-MM-dd"
           
           Write-Host "File: $file"
           Write-Host "SHA512: $sha512"
           Write-Host "Size: $size"
           Write-Host "Version: $version"
           
+          # Create YAML content (must be in lowercase for hash)
           $yaml = @"
 version: $version
 files:
@@ -160,7 +159,7 @@ files:
     size: $size
 path: Sonacove-Meets-Setup.exe
 sha512: $sha512
-releaseDate: '$releaseDate'
+releaseDate: '$(Get-Date -Format 'yyyy-MM-dd')'
 "@
           
           Set-Content -Path "dist/latest.yml" -Value $yaml
