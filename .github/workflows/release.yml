@@ -136,21 +136,49 @@ jobs:
 
       - name: Upload signed Windows installer to draft release
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          # Upload the signed files directly using GitHub CLI
-          # gh CLI is pre-installed on GitHub Actions runners
+          # Regenerate latest.yml with correct checksum from signed exe
+          $file = "dist\Sonacove-Meets-Setup.exe"
+          $hash = Get-FileHash -Path $file -Algorithm SHA512
+          $sha512 = $hash.Hash.ToLower()
+          $size = (Get-Item $file).Length
+          $version = node -p "require('./package.json').version"
           
-          # Get the tag name
-          TAG_NAME=${{ needs.version.outputs.new_tag }}
+          Write-Host "File: $file"
+          Write-Host "SHA512: $sha512"
+          Write-Host "Size: $size"
+          Write-Host "Version: $version"
           
-          # Upload the signed files to the draft release
-          # Use --clobber to overwrite if they already exist
+          $yaml = @"
+version: $version
+files:
+  - url: Sonacove-Meets-Setup.exe
+    sha512: $sha512
+    size: $size
+path: Sonacove-Meets-Setup.exe
+sha512: $sha512
+releaseDate: '$(Get-Date -Format 'yyyy-MM-dd')'
+"@
+          
+          Set-Content -Path "dist/latest.yml" -Value $yaml
+          
+          Write-Host ""
+          Write-Host "=== Generated latest.yml ==="
+          Get-Content "dist/latest.yml"
+          Write-Host ""
+          
+          # Upload files to release
+          $TAG_NAME = "${{ needs.version.outputs.new_tag }}"
+          Write-Host "Uploading to release: $TAG_NAME"
+          
           gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe
           gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe.blockmap
           gh release upload $TAG_NAME --clobber dist/latest.yml
-        shell: bash
+          
+          Write-Host "Upload complete!"
 
       - name: Verify mac universal and notarization
         if: matrix.os == 'macos-latest'
