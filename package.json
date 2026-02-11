@@ -99,7 +99,6 @@
     "electron-reload": "^1.5.0",
     "electron-updater": "6.6.2",
     "electron-window-state": "^5.0.3",
-    "js-yaml": "^4.1.0",
     "prop-types": "^15.8.1"
   },
   "devDependencies": {

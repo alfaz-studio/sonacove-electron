@@ -122,7 +122,14 @@ jobs:
         run: |
           $file = "dist\Sonacove-Meets-Setup.exe"
           $hash = Get-FileHash -Path $file -Algorithm SHA512
-          $sha512 = $hash.Hash.ToLower()
+          
+          # Convert hex hash to base64 (electron-updater expects base64)
+          $hashBytes = [byte[]]::new($hash.Hash.Length / 2)
+          for ($i = 0; $i -lt $hash.Hash.Length; $i += 2) {
+              $hashBytes[$i / 2] = [Convert]::ToByte($hash.Hash.Substring($i, 2), 16)
+          }
+          $sha512 = [Convert]::ToBase64String($hashBytes)
+
           $size = (Get-Item $file).Length
           $version = node -p "require('./package.json').version"
           $date = Get-Date -Format "yyyy-MM-dd"
