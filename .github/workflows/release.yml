@@ -154,15 +154,15 @@ jobs:
                 Write-Host "Version: $version"
                 
                 $yaml = @"
-      version: $version
-      files:
-        - url: Sonacove-Meets-Setup.exe
-          sha512: $sha512
-          size: $size
-      path: Sonacove-Meets-Setup.exe
-      sha512: $sha512
-      releaseDate: '$releaseDate'
-      "@
+        version: $version
+        files:
+          - url: Sonacove-Meets-Setup.exe
+            sha512: $sha512
+            size: $size
+        path: Sonacove-Meets-Setup.exe
+        sha512: $sha512
+        releaseDate: '$releaseDate'
+        "@
                 
                 Set-Content -Path "dist/latest.yml" -Value $yaml
                 
