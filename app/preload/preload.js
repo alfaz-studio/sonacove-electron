@@ -57,24 +57,36 @@ function setupRenderer(api, options = {}) {
 }
 
 // Intercept getUserMedia to track the last selected screenshare source
-const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-navigator.mediaDevices.getUserMedia = async (constraints) => {
-    if (constraints && constraints.video && typeof constraints.video === 'object') {
-        let sourceId = null;
-
-        if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
-            sourceId = constraints.video.mandatory.chromeMediaSourceId;
-        } else if (constraints.video.chromeMediaSourceId) {
-            sourceId = constraints.video.chromeMediaSourceId;
-        }
-
-        if (sourceId) {
-            window._lastScreenshareSourceId = sourceId;
-        }
+// navigator.mediaDevices may not be available at preload time, so defer the patch
+function patchGetUserMedia() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return;
     }
+    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async (constraints) => {
+        if (constraints && constraints.video && typeof constraints.video === 'object') {
+            let sourceId = null;
 
-    return originalGetUserMedia(constraints);
-};
+            if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
+                sourceId = constraints.video.mandatory.chromeMediaSourceId;
+            } else if (constraints.video.chromeMediaSourceId) {
+                sourceId = constraints.video.chromeMediaSourceId;
+            }
+
+            if (sourceId) {
+                window._lastScreenshareSourceId = sourceId;
+            }
+        }
+
+        return originalGetUserMedia(constraints);
+    };
+}
+
+if (navigator.mediaDevices) {
+    patchGetUserMedia();
+} else {
+    window.addEventListener('DOMContentLoaded', patchGetUserMedia);
+}
 
 
 window.sonacoveElectronAPI = {

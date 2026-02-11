@@ -3,6 +3,19 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
+if (typeof Request === 'undefined') {
+    global.Request = class Request {
+        constructor(input, init = {}) {
+            this.url = typeof input === 'string' ? input : input.url;
+            this.method = (init.method || 'GET').toUpperCase();
+            this.headers = new (global.Headers || Object)(init.headers);
+            this.body = init.body || null;
+            this.credentials = init.credentials || 'same-origin';
+            this.mode = init.mode || 'cors';
+        }
+    };
+}
+
 if (typeof Headers === 'undefined') {
     global.Headers = class Headers {
         constructor(init) {
