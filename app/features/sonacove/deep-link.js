@@ -69,6 +69,54 @@ function processDeepLinkOnStartup() {
 }
 
 /**
+ * Handles the authentication callback from the deep link.
+ * Extracts user data and sends it to the renderer process via IPC.
+ *
+ * @param {string} deepLink - The auth callback URL.
+ * @returns {void}
+ */
+function handleAuthCallback(deepLink) {
+    try {
+        // Hack to use URL parser with non-standard protocol
+        const urlStr = deepLink.replace('sonacove://', 'https://');
+        const urlObj = new URL(urlStr);
+        const payload = urlObj.searchParams.get('payload');
+
+        if (payload) {
+            const user = JSON.parse(decodeURIComponent(payload));
+            const win = getMainWindow();
+
+            if (win) {
+                console.log('🔐 deep-link.js: Sending auth-token-received event with user:', user?.email);
+                
+                // Send the IPC event to the renderer process
+                win.webContents.send('auth-token-received', user);
+                
+                // Wait a moment for the IPC to be processed and localStorage updated, then reload
+                setTimeout(() => {
+                    console.log('🔄 deep-link.js: Reloading page to apply auth token');
+                    if (!win.isDestroyed()) {
+                        win.webContents.reload();
+                    }
+                }, 500);
+                
+                // Focus the window
+                if (win.isMinimized()) {
+                    win.restore();
+                }
+                win.focus();
+            } else {
+                console.error('❌ deep-link.js: No main window found to send auth token');
+            }
+        } else {
+            console.warn('⚠️ deep-link.js: No payload found in auth callback');
+        }
+    } catch (e) {
+        console.error('❌ Auth Parsing Error:', e);
+    }
+}
+
+/**
  * Navigates the application based on the provided deep link.
  * Handles auth callbacks, logout, and standard navigation.
  *
@@ -76,15 +124,19 @@ function processDeepLinkOnStartup() {
  * @returns {boolean} Success status.
  */
 function navigateDeepLink(deepLink) {
-    // 1. Handle Auth Callback
-    if (deepLink.includes('auth-callback')) {
-        handleAuthCallback(deepLink);
+    console.log('🔗 navigateDeepLink called with:', deepLink);
 
+    // CRITICAL: Check for auth-callback FIRST with specific pattern
+    // Must check for 'auth-callback' but NOT 'logout-callback'
+    if (deepLink.includes('auth-callback') && !deepLink.includes('logout')) {
+        console.log('🔐 Detected auth-callback');
+        handleAuthCallback(deepLink);
         return true;
     }
 
-    // 2. Handle Logout
+    // 2. Handle Logout (must be checked AFTER auth-callback)
     if (deepLink.includes('logout-callback')) {
+        console.log('🚪 Detected logout-callback');
         const win = getMainWindow();
 
         if (win) {
@@ -93,7 +145,10 @@ function navigateDeepLink(deepLink) {
             }
             win.focus();
             setTimeout(() => {
-                win.webContents.send('auth-logout-complete');
+                console.log('📤 Sending auth-logout-complete event');
+                if (!win.isDestroyed()) {
+                    win.webContents.send('auth-logout-complete');
+                }
             }, 500);
         }
 
@@ -149,43 +204,9 @@ function navigateDeepLink(deepLink) {
 
 
     } catch (error) {
-        console.error('Error parsing deep link:', error);
+        console.error('❌ Error parsing deep link:', error);
 
         return false;
-    }
-}
-
-/**
- * Handles the authentication callback from the deep link.
- * Extracts user data and sends it to the renderer process.
- *
- * @param {string} deepLink - The auth callback URL.
- * @returns {void}
- */
-function handleAuthCallback(deepLink) {
-    try {
-        // Hack to use URL parser with non-standard protocol
-        const urlStr = deepLink.replace('sonacove://', 'https://');
-        const urlObj = new URL(urlStr);
-        const payload = urlObj.searchParams.get('payload');
-
-        if (payload) {
-            const user = JSON.parse(decodeURIComponent(payload));
-            const win = getMainWindow();
-
-            if (win) {
-                // Focus first to ensure execution priority
-                if (win.isMinimized()) {
-                    win.restore();
-                }
-                win.focus();
-
-                // Send the data
-                win.webContents.send('auth-token-received', user);
-            }
-        }
-    } catch (e) {
-        console.error('Auth Parsing Error', e);
     }
 }
 
