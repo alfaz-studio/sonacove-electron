@@ -356,6 +356,70 @@ function createJitsiMeetWindow() {
         }
     });
 
+    mainWindow.webContents.on('did-finish-load', () => {
+        
+        // Inject Maintenance Notice
+        mainWindow.webContents.executeJavaScript(`
+            (function() {
+                // 1. Maintenance Notice
+                const noticeId = 'sonacove-maintenance-notice';
+                if (!document.getElementById(noticeId)) {
+                    const notice = document.createElement('div');
+                    notice.id = noticeId;
+                    notice.innerHTML = \`
+                        The desktop app is currently under maintenance. Please use the web version at 
+                        <a href="#" id="sonacove-maintenance-link" style="color: #533f03; font-weight: bold; text-decoration: underline; cursor: pointer;">https://sonacove.com/dashboard</a> 
+                        for the best experience.
+                    \`;
+                    Object.assign(notice.style, {
+                        backgroundColor: '#fff3cd',
+                        borderBottom: '1px solid #ffeeba',
+                        color: '#856404',
+                        padding: '10px 20px',
+                        fontSize: '13px',
+                        lineHeight: '1.4',
+                        textAlign: 'center',
+                        width: '100%',
+                        position: 'fixed',
+                        top: '0',
+                        left: '0',
+                        zIndex: '2147483647',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+                    });
+                    document.body.prepend(notice);
+                    
+                    // Add padding to body so content isn't hidden
+                    document.body.style.paddingTop = '40px';
+
+                    document.getElementById('sonacove-maintenance-link').onclick = (e) => {
+                        e.preventDefault();
+                        const url = 'https://sonacove.com/dashboard';
+                        
+                        // Try multiple API paths as fallbacks
+                        const api = window.sonacoveElectronAPI || window.electronAPI || window.jitsiNodeAPI;
+                        
+                        if (api && api.openExternalLink) {
+                            api.openExternalLink(url);
+                        } else if (api && api.ipc && api.ipc.send) {
+                            // Try both potential channels
+                            api.ipc.send('open-external', url);
+                            api.ipc.send('jitsi-open-url', url);
+                        } else if (window.ipcRenderer) {
+                            window.ipcRenderer.send('open-external', url);
+                        } else {
+                            // Last resort for vanilla JS context if nothing else is available
+                            console.error('No API available to open external link');
+                            window.open(url, '_blank');
+                        }
+                    };
+                }
+
+                console.log('✅ Maintenance notice installed');
+            })();
+        `);
+    });
+
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
         const validOptions = {
