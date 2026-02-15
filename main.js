@@ -356,6 +356,52 @@ function createJitsiMeetWindow() {
         }
     });
 
+    // Picture-in-Picture Auto-Trigger (Electron-specific)
+    // This allows PiP to activate without user gesture since Electron bypasses browser restrictions
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('✅ Main: Window loaded, setting up PiP detection');
+        
+        // Inject script to detect visibility changes and notify main process
+        mainWindow.webContents.executeJavaScript(`
+            let lastVisibilityState = document.visibilityState;
+            
+            document.addEventListener('visibilitychange', () => {
+                if (lastVisibilityState === 'visible' && document.visibilityState === 'hidden') {
+                    console.log('🔔 Visibility change detected: tab hidden');
+                    // Notify main process that tab is hidden
+                    window.electronAPI?.ipc?.send?.('tab-hidden-for-pip');
+                } else if (lastVisibilityState === 'hidden' && document.visibilityState === 'visible') {
+                    console.log('🔔 Visibility change detected: tab visible');
+                    // Notify main process that tab is visible
+                    window.electronAPI?.ipc?.send?.('tab-visible-for-pip');
+                }
+                lastVisibilityState = document.visibilityState;
+            });
+            
+            console.log('✅ PiP visibility change detector installed');
+        `);
+    });
+
+    // Handle tab hidden event - trigger PiP auto-entry
+    ipcMain.on('tab-hidden-for-pip', (event) => {
+        console.log('📱 Main: Tab hidden, triggering auto PiP entry');
+        
+        // Send message to renderer to enter PiP without user gesture requirement
+        // In Electron context, we can bypass the user gesture check
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('electron-request-enter-pip');
+        }
+    });
+
+    // Handle tab visible event - trigger PiP exit
+    ipcMain.on('tab-visible-for-pip', (event) => {
+        console.log('📱 Main: Tab visible, triggering PiP exit');
+        
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('electron-request-exit-pip');
+        }
+    });
+
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
         const validOptions = {
