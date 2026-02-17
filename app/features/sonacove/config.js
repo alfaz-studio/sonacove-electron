@@ -7,8 +7,7 @@ const URLS = {
     production: {
         landing: 'https://sonacove.com/dashboard',
         meetRoot: 'https://sonacove.com/meet',
-        authHost: 'auth.sonacove.com',
-        allowedHosts: [ 'sonacove.com', 'auth.sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
+        allowedHosts: [ 'sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
         defaultServerURL: 'https://sonacove.com'
     },
     staging: {
@@ -16,7 +15,6 @@ const URLS = {
         // landing: 'http://localhost:4321/dashboard',
         meetRoot: 'https://ca832c9c-sona-app.catfurr.workers.dev/meet',
         // meetRoot: 'https://localhost:5173/meet/',
-        authHost: 'staj.sonacove.com',
         allowedHosts: ['ca832c9c-sona-app.catfurr.workers.dev', 'localhost', 'sonacove.catfurr.workers.dev', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
         defaultServerURL: 'https://sonacove.com'
     }
