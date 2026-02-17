@@ -356,50 +356,106 @@ function createJitsiMeetWindow() {
         }
     });
 
-    // Picture-in-Picture Auto-Trigger (Electron-specific)
-    // This allows PiP to activate without user gesture since Electron bypasses browser restrictions
+    // Picture-in-Picture Auto-Trigger
+    let pipActive = false;
+
     mainWindow.webContents.on('did-finish-load', () => {
-        console.log('✅ Main: Window loaded, setting up PiP detection');
-        
-        // Inject script to detect visibility changes and notify main process
+        console.log('✅ Main: Window loaded, setting up PiP auto-trigger');
+        pipActive = false;
+
+        // Install visibility change and PiP exit listeners in the renderer
         mainWindow.webContents.executeJavaScript(`
-            let lastVisibilityState = document.visibilityState;
-            
-            document.addEventListener('visibilitychange', () => {
-                if (lastVisibilityState === 'visible' && document.visibilityState === 'hidden') {
-                    console.log('🔔 Visibility change detected: tab hidden');
-                    // Notify main process that tab is hidden
-                    window.electronAPI?.ipc?.send?.('tab-hidden-for-pip');
-                } else if (lastVisibilityState === 'hidden' && document.visibilityState === 'visible') {
-                    console.log('🔔 Visibility change detected: tab visible');
-                    // Notify main process that tab is visible
-                    window.electronAPI?.ipc?.send?.('tab-visible-for-pip');
-                }
-                lastVisibilityState = document.visibilityState;
-            });
-            
-            console.log('✅ PiP visibility change detector installed');
+            (() => {
+                if (window.__pipVisibilityInstalled) return;
+                window.__pipVisibilityInstalled = true;
+
+                const getApi = () => window.sonacoveElectronAPI || window.electronAPI;
+
+                document.addEventListener('visibilitychange', () => {
+                    const hidden = document.visibilityState === 'hidden';
+                    console.log('🔔 Visibility change detected: tab ' + (hidden ? 'hidden' : 'visible'));
+                    getApi()?.ipc?.send?.('pip-visibility-change', hidden);
+                });
+
+                document.addEventListener('leavepictureinpicture', () => {
+                    console.log('📱 PiP: User exited PiP window');
+                    getApi()?.ipc?.send?.('pip-exited');
+                });
+
+                console.log('✅ PiP visibility change detector installed');
+            })();
         `);
     });
 
-    // Handle tab hidden event - trigger PiP auto-entry
-    ipcMain.on('tab-hidden-for-pip', (event) => {
-        console.log('📱 Main: Tab hidden, triggering auto PiP entry');
-        
-        // Send message to renderer to enter PiP without user gesture requirement
-        // In Electron context, we can bypass the user gesture check
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('electron-request-enter-pip');
+    ipcMain.on('pip-visibility-change', (_event, hidden) => {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+            return;
+        }
+
+        if (hidden && !pipActive) {
+            // The key: { userGesture: true } tells Chromium to treat this
+            // as if triggered by a user action, bypassing the gesture requirement.
+            mainWindow.webContents.executeJavaScript(`
+                (async () => {
+                    try {
+                        const video = document.getElementById('largeVideo');
+                        if (!video) {
+                            console.warn('⚠️ PiP: largeVideo element not found');
+                            return false;
+                        }
+                        if (document.pictureInPictureElement) {
+                            console.log('📱 PiP: Already in PiP mode');
+                            return true;
+                        }
+                        await video.requestPictureInPicture();
+                        console.log('✅ PiP: Entered PiP via Electron userGesture');
+
+                        // Notify the app's PiP controller that we entered PiP
+                        if (window.__onElectronPipEntered) {
+                            window.__onElectronPipEntered();
+                        }
+                        return true;
+                    } catch (err) {
+                        console.error('❌ PiP: Failed to enter:', err);
+                        return false;
+                    }
+                })();
+            `, true) // userGesture: true
+            .then(success => {
+                if (success) {
+                    pipActive = true;
+                }
+            })
+            .catch(err => {
+                console.error('❌ Main: executeJavaScript PiP error:', err);
+            });
+        } else if (!hidden && pipActive) {
+            mainWindow.webContents.executeJavaScript(`
+                (async () => {
+                    try {
+                        if (document.pictureInPictureElement) {
+                            await document.exitPictureInPicture();
+                            console.log('✅ PiP: Exited PiP');
+                        }
+                        return true;
+                    } catch (err) {
+                        console.error('❌ PiP: Failed to exit:', err);
+                        return false;
+                    }
+                })();
+            `)
+            .then(() => {
+                pipActive = false;
+            })
+            .catch(err => {
+                console.error('❌ Main: executeJavaScript PiP exit error:', err);
+                pipActive = false;
+            });
         }
     });
 
-    // Handle tab visible event - trigger PiP exit
-    ipcMain.on('tab-visible-for-pip', (event) => {
-        console.log('📱 Main: Tab visible, triggering PiP exit');
-        
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('electron-request-exit-pip');
-        }
+    ipcMain.on('pip-exited', () => {
+        pipActive = false;
     });
 
     // Enable Screen Sharing
