@@ -24,6 +24,8 @@ const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
 
+const { setupPictureInPicture } = require('./app/features/pip/main');
+
 // Set app user model ID at the very top for Windows icon support
 if (process.platform === 'win32') {
     app.setAppUserModelId('com.sonacove.meet');
@@ -357,106 +359,7 @@ function createJitsiMeetWindow() {
     });
 
     // Picture-in-Picture Auto-Trigger
-    let pipActive = false;
-
-    mainWindow.webContents.on('did-finish-load', () => {
-        console.log('✅ Main: Window loaded, setting up PiP auto-trigger');
-        pipActive = false;
-
-        // Install visibility change and PiP exit listeners in the renderer
-        mainWindow.webContents.executeJavaScript(`
-            (() => {
-                if (window.__pipVisibilityInstalled) return;
-                window.__pipVisibilityInstalled = true;
-
-                const getApi = () => window.sonacoveElectronAPI || window.electronAPI;
-
-                document.addEventListener('visibilitychange', () => {
-                    const hidden = document.visibilityState === 'hidden';
-                    console.log('🔔 Visibility change detected: tab ' + (hidden ? 'hidden' : 'visible'));
-                    getApi()?.ipc?.send?.('pip-visibility-change', hidden);
-                });
-
-                document.addEventListener('leavepictureinpicture', () => {
-                    console.log('📱 PiP: User exited PiP window');
-                    getApi()?.ipc?.send?.('pip-exited');
-                });
-
-                console.log('✅ PiP visibility change detector installed');
-            })();
-        `);
-    });
-
-    ipcMain.on('pip-visibility-change', (_event, hidden) => {
-        if (!mainWindow || mainWindow.isDestroyed()) {
-            return;
-        }
-
-        if (hidden && !pipActive) {
-            // The key: { userGesture: true } tells Chromium to treat this
-            // as if triggered by a user action, bypassing the gesture requirement.
-            mainWindow.webContents.executeJavaScript(`
-                (async () => {
-                    try {
-                        const video = document.getElementById('largeVideo');
-                        if (!video) {
-                            console.warn('⚠️ PiP: largeVideo element not found');
-                            return false;
-                        }
-                        if (document.pictureInPictureElement) {
-                            console.log('📱 PiP: Already in PiP mode');
-                            return true;
-                        }
-                        await video.requestPictureInPicture();
-                        console.log('✅ PiP: Entered PiP via Electron userGesture');
-
-                        // Notify the app's PiP controller that we entered PiP
-                        if (window.__onElectronPipEntered) {
-                            window.__onElectronPipEntered();
-                        }
-                        return true;
-                    } catch (err) {
-                        console.error('❌ PiP: Failed to enter:', err);
-                        return false;
-                    }
-                })();
-            `, true) // userGesture: true
-            .then(success => {
-                if (success) {
-                    pipActive = true;
-                }
-            })
-            .catch(err => {
-                console.error('❌ Main: executeJavaScript PiP error:', err);
-            });
-        } else if (!hidden && pipActive) {
-            mainWindow.webContents.executeJavaScript(`
-                (async () => {
-                    try {
-                        if (document.pictureInPictureElement) {
-                            await document.exitPictureInPicture();
-                            console.log('✅ PiP: Exited PiP');
-                        }
-                        return true;
-                    } catch (err) {
-                        console.error('❌ PiP: Failed to exit:', err);
-                        return false;
-                    }
-                })();
-            `)
-            .then(() => {
-                pipActive = false;
-            })
-            .catch(err => {
-                console.error('❌ Main: executeJavaScript PiP exit error:', err);
-                pipActive = false;
-            });
-        }
-    });
-
-    ipcMain.on('pip-exited', () => {
-        pipActive = false;
-    });
+    setupPictureInPicture(mainWindow);
 
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
