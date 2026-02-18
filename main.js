@@ -53,10 +53,23 @@ const ENABLE_REMOTE_CONTROL = false;
 const disabledFeatures = [
     'ThumbnailCapturerMac:capture_mode/sc_screenshot_manager',
     'ScreenCaptureKitPickerScreen',
-    'ScreenCaptureKitStreamPickerSonoma'
+    'ScreenCaptureKitStreamPickerSonoma',
+
+    // Disable cookie restrictions — Electron loads the web app from a different
+    // origin than the API, so session cookies are cross-site by nature.
+    'ThirdPartyCookieDeprecationTrial',
+    'ThirdPartyStoragePartitioning',
+    'PartitionedCookies',
+    'SameSiteByDefaultCookies',
+    'CookiesWithoutSameSiteMustBeSecure',
+
+    // Disable other restrictive browser policies that don't apply to a desktop app
+    'BlockInsecurePrivateNetworkRequests',
+    'PrivateNetworkAccessRespectPreflightResults'
 ];
 
 app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
+app.commandLine.appendSwitch('disable-site-isolation-trials');
 
 if (isDev) {
     app.commandLine.appendSwitch('ignore-certificate-errors');
@@ -267,6 +280,19 @@ function createJitsiMeetWindow() {
     const windowOpenHandler = ({ url, frameName }) => {
         const target = getPopupTarget(url, frameName);
 
+        // Allow URLs on allowed hosts to open inside Electron instead of the browser
+        const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
+
+        try {
+            const parsedUrl = new URL(url);
+
+            if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
+                return { action: 'allow' };
+            }
+        } catch (e) {
+            // ignore parse errors
+        }
+
         if (!target || target === 'browser') {
             openExternalLink(url);
 
@@ -356,70 +382,6 @@ function createJitsiMeetWindow() {
         }
     });
 
-    mainWindow.webContents.on('did-finish-load', () => {
-        
-        // Inject Maintenance Notice
-        mainWindow.webContents.executeJavaScript(`
-            (function() {
-                // 1. Maintenance Notice
-                const noticeId = 'sonacove-maintenance-notice';
-                if (!document.getElementById(noticeId)) {
-                    const notice = document.createElement('div');
-                    notice.id = noticeId;
-                    notice.innerHTML = \`
-                        The desktop app is currently under maintenance. Please use the web version at 
-                        <a href="#" id="sonacove-maintenance-link" style="color: #533f03; font-weight: bold; text-decoration: underline; cursor: pointer;">https://sonacove.com/dashboard</a> 
-                        for the best experience.
-                    \`;
-                    Object.assign(notice.style, {
-                        backgroundColor: '#fff3cd',
-                        borderBottom: '1px solid #ffeeba',
-                        color: '#856404',
-                        padding: '10px 20px',
-                        fontSize: '13px',
-                        lineHeight: '1.4',
-                        textAlign: 'center',
-                        width: '100%',
-                        position: 'fixed',
-                        top: '0',
-                        left: '0',
-                        zIndex: '2147483647',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
-                    });
-                    document.body.prepend(notice);
-                    
-                    // Add padding to body so content isn't hidden
-                    document.body.style.paddingTop = '40px';
-
-                    document.getElementById('sonacove-maintenance-link').onclick = (e) => {
-                        e.preventDefault();
-                        const url = 'https://sonacove.com/dashboard';
-                        
-                        // Try multiple API paths as fallbacks
-                        const api = window.sonacoveElectronAPI || window.electronAPI || window.jitsiNodeAPI;
-                        
-                        if (api && api.openExternalLink) {
-                            api.openExternalLink(url);
-                        } else if (api && api.ipc && api.ipc.send) {
-                            // Try both potential channels
-                            api.ipc.send('open-external', url);
-                            api.ipc.send('jitsi-open-url', url);
-                        } else if (window.ipcRenderer) {
-                            window.ipcRenderer.send('open-external', url);
-                        } else {
-                            // Last resort for vanilla JS context if nothing else is available
-                            console.error('No API available to open external link');
-                            window.open(url, '_blank');
-                        }
-                    };
-                }
-
-                console.log('✅ Maintenance notice installed');
-            })();
-        `);
-    });
-
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
         const validOptions = {
@@ -504,23 +466,56 @@ function createJitsiMeetWindow() {
         mainWindow.webContents.session.clearCache();
     }
 
-    // Block access to file:// URLs.
-    const fileFilter = {
-        urls: [ 'file://*' ]
-    };
+    // Clear stale auth cookies that may have accumulated from previous sessions.
+    // Electron can end up with duplicate cookies on different domains (.sonacove.com
+    // vs .staj.sonacove.com) that confuse the server.
+    const ses = mainWindow.webContents.session;
 
-    mainWindow.webContents.session.webRequest.onBeforeSendHeaders(fileFilter, (details, callback) => {
-        const requestedPath = path.resolve(nodeURL.fileURLToPath(details.url));
-        const appBasePath = path.resolve(basePath);
+    const removeCookies = name => ses.cookies.get({ name })
+        .then(cookies => cookies.forEach(c => {
+            const host = c.domain.replace(/^\./, '');
 
-        if (!requestedPath.startsWith(appBasePath)) {
-            callback({ cancel: true });
-            console.warn(`Rejected file URL: ${details.url}`);
+            ses.cookies.remove(`https://${host}${c.path}`, c.name);
+        }))
+        .catch(_e => { /* ignore */ });
 
-            return;
+    removeCookies('better-auth.session_token');
+    removeCookies('__Secure-better-auth.session_token');
+
+    mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+        // Block file:// URLs outside the app base path
+        if (details.url.startsWith('file://')) {
+            const requestedPath = path.resolve(nodeURL.fileURLToPath(details.url));
+            const appBasePath = path.resolve(basePath);
+
+            if (!requestedPath.startsWith(appBasePath)) {
+                callback({ cancel: true });
+                console.warn(`Rejected file URL: ${details.url}`);
+
+                return;
+            }
         }
 
-        callback({ cancel: false });
+        // Electron with webSecurity:false suppresses the Origin header on cross-origin
+        // requests. Without Origin, the server's CORS middleware returns '*' and
+        // better-auth's trustedOrigins/CSRF check fails, returning null sessions.
+        // Inject the correct Origin header so the server treats us like a normal browser.
+        if (!details.requestHeaders.Origin && !details.url.startsWith('file://')) {
+            try {
+                const reqUrl = new URL(details.url);
+                const pageUrl = mainWindow.webContents.getURL();
+                const pageOrigin = pageUrl ? new URL(pageUrl).origin : null;
+
+                if (pageOrigin && reqUrl.origin !== pageOrigin) {
+                    details.requestHeaders.Origin = pageOrigin;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        callback({ cancel: false,
+            requestHeaders: details.requestHeaders });
     });
 
     // Filter out x-frame-options and frame-ancestors CSP to allow loading jitsi via the iframe API
@@ -668,19 +663,6 @@ function handleProtocolCall(fullProtocolCall) {
         return;
     }
 
-    if (
-        fullProtocolCall.includes('auth-callback')
-        || fullProtocolCall.includes('payload')
-        || fullProtocolCall.includes('logout-callback')
-    ) {
-        console.log('🔐 Auth/logout callback, using navigateDeepLink');
-        navigateDeepLink(fullProtocolCall);
-
-        return;
-    }
-
-    // Handle standard navigation (like meeting links) directly
-    console.log('🚀 Standard navigation, using navigateDeepLink');
     navigateDeepLink(fullProtocolCall);
 
     if (app.isReady() && mainWindow === null) {
@@ -797,5 +779,18 @@ app.on('open-url', (event, data) => {
  * Handle opening external links in the main process.
  */
 ipcMain.on('jitsi-open-url', (event, someUrl) => {
+    // Keep allowed hosts in-app instead of opening externally
+    const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
+
+    try {
+        const parsedUrl = new URL(someUrl);
+
+        if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
+            return;
+        }
+    } catch (e) {
+        // ignore
+    }
+
     openExternalLink(someUrl);
 });
