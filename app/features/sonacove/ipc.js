@@ -19,24 +19,7 @@ function setupSonacoveIPC(ipcMain, mainWindow) {
     });
 
     // Open External Links (Proxy for renderer)
-    // URLs on allowed hosts are navigated in-app instead of opening the system browser.
     ipcMain.on('open-external', (event, url) => {
-        const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
-
-        try {
-            const parsedUrl = new URL(url);
-
-            if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.loadURL(url);
-                }
-
-                return;
-            }
-        } catch (e) {
-            // ignore parse errors
-        }
-
         shell.openExternal(url);
     });
 

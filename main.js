@@ -466,22 +466,6 @@ function createJitsiMeetWindow() {
         mainWindow.webContents.session.clearCache();
     }
 
-    // Clear stale auth cookies that may have accumulated from previous sessions.
-    // Electron can end up with duplicate cookies on different domains (.sonacove.com
-    // vs .staj.sonacove.com) that confuse the server.
-    const ses = mainWindow.webContents.session;
-
-    const removeCookies = name => ses.cookies.get({ name })
-        .then(cookies => cookies.forEach(c => {
-            const host = c.domain.replace(/^\./, '');
-
-            ses.cookies.remove(`https://${host}${c.path}`, c.name);
-        }))
-        .catch(_e => { /* ignore */ });
-
-    removeCookies('better-auth.session_token');
-    removeCookies('__Secure-better-auth.session_token');
-
     mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
         // Block file:// URLs outside the app base path
         if (details.url.startsWith('file://')) {
@@ -779,18 +763,5 @@ app.on('open-url', (event, data) => {
  * Handle opening external links in the main process.
  */
 ipcMain.on('jitsi-open-url', (event, someUrl) => {
-    // Keep allowed hosts in-app instead of opening externally
-    const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
-
-    try {
-        const parsedUrl = new URL(someUrl);
-
-        if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
-            return;
-        }
-    } catch (e) {
-        // ignore
-    }
-
     openExternalLink(someUrl);
 });

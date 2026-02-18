@@ -11,11 +11,11 @@ const URLS = {
         defaultServerURL: 'https://sonacove.com'
     },
     staging: {
-        landing: 'https://sonacove.catfurr.workers.dev/dashboard',
+        landing: 'https://26c4a307-sonacove.catfurr.workers.dev/dashboard',
         // landing: 'http://localhost:4321/dashboard',
-        meetRoot: 'https://ca832c9c-sona-app.catfurr.workers.dev/meet',
+        meetRoot: 'https://dea29a3a-sona-app.catfurr.workers.dev/meet',
         // meetRoot: 'https://localhost:5173/meet/',
-        allowedHosts: ['ca832c9c-sona-app.catfurr.workers.dev', 'localhost', 'sonacove.catfurr.workers.dev', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        allowedHosts: [ 'dea29a3a-sona-app.catfurr.workers.dev', '26c4a307-sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
         defaultServerURL: 'https://sonacove.com'
     }
 };
