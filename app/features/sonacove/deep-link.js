@@ -70,37 +70,12 @@ function processDeepLinkOnStartup() {
 
 /**
  * Navigates the application based on the provided deep link.
- * Handles auth callbacks, logout, and standard navigation.
+ * Handles standard navigation (e.g. sonacove://meet/roomname).
  *
  * @param {string} deepLink - The deep link URL to process.
  * @returns {boolean} Success status.
  */
 function navigateDeepLink(deepLink) {
-    // 1. Handle Auth Callback
-    if (deepLink.includes('auth-callback')) {
-        handleAuthCallback(deepLink);
-
-        return true;
-    }
-
-    // 2. Handle Logout
-    if (deepLink.includes('logout-callback')) {
-        const win = getMainWindow();
-
-        if (win) {
-            if (win.isMinimized()) {
-                win.restore();
-            }
-            win.focus();
-            setTimeout(() => {
-                win.webContents.send('auth-logout-complete');
-            }, 500);
-        }
-
-        return true;
-    }
-
-    // 3. Handle Standard Navigation
     try {
         let rawPath = deepLink.replace('sonacove://', '');
 
@@ -152,40 +127,6 @@ function navigateDeepLink(deepLink) {
         console.error('Error parsing deep link:', error);
 
         return false;
-    }
-}
-
-/**
- * Handles the authentication callback from the deep link.
- * Extracts user data and sends it to the renderer process.
- *
- * @param {string} deepLink - The auth callback URL.
- * @returns {void}
- */
-function handleAuthCallback(deepLink) {
-    try {
-        // Hack to use URL parser with non-standard protocol
-        const urlStr = deepLink.replace('sonacove://', 'https://');
-        const urlObj = new URL(urlStr);
-        const payload = urlObj.searchParams.get('payload');
-
-        if (payload) {
-            const user = JSON.parse(decodeURIComponent(payload));
-            const win = getMainWindow();
-
-            if (win) {
-                // Focus first to ensure execution priority
-                if (win.isMinimized()) {
-                    win.restore();
-                }
-                win.focus();
-
-                // Send the data
-                win.webContents.send('auth-token-received', user);
-            }
-        }
-    } catch (e) {
-        console.error('Auth Parsing Error', e);
     }
 }
 
