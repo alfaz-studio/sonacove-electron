@@ -1,9 +1,9 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 
 const sonacoveConfig = require('./config');
+const { closeOverlay } = require('./overlay-window');
 
-let macDeepLinkUrl = null;
 let pendingStartupDeepLink = null;
 
 /**
@@ -33,23 +33,6 @@ function registerProtocol() {
 }
 
 /**
- * Sets up the listener for the macOS open-url event.
- *
- * @returns {void}
- */
-function setupMacDeepLinkListener() {
-    app.on('open-url', (event, url) => {
-        event.preventDefault();
-        macDeepLinkUrl = url;
-        const win = getMainWindow();
-
-        if (win) {
-            navigateDeepLink(url);
-        }
-    });
-}
-
-/**
  * Processes any deep link arguments provided during application startup.
  *
  * @returns {void}
@@ -61,10 +44,6 @@ function processDeepLinkOnStartup() {
         if (url) {
             pendingStartupDeepLink = url;
         }
-    }
-    if (macDeepLinkUrl) {
-        pendingStartupDeepLink = macDeepLinkUrl;
-        macDeepLinkUrl = null;
     }
 }
 
@@ -111,6 +90,28 @@ function navigateDeepLink(deepLink) {
         const win = getMainWindow();
 
         if (win) {
+            // Check if user is currently in a meeting
+            try {
+                const currentUrl = new URL(win.webContents.getURL());
+
+                if (currentUrl.pathname.startsWith('/meet')) {
+                    const choice = dialog.showMessageBoxSync(win, {
+                        type: 'question',
+                        buttons: [ 'Leave Meeting', 'Stay' ],
+                        title: 'Meeting in Progress',
+                        message: 'You are already in a meeting. Do you want to leave and join a new one?',
+                        defaultId: 1,
+                        cancelId: 1
+                    });
+
+                    if (choice !== 0) {
+                        return false;
+                    }
+
+                    closeOverlay(false, 'deep-link-navigation');
+                }
+            } catch (e) { /* ignore URL parse errors */ }
+
             win.loadURL(targetUrl);
             if (win.isMinimized()) {
                 win.restore();
@@ -132,7 +133,6 @@ function navigateDeepLink(deepLink) {
 
 module.exports = {
     registerProtocol,
-    setupMacDeepLinkListener,
     processDeepLinkOnStartup,
     navigateDeepLink
 };
