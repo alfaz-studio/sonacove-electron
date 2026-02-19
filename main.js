@@ -34,7 +34,6 @@ const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink,
-    setupMacDeepLinkListener,
     processDeepLinkOnStartup
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
@@ -691,7 +690,6 @@ app.on('certificate-error',
 );
 
 app.on('ready', () => {
-    setupMacDeepLinkListener();
     setupChildWindowIcon();
     createJitsiMeetWindow();
 

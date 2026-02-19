@@ -4,7 +4,6 @@ const path = require('path');
 const sonacoveConfig = require('./config');
 const { closeOverlay } = require('./overlay-window');
 
-let macDeepLinkUrl = null;
 let pendingStartupDeepLink = null;
 
 /**
@@ -34,23 +33,6 @@ function registerProtocol() {
 }
 
 /**
- * Sets up the listener for the macOS open-url event.
- *
- * @returns {void}
- */
-function setupMacDeepLinkListener() {
-    app.on('open-url', (event, url) => {
-        event.preventDefault();
-        macDeepLinkUrl = url;
-        const win = getMainWindow();
-
-        if (win) {
-            navigateDeepLink(url);
-        }
-    });
-}
-
-/**
  * Processes any deep link arguments provided during application startup.
  *
  * @returns {void}
@@ -62,10 +44,6 @@ function processDeepLinkOnStartup() {
         if (url) {
             pendingStartupDeepLink = url;
         }
-    }
-    if (macDeepLinkUrl) {
-        pendingStartupDeepLink = macDeepLinkUrl;
-        macDeepLinkUrl = null;
     }
 }
 
@@ -155,7 +133,6 @@ function navigateDeepLink(deepLink) {
 
 module.exports = {
     registerProtocol,
-    setupMacDeepLinkListener,
     processDeepLinkOnStartup,
     navigateDeepLink
 };
