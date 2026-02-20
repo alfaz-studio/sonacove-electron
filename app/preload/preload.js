@@ -19,8 +19,6 @@ const whitelistedIpcChannels = [
     'screenshare-stop',
     'annotation-status',
     'toggle-click-through-request',
-    'auth-token-received',
-    'auth-logout-complete',
     'cleanup-whiteboards-for-viewers',
     'jitsi-open-url',
     'open-external',

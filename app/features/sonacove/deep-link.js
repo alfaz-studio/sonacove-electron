@@ -1,9 +1,9 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 
 const sonacoveConfig = require('./config');
+const { closeOverlay } = require('./overlay-window');
 
-let macDeepLinkUrl = null;
 let pendingStartupDeepLink = null;
 
 /**
@@ -33,23 +33,6 @@ function registerProtocol() {
 }
 
 /**
- * Sets up the listener for the macOS open-url event.
- *
- * @returns {void}
- */
-function setupMacDeepLinkListener() {
-    app.on('open-url', (event, url) => {
-        event.preventDefault();
-        macDeepLinkUrl = url;
-        const win = getMainWindow();
-
-        if (win) {
-            navigateDeepLink(url);
-        }
-    });
-}
-
-/**
  * Processes any deep link arguments provided during application startup.
  *
  * @returns {void}
@@ -62,45 +45,16 @@ function processDeepLinkOnStartup() {
             pendingStartupDeepLink = url;
         }
     }
-    if (macDeepLinkUrl) {
-        pendingStartupDeepLink = macDeepLinkUrl;
-        macDeepLinkUrl = null;
-    }
 }
 
 /**
  * Navigates the application based on the provided deep link.
- * Handles auth callbacks, logout, and standard navigation.
+ * Handles standard navigation (e.g. sonacove://meet/roomname).
  *
  * @param {string} deepLink - The deep link URL to process.
  * @returns {boolean} Success status.
  */
 function navigateDeepLink(deepLink) {
-    // 1. Handle Auth Callback
-    if (deepLink.includes('auth-callback')) {
-        handleAuthCallback(deepLink);
-
-        return true;
-    }
-
-    // 2. Handle Logout
-    if (deepLink.includes('logout-callback')) {
-        const win = getMainWindow();
-
-        if (win) {
-            if (win.isMinimized()) {
-                win.restore();
-            }
-            win.focus();
-            setTimeout(() => {
-                win.webContents.send('auth-logout-complete');
-            }, 500);
-        }
-
-        return true;
-    }
-
-    // 3. Handle Standard Navigation
     try {
         let rawPath = deepLink.replace('sonacove://', '');
 
@@ -136,6 +90,28 @@ function navigateDeepLink(deepLink) {
         const win = getMainWindow();
 
         if (win) {
+            // Check if user is currently in a meeting
+            try {
+                const currentUrl = new URL(win.webContents.getURL());
+
+                if (currentUrl.pathname.startsWith('/meet')) {
+                    const choice = dialog.showMessageBoxSync(win, {
+                        type: 'question',
+                        buttons: [ 'Leave Meeting', 'Stay' ],
+                        title: 'Meeting in Progress',
+                        message: 'You are already in a meeting. Do you want to leave and join a new one?',
+                        defaultId: 1,
+                        cancelId: 1
+                    });
+
+                    if (choice !== 0) {
+                        return false;
+                    }
+
+                    closeOverlay(false, 'deep-link-navigation');
+                }
+            } catch (e) { /* ignore URL parse errors */ }
+
             win.loadURL(targetUrl);
             if (win.isMinimized()) {
                 win.restore();
@@ -155,43 +131,8 @@ function navigateDeepLink(deepLink) {
     }
 }
 
-/**
- * Handles the authentication callback from the deep link.
- * Extracts user data and sends it to the renderer process.
- *
- * @param {string} deepLink - The auth callback URL.
- * @returns {void}
- */
-function handleAuthCallback(deepLink) {
-    try {
-        // Hack to use URL parser with non-standard protocol
-        const urlStr = deepLink.replace('sonacove://', 'https://');
-        const urlObj = new URL(urlStr);
-        const payload = urlObj.searchParams.get('payload');
-
-        if (payload) {
-            const user = JSON.parse(decodeURIComponent(payload));
-            const win = getMainWindow();
-
-            if (win) {
-                // Focus first to ensure execution priority
-                if (win.isMinimized()) {
-                    win.restore();
-                }
-                win.focus();
-
-                // Send the data
-                win.webContents.send('auth-token-received', user);
-            }
-        }
-    } catch (e) {
-        console.error('Auth Parsing Error', e);
-    }
-}
-
 module.exports = {
     registerProtocol,
-    setupMacDeepLinkListener,
     processDeepLinkOnStartup,
     navigateDeepLink
 };

@@ -36,7 +36,6 @@ const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink,
-    setupMacDeepLinkListener,
     processDeepLinkOnStartup
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
@@ -55,10 +54,23 @@ const ENABLE_REMOTE_CONTROL = false;
 const disabledFeatures = [
     'ThumbnailCapturerMac:capture_mode/sc_screenshot_manager',
     'ScreenCaptureKitPickerScreen',
-    'ScreenCaptureKitStreamPickerSonoma'
+    'ScreenCaptureKitStreamPickerSonoma',
+
+    // Disable cookie restrictions — Electron loads the web app from a different
+    // origin than the API, so session cookies are cross-site by nature.
+    'ThirdPartyCookieDeprecationTrial',
+    'ThirdPartyStoragePartitioning',
+    'PartitionedCookies',
+    'SameSiteByDefaultCookies',
+    'CookiesWithoutSameSiteMustBeSecure',
+
+    // Disable other restrictive browser policies that don't apply to a desktop app
+    'BlockInsecurePrivateNetworkRequests',
+    'PrivateNetworkAccessRespectPreflightResults'
 ];
 
 app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
+app.commandLine.appendSwitch('disable-site-isolation-trials');
 
 if (isDev) {
     app.commandLine.appendSwitch('ignore-certificate-errors');
@@ -269,6 +281,19 @@ function createJitsiMeetWindow() {
     const windowOpenHandler = ({ url, frameName }) => {
         const target = getPopupTarget(url, frameName);
 
+        // Allow URLs on allowed hosts to open inside Electron instead of the browser
+        const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
+
+        try {
+            const parsedUrl = new URL(url);
+
+            if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
+                return { action: 'allow' };
+            }
+        } catch (e) {
+            // ignore parse errors
+        }
+
         if (!target || target === 'browser') {
             openExternalLink(url);
 
@@ -445,23 +470,40 @@ function createJitsiMeetWindow() {
         mainWindow.webContents.session.clearCache();
     }
 
-    // Block access to file:// URLs.
-    const fileFilter = {
-        urls: [ 'file://*' ]
-    };
+    mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+        // Block file:// URLs outside the app base path
+        if (details.url.startsWith('file://')) {
+            const requestedPath = path.resolve(nodeURL.fileURLToPath(details.url));
+            const appBasePath = path.resolve(basePath);
 
-    mainWindow.webContents.session.webRequest.onBeforeSendHeaders(fileFilter, (details, callback) => {
-        const requestedPath = path.resolve(nodeURL.fileURLToPath(details.url));
-        const appBasePath = path.resolve(basePath);
+            if (!requestedPath.startsWith(appBasePath)) {
+                callback({ cancel: true });
+                console.warn(`Rejected file URL: ${details.url}`);
 
-        if (!requestedPath.startsWith(appBasePath)) {
-            callback({ cancel: true });
-            console.warn(`Rejected file URL: ${details.url}`);
-
-            return;
+                return;
+            }
         }
 
-        callback({ cancel: false });
+        // Electron with webSecurity:false suppresses the Origin header on cross-origin
+        // requests. Without Origin, the server's CORS middleware returns '*' and
+        // better-auth's trustedOrigins/CSRF check fails, returning null sessions.
+        // Inject the correct Origin header so the server treats us like a normal browser.
+        if (!details.requestHeaders.Origin && !details.url.startsWith('file://')) {
+            try {
+                const reqUrl = new URL(details.url);
+                const pageUrl = mainWindow.webContents.getURL();
+                const pageOrigin = pageUrl ? new URL(pageUrl).origin : null;
+
+                if (pageOrigin && reqUrl.origin !== pageOrigin) {
+                    details.requestHeaders.Origin = pageOrigin;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        callback({ cancel: false,
+            requestHeaders: details.requestHeaders });
     });
 
     // Filter out x-frame-options and frame-ancestors CSP to allow loading jitsi via the iframe API
@@ -609,19 +651,6 @@ function handleProtocolCall(fullProtocolCall) {
         return;
     }
 
-    if (
-        fullProtocolCall.includes('auth-callback')
-        || fullProtocolCall.includes('payload')
-        || fullProtocolCall.includes('logout-callback')
-    ) {
-        console.log('🔐 Auth/logout callback, using navigateDeepLink');
-        navigateDeepLink(fullProtocolCall);
-
-        return;
-    }
-
-    // Handle standard navigation (like meeting links) directly
-    console.log('🚀 Standard navigation, using navigateDeepLink');
     navigateDeepLink(fullProtocolCall);
 
     if (app.isReady() && mainWindow === null) {
@@ -666,7 +695,6 @@ app.on('certificate-error',
 );
 
 app.on('ready', () => {
-    setupMacDeepLinkListener();
     setupChildWindowIcon();
     createJitsiMeetWindow();
 
