@@ -129,6 +129,20 @@ function toggleOverlay(mainWindow, data) {
     globalShortcut.register('Alt+X', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
             annotationWindow.webContents.send('toggle-click-through-request');
+
+            annotationWindow.focus();
+        }
+    });
+
+    globalShortcut.register('CommandOrControl+Z', () => {
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.webContents.send('annotation-undo');
+        }
+    });
+
+    globalShortcut.register('CommandOrControl+Shift+Z', () => {
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.webContents.send('annotation-redo');
         }
     });
 
@@ -155,6 +169,9 @@ function toggleOverlay(mainWindow, data) {
     };
 
     annotationWindow.on('closed', () => {
+        globalShortcut.unregister('Alt+X');
+        globalShortcut.unregister('CommandOrControl+Z');
+        globalShortcut.unregister('CommandOrControl+Shift+Z');
         annotationWindow = null;
         cleanup();
     });
@@ -170,7 +187,10 @@ function toggleOverlay(mainWindow, data) {
 function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
-        
+
+        globalShortcut.unregister('Alt+X');
+        globalShortcut.unregister('CommandOrControl+Z');
+        globalShortcut.unregister('CommandOrControl+Shift+Z');
         annotationWindow.destroy();
         annotationWindow = null;
 

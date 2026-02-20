@@ -19,6 +19,8 @@ const whitelistedIpcChannels = [
     'screenshare-stop',
     'annotation-status',
     'toggle-click-through-request',
+    'annotation-undo',
+    'annotation-redo',
     'cleanup-whiteboards-for-viewers',
     'jitsi-open-url',
     'open-external'
