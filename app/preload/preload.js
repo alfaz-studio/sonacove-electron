@@ -21,6 +21,7 @@ const whitelistedIpcChannels = [
     'toggle-click-through-request',
     'annotation-undo',
     'annotation-redo',
+    'annotation-mode-changed',
     'cleanup-whiteboards-for-viewers',
     'jitsi-open-url',
     'open-external'

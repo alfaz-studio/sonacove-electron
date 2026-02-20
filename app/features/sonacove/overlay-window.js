@@ -134,18 +134,6 @@ function toggleOverlay(mainWindow, data) {
         }
     });
 
-    globalShortcut.register('CommandOrControl+Z', () => {
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.webContents.send('annotation-undo');
-        }
-    });
-
-    globalShortcut.register('CommandOrControl+Shift+Z', () => {
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.webContents.send('annotation-redo');
-        }
-    });
-
     annotationWindow.webContents.on('did-finish-load', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
             annotationWindow.show();
@@ -170,8 +158,6 @@ function toggleOverlay(mainWindow, data) {
 
     annotationWindow.on('closed', () => {
         globalShortcut.unregister('Alt+X');
-        globalShortcut.unregister('CommandOrControl+Z');
-        globalShortcut.unregister('CommandOrControl+Shift+Z');
         annotationWindow = null;
         cleanup();
     });
@@ -189,8 +175,6 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
 
         globalShortcut.unregister('Alt+X');
-        globalShortcut.unregister('CommandOrControl+Z');
-        globalShortcut.unregister('CommandOrControl+Shift+Z');
         annotationWindow.destroy();
         annotationWindow = null;
 
