@@ -384,7 +384,7 @@ function createJitsiMeetWindow() {
     });
 
     // Picture-in-Picture Auto-Trigger
-    setupPictureInPicture(mainWindow);
+    const cleanupPip = setupPictureInPicture(mainWindow);
 
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
@@ -571,6 +571,9 @@ function createJitsiMeetWindow() {
     }
 
     mainWindow.on('closed', () => {
+        // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
+        cleanupPip();
+
         // Close the annotation overlay if it is open
         closeOverlay();
 
