@@ -3,8 +3,11 @@ const { ipcMain } = require('electron');
 /**
  * Sets up automatic Picture-in-Picture triggering for Electron.
  *
- * Uses webContents.executeJavaScript with userGesture:true to bypass
- * Chromium's user gesture requirement for requestPictureInPicture().
+ * Uses webContents.executeJavaScript with userGesture:true to call
+ * window.__pipEnter() / window.__pipExit() which are registered by the
+ * jitsi-meet frontend (controller-electron.ts). All PiP DOM logic and
+ * media session setup lives in the frontend — this module only orchestrates
+ * when to enter/exit.
  *
  * @param {BrowserWindow} mainWindow - The main application window.
  */
@@ -15,7 +18,9 @@ function setupPictureInPicture(mainWindow) {
         console.log('✅ PiP: Window loaded, setting up auto-trigger');
         pipActive = false;
 
-        // Install visibility change and PiP exit listeners in the renderer
+        // Install visibility change and PiP exit listeners in the renderer.
+        // These are the only bits of inline JS needed — they just send IPC
+        // messages back to the main process so we can respond with userGesture.
         mainWindow.webContents.executeJavaScript(`
             (() => {
                 if (window.__pipVisibilityInstalled) return;
@@ -25,16 +30,12 @@ function setupPictureInPicture(mainWindow) {
 
                 document.addEventListener('visibilitychange', () => {
                     const hidden = document.visibilityState === 'hidden';
-                    console.log('🔔 Visibility change detected: tab ' + (hidden ? 'hidden' : 'visible'));
                     getApi()?.ipc?.send?.('pip-visibility-change', hidden);
                 });
 
                 document.addEventListener('leavepictureinpicture', () => {
-                    console.log('📱 PiP: User exited PiP window');
                     getApi()?.ipc?.send?.('pip-exited');
                 });
-
-                console.log('✅ PiP visibility change detector installed');
             })();
         `);
     });
@@ -45,22 +46,24 @@ function setupPictureInPicture(mainWindow) {
         }
 
         if (hidden && !pipActive) {
-            _enterPip(mainWindow)
+            // userGesture: true (second arg) bypasses Chromium's gesture requirement.
+            // window.__pipEnter() is registered by the frontend's ElectronPipController.
+            mainWindow.webContents.executeJavaScript('window.__pipEnter()', true)
                 .then(success => {
                     if (success) {
                         pipActive = true;
                     }
                 })
                 .catch(err => {
-                    console.error('❌ PiP: executeJavaScript error:', err);
+                    console.error('❌ PiP: enter error:', err);
                 });
         } else if (!hidden && pipActive) {
-            _exitPip(mainWindow)
+            mainWindow.webContents.executeJavaScript('window.__pipExit()')
                 .then(() => {
                     pipActive = false;
                 })
                 .catch(err => {
-                    console.error('❌ PiP: executeJavaScript exit error:', err);
+                    console.error('❌ PiP: exit error:', err);
                     pipActive = false;
                 });
         }
@@ -69,64 +72,6 @@ function setupPictureInPicture(mainWindow) {
     ipcMain.on('pip-exited', () => {
         pipActive = false;
     });
-}
-
-/**
- * Enters PiP by executing requestPictureInPicture in the renderer
- * with userGesture:true to bypass the browser gesture requirement.
- *
- * @param {BrowserWindow} mainWindow - The main application window.
- * @returns {Promise<boolean>} Whether PiP was entered successfully.
- */
-function _enterPip(mainWindow) {
-    return mainWindow.webContents.executeJavaScript(`
-        (async () => {
-            try {
-                const video = document.getElementById('largeVideo');
-                if (!video) {
-                    console.warn('⚠️ PiP: largeVideo element not found');
-                    return false;
-                }
-                if (document.pictureInPictureElement) {
-                    console.log('📱 PiP: Already in PiP mode');
-                    return true;
-                }
-                await video.requestPictureInPicture();
-                console.log('✅ PiP: Entered PiP via Electron userGesture');
-
-                if (window.__onElectronPipEntered) {
-                    window.__onElectronPipEntered();
-                }
-                return true;
-            } catch (err) {
-                console.error('❌ PiP: Failed to enter:', err);
-                return false;
-            }
-        })();
-    `, true); // userGesture: true — bypasses Chromium's gesture requirement
-}
-
-/**
- * Exits PiP by calling document.exitPictureInPicture in the renderer.
- *
- * @param {BrowserWindow} mainWindow - The main application window.
- * @returns {Promise<boolean>} Whether PiP was exited successfully.
- */
-function _exitPip(mainWindow) {
-    return mainWindow.webContents.executeJavaScript(`
-        (async () => {
-            try {
-                if (document.pictureInPictureElement) {
-                    await document.exitPictureInPicture();
-                    console.log('✅ PiP: Exited PiP');
-                }
-                return true;
-            } catch (err) {
-                console.error('❌ PiP: Failed to exit:', err);
-                return false;
-            }
-        })();
-    `);
 }
 
 module.exports = { setupPictureInPicture };
