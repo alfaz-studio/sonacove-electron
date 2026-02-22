@@ -65,7 +65,9 @@ function setupPictureInPicture(mainWindow) {
 
     // Return cleanup function to remove listeners when window is closed.
     return () => {
-        mainWindow.webContents.removeListener('did-finish-load', onDidFinishLoad);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.removeListener('did-finish-load', onDidFinishLoad);
+        }
         ipcMain.removeListener('pip-visibility-change', onVisibilityChange);
         ipcMain.removeListener('pip-exited', onPipExited);
     };
