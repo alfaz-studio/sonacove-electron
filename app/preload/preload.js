@@ -21,7 +21,9 @@ const whitelistedIpcChannels = [
     'toggle-click-through-request',
     'cleanup-whiteboards-for-viewers',
     'jitsi-open-url',
-    'open-external'
+    'open-external',
+    'pip-visibility-change',
+    'pip-exited'
 ];
 
 ipcRenderer.setMaxListeners(0);
@@ -61,7 +63,8 @@ function patchGetUserMedia() {
         return;
     }
     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = async (constraints) => {
+
+    navigator.mediaDevices.getUserMedia = async constraints => {
         if (constraints && constraints.video && typeof constraints.video === 'object') {
             let sourceId = null;
 
@@ -172,21 +175,19 @@ window.addEventListener('DOMContentLoaded', () => {
         window.APP.API = {};
     }
 
-    window.APP.API.requestDesktopSources = (options) => {
-        return new Promise((resolve, reject) => {
-            window.JitsiMeetElectron.obtainDesktopStreams(
-                (sources) => {
+    window.APP.API.requestDesktopSources = options => new Promise((resolve, reject) => {
+        window.JitsiMeetElectron.obtainDesktopStreams(
+                sources => {
                     console.log('✅ APP.API: Desktop sources obtained:', sources.length);
                     resolve({ sources });
                 },
-                (error) => {
+                error => {
                     console.error('❌ APP.API: Error obtaining sources:', error);
                     reject({ error });
                 },
                 options
-            );
-        });
-    };
+        );
+    });
 
     console.log('✅ APP.API.requestDesktopSources registered');
 });

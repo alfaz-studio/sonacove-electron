@@ -24,6 +24,8 @@ const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
 
+const { setupPictureInPicture } = require('./app/features/pip/main');
+
 // Set app user model ID at the very top for Windows icon support
 if (process.platform === 'win32') {
     app.setAppUserModelId('com.sonacove.meet');
@@ -381,6 +383,9 @@ function createJitsiMeetWindow() {
         }
     });
 
+    // Picture-in-Picture Auto-Trigger
+    const cleanupPip = setupPictureInPicture(mainWindow);
+
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
         const validOptions = {
@@ -566,6 +571,9 @@ function createJitsiMeetWindow() {
     }
 
     mainWindow.on('closed', () => {
+        // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
+        cleanupPip();
+
         // Close the annotation overlay if it is open
         closeOverlay();
 
