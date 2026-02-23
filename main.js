@@ -464,8 +464,6 @@ function createJitsiMeetWindow() {
     windowState.manage(mainWindow);
     mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
 
-    mainWindow.webContents.setWindowOpenHandler(windowOpenHandler);
-
     if (isDev) {
         mainWindow.webContents.session.clearCache();
     }
@@ -563,7 +561,7 @@ function createJitsiMeetWindow() {
         callback(true);
     });
 
-    initPopupsConfigurationMain(mainWindow);
+    initPopupsConfigurationMain(mainWindow, windowOpenHandler);
     setupPictureInPictureMain(mainWindow);
     setupPowerMonitorMain(mainWindow);
     if (ENABLE_REMOTE_CONTROL) {
