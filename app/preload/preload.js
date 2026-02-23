@@ -23,7 +23,8 @@ const whitelistedIpcChannels = [
     'jitsi-open-url',
     'open-external',
     'pip-visibility-change',
-    'pip-exited'
+    'pip-exited',
+    'posthog-capture'
 ];
 
 ipcRenderer.setMaxListeners(0);
@@ -90,9 +91,22 @@ if (navigator.mediaDevices) {
 }
 
 
+/**
+ * Send a PostHog event from the renderer process through the main process.
+ *
+ * @param {string} event - PostHog event name.
+ * @param {Object} [properties] - Extra properties to attach.
+ * @returns {void}
+ */
+function captureAnalyticsEvent(event, properties = {}) {
+    ipcRenderer.send('posthog-capture', { event,
+        properties });
+}
+
 window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
+    analytics: { capture: captureAnalyticsEvent },
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {

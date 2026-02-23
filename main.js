@@ -25,6 +25,10 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
+const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+
+// Track the time the app process started for session duration calculation.
+const appLaunchTime = Date.now();
 
 // Set app user model ID at the very top for Windows icon support
 if (process.platform === 'win32') {
@@ -324,6 +328,10 @@ function createJitsiMeetWindow() {
 
         autoUpdater.on('update-available', info => {
             console.log(`✅ Update available: ${info.version}`);
+            capture('update_available', {
+                new_version: info.version,
+                current_version: app.getVersion()
+            });
         });
 
         autoUpdater.on('update-not-available', info => {
@@ -331,6 +339,8 @@ function createJitsiMeetWindow() {
         });
 
         autoUpdater.on('update-downloaded', info => {
+            capture('update_downloaded', { new_version: info.version });
+
             dialog.showMessageBox(mainWindow, {
                 type: 'info',
                 title: 'Update Ready',
@@ -338,13 +348,17 @@ function createJitsiMeetWindow() {
                 buttons: [ 'Yes', 'Later' ]
             }).then(result => {
                 if (result.response === 0) {
+                    capture('update_install_clicked', { new_version: info.version });
                     autoUpdater.quitAndInstall(false, true);
+                } else {
+                    capture('update_deferred', { new_version: info.version });
                 }
             });
         });
 
         autoUpdater.on('error', err => {
             console.error('Updater Error:', err);
+            capture('update_error', { error_message: err.message });
         });
 
         // Only check for updates in production
@@ -486,11 +500,27 @@ function createJitsiMeetWindow() {
         // requests. Without Origin, the server's CORS middleware returns '*' and
         // better-auth's trustedOrigins/CSRF check fails, returning null sessions.
         // Inject the correct Origin header so the server treats us like a normal browser.
+        //
+        // IMPORTANT: We must use the *initiating frame's* origin, not the main page's
+        // origin. Third-party iframes (e.g. YouTube embeds) make same-origin requests
+        // to their own backend. Injecting the main page's origin on those requests
+        // causes 403 Forbidden errors.
         if (!details.requestHeaders.Origin && !details.url.startsWith('file://')) {
             try {
                 const reqUrl = new URL(details.url);
-                const pageUrl = mainWindow.webContents.getURL();
-                const pageOrigin = pageUrl ? new URL(pageUrl).origin : null;
+
+                // Determine the origin of the frame that initiated this request.
+                // details.frame (WebFrameMain) is available in Electron 40+.
+                let frameOrigin = null;
+
+                if (details.frame && details.frame.url) {
+                    frameOrigin = new URL(details.frame.url).origin;
+                } else {
+                    // Fallback: use the main page origin
+                    const pageUrl = mainWindow.webContents.getURL();
+
+                    frameOrigin = pageUrl ? new URL(pageUrl).origin : null;
+                }
 
                 // Only inject Origin when the request is cross-origin relative to the
                 // initiating frame. Same-origin requests (e.g. YouTube iframe → youtube.com)
@@ -656,6 +686,7 @@ function handleProtocolCall(fullProtocolCall) {
     }
 
     navigateDeepLink(fullProtocolCall);
+    capture('deep_link_opened', { deep_link: fullProtocolCall });
 
     if (app.isReady() && mainWindow === null) {
         createJitsiMeetWindow();
@@ -699,6 +730,9 @@ app.on('certificate-error',
 );
 
 app.on('ready', () => {
+    initAnalytics();
+    capture('app_launched');
+
     setupChildWindowIcon();
     createJitsiMeetWindow();
 
@@ -732,6 +766,35 @@ app.on('second-instance', (event, commandLine) => {
 
 app.on('window-all-closed', () => {
     app.quit();
+});
+
+// Capture app_quit and flush PostHog before the process exits.
+// Uses a flag to avoid infinite recursion (before-quit → app.quit() → before-quit...).
+let analyticsShutdownDone = false;
+
+app.on('before-quit', event => {
+    if (analyticsShutdownDone) {
+        return;
+    }
+    event.preventDefault();
+    analyticsShutdownDone = true;
+
+    capture('app_quit', {
+        session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)
+    });
+
+    // Allow up to 3 s for PostHog to flush, then force-quit regardless.
+    const forceQuitTimeout = setTimeout(() => app.quit(), 3000);
+
+    shutdownAnalytics()
+        .then(() => {
+            clearTimeout(forceQuitTimeout);
+            app.quit();
+        })
+        .catch(() => {
+            clearTimeout(forceQuitTimeout);
+            app.quit();
+        });
 });
 
 // remove so we can register each time as we run the app.
@@ -771,4 +834,14 @@ app.on('open-url', (event, data) => {
  */
 ipcMain.on('jitsi-open-url', (event, someUrl) => {
     openExternalLink(someUrl);
+});
+
+/**
+ * Forward PostHog capture calls from the renderer process to the main-process
+ * PostHog client. The renderer sends: { event, properties }.
+ */
+ipcMain.on('posthog-capture', (_, { event, properties } = {}) => {
+    if (event && typeof event === 'string') {
+        capture(event, properties || {});
+    }
 });
