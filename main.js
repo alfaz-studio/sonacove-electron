@@ -492,8 +492,11 @@ function createJitsiMeetWindow() {
                 const pageUrl = mainWindow.webContents.getURL();
                 const pageOrigin = pageUrl ? new URL(pageUrl).origin : null;
 
-                if (pageOrigin && reqUrl.origin !== pageOrigin) {
-                    details.requestHeaders.Origin = pageOrigin;
+                // Only inject Origin when the request is cross-origin relative to the
+                // initiating frame. Same-origin requests (e.g. YouTube iframe → youtube.com)
+                // don't need an Origin header.
+                if (frameOrigin && reqUrl.origin !== frameOrigin) {
+                    details.requestHeaders.Origin = frameOrigin;
                 }
             } catch (e) {
                 // ignore
