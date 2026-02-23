@@ -131,10 +131,11 @@ let pendingStartupDeepLink = null;
 /**
  * Resolves the absolute path to the application icon based on the current platform
  *
+ * @param {string} [format] - Optional format override (e.g., 'png').
  * @returns {string} The absolute path to the icon file (.ico for Windows, .png for others).
  */
-const getIconPath = () => {
-    const ext = process.platform === 'win32' ? 'ico' : 'png';
+const getIconPath = format => {
+    const ext = format || (process.platform === 'win32' ? 'ico' : 'png');
     const name = `icon.${ext}`;
 
     // 1. Try Development Root (Where you run npm start)
@@ -334,6 +335,14 @@ const TITLEBAR_CSS = `
     user-select: none;
     box-sizing: border-box;
 }
+#sonacove-titlebar .stb-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
 #sonacove-titlebar .stb-title {
     flex: 1;
     overflow: hidden;
@@ -364,13 +373,18 @@ const TITLEBAR_CSS = `
 body { margin-top: 32px !important; }
 `.trim();
 
-const TITLEBAR_JS = `
+const getTitlebarJS = (iconBase64 = '') => `
 (function() {
     if (document.getElementById('sonacove-titlebar')) return;
 
     var bar = document.createElement('div');
     bar.id = 'sonacove-titlebar';
+    var iconHtml = '';
+    if ('${iconBase64}') {
+        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
+    }
     bar.innerHTML =
+        iconHtml +
         '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about">About</button>' +
@@ -408,8 +422,18 @@ function injectWindowsTitleBar() {
         return;
     }
 
+    let iconBase64 = '';
+    try {
+        const iconPath = getIconPath('png');
+        if (fs.existsSync(iconPath)) {
+            iconBase64 = fs.readFileSync(iconPath).toString('base64');
+        }
+    } catch (e) {
+        console.warn('Failed to load title bar icon:', e);
+    }
+
     mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
-    mainWindow.webContents.executeJavaScript(TITLEBAR_JS).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(iconBase64)).catch(() => {});
 }
 
 /**
