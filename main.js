@@ -13,7 +13,8 @@ const {
     app,
     ipcMain,
     desktopCapturer,
-    dialog
+    dialog,
+    shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
 const isDev = require('electron-is-dev');
@@ -251,6 +252,62 @@ function setApplicationMenu() {
                 { type: 'separator' },
                 { role: 'quit' }
             ]
+        },
+        {
+            label: 'Edit',
+            submenu: [ {
+                label: 'Undo',
+                accelerator: 'CmdOrCtrl+Z',
+                selector: 'undo:'
+            },
+            {
+                label: 'Redo',
+                accelerator: 'Shift+CmdOrCtrl+Z',
+                selector: 'redo:'
+            },
+            {
+                type: 'separator'
+            },
+            {
+                label: 'Cut',
+                accelerator: 'CmdOrCtrl+X',
+                selector: 'cut:'
+            },
+            {
+                label: 'Copy',
+                accelerator: 'CmdOrCtrl+C',
+                selector: 'copy:'
+            },
+            {
+                label: 'Paste',
+                accelerator: 'CmdOrCtrl+V',
+                selector: 'paste:'
+            },
+            {
+                label: 'Select All',
+                accelerator: 'CmdOrCtrl+A',
+                selector: 'selectAll:'
+            } ]
+        },
+        {
+            label: '&Window',
+            role: 'window',
+            submenu: [
+                { role: 'minimize' },
+                { role: 'close' }
+            ]
+        },
+        {
+            label: '&Help',
+            role: 'help',
+            submenu: [
+                {
+                    label: 'Guides',
+                    click: async () => {
+                        await shell.openExternal('https://docs.sonacove.com/');
+                    }
+                }
+            ]
         }
     ]));
 }
@@ -318,6 +375,7 @@ const TITLEBAR_JS = `
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about">About</button>' +
             '<button class="stb-btn" id="stb-updates">Check for Updates</button>' +
+            '<button class="stb-btn" id="stb-help">Help</button>' +
         '</div>';
     document.body.prepend(bar);
 
@@ -326,6 +384,9 @@ const TITLEBAR_JS = `
     });
     document.getElementById('stb-updates').addEventListener('click', function() {
         window.sonacoveElectronAPI.ipc.send('check-for-updates');
+    });
+    document.getElementById('stb-help').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('open-help-docs');
     });
 
     // Keep the displayed title in sync with document.title changes.
@@ -598,7 +659,11 @@ function createJitsiMeetWindow() {
         }
     });
 
-    setupSonacoveIPC(ipcMain, mainWindow);
+    setupSonacoveIPC(ipcMain, mainWindow, {
+        showAboutDialog,
+        checkForUpdatesManually,
+        capture
+    });
 
     windowState.manage(mainWindow);
     mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
@@ -951,37 +1016,4 @@ if (isDev && process.platform === 'win32') {
 app.on('open-url', (event, data) => {
     event.preventDefault();
     handleProtocolCall(data);
-});
-
-/**
- * This is to notify main.js [this] that front app is ready to receive messages.
- */
-// Note: Protocol handling now done directly in main process
-// No longer need renderer-ready handler for protocol data
-
-/**
- * Handle opening external links in the main process.
- */
-ipcMain.on('jitsi-open-url', (event, someUrl) => {
-    openExternalLink(someUrl);
-});
-
-/**
- * Forward PostHog capture calls from the renderer process to the main-process
- * PostHog client. The renderer sends: { event, properties }.
- */
-ipcMain.on('posthog-capture', (_, { event, properties } = {}) => {
-    if (event && typeof event === 'string') {
-        capture(event, properties || {});
-    }
-});
-
-/**
- * IPC handlers for the custom Windows title bar menu items.
- */
-ipcMain.on('show-about-dialog', () => {
-    showAboutDialog();
-});
-ipcMain.on('check-for-updates', () => {
-    checkForUpdatesManually();
 });
