@@ -170,18 +170,80 @@ const getIconPath = () => {
 };
 
 /**
- * Sets the application menu. It is hidden on all platforms except macOS because
- * otherwise copy and paste functionality is not available.
+ * Shows a native About dialog with version and environment info.
+ */
+function showAboutDialog() {
+    dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: `About ${app.name}`,
+        message: app.name,
+        detail: [
+            `Version: ${app.getVersion()}`,
+            `Electron: ${process.versions.electron}`,
+            `Chrome: ${process.versions.chrome}`,
+            `Node: ${process.versions.node}`,
+            `Platform: ${process.platform} ${process.arch}`
+        ].join('\n'),
+        buttons: [ 'OK' ]
+    });
+}
+
+/**
+ * Triggers a manual update check and reports the result to the user.
+ */
+function checkForUpdatesManually() {
+    autoUpdater.checkForUpdates()
+        .then(result => {
+            if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
+                dialog.showMessageBox(mainWindow, {
+                    type: 'info',
+                    title: 'No Updates Available',
+                    message: `You're on the latest version (${app.getVersion()}).`,
+                    buttons: [ 'OK' ]
+                });
+            }
+
+            // If an update IS available, the existing autoUpdater event
+            // handlers (update-available → update-downloaded) take over.
+        })
+        .catch(err => {
+            console.error('Manual update check failed:', err);
+            dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                title: 'Update Check Failed',
+                message: 'Could not check for updates. Please try again later.',
+                detail: err.message,
+                buttons: [ 'OK' ]
+            });
+        });
+
+    capture('update_check_manual');
+}
+
+/**
+ * Sets the application menu.
+ *
+ * macOS: app-name menu with About, Check for Updates, and the standard
+ *        system actions (Services, Hide, Quit). Nothing else.
+ * Windows: null — the native menu bar is hidden (titleBarStyle:'hidden') and
+ *          the custom in-page title bar handles About / Check for Updates.
  */
 function setApplicationMenu() {
-    if (process.platform === 'darwin') {
-        const template = [ {
+    if (process.platform !== 'darwin') {
+        Menu.setApplicationMenu(null);
+
+        return;
+    }
+
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+        {
             label: app.name,
             submenu: [
-                {
-                    role: 'services',
-                    submenu: []
-                },
+                { label: `About ${app.name}`, click: showAboutDialog },
+                { type: 'separator' },
+                { label: 'Check for Updates…', click: checkForUpdatesManually },
+                { type: 'separator' },
+                { role: 'services', submenu: [] },
                 { type: 'separator' },
                 { role: 'hide' },
                 { role: 'hideothers' },
@@ -189,54 +251,104 @@ function setApplicationMenu() {
                 { type: 'separator' },
                 { role: 'quit' }
             ]
-        }, {
-            label: 'Edit',
-            submenu: [ {
-                label: 'Undo',
-                accelerator: 'CmdOrCtrl+Z',
-                selector: 'undo:'
-            },
-            {
-                label: 'Redo',
-                accelerator: 'Shift+CmdOrCtrl+Z',
-                selector: 'redo:'
-            },
-            {
-                type: 'separator'
-            },
-            {
-                label: 'Cut',
-                accelerator: 'CmdOrCtrl+X',
-                selector: 'cut:'
-            },
-            {
-                label: 'Copy',
-                accelerator: 'CmdOrCtrl+C',
-                selector: 'copy:'
-            },
-            {
-                label: 'Paste',
-                accelerator: 'CmdOrCtrl+V',
-                selector: 'paste:'
-            },
-            {
-                label: 'Select All',
-                accelerator: 'CmdOrCtrl+A',
-                selector: 'selectAll:'
-            } ]
-        }, {
-            label: '&Window',
-            role: 'window',
-            submenu: [
-                { role: 'minimize' },
-                { role: 'close' }
-            ]
-        } ];
+        }
+    ]));
+}
 
-        Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-    } else {
-        Menu.setApplicationMenu(null);
+// ── Windows: in-page title bar ─────────────────────────────────────────────
+// Because we use titleBarStyle:'hidden' on Windows, the native menu bar is
+// gone. We inject a slim custom title bar into each loaded page so the user
+// still has About / Check for Updates without pressing Alt.
+
+const TITLEBAR_CSS = `
+#sonacove-titlebar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 32px;
+    background: #1a1a2e;
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    z-index: 2147483647;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    color: #c0c0c0;
+    user-select: none;
+    box-sizing: border-box;
+}
+#sonacove-titlebar .stb-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#sonacove-titlebar .stb-menu {
+    display: flex;
+    gap: 2px;
+    -webkit-app-region: no-drag;
+    margin-right: 140px; /* space for native window-controls overlay */
+}
+#sonacove-titlebar .stb-btn {
+    background: transparent;
+    border: none;
+    color: #a0a0a0;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1;
+}
+#sonacove-titlebar .stb-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: #ffffff;
+}
+body { margin-top: 32px !important; }
+`.trim();
+
+const TITLEBAR_JS = `
+(function() {
+    if (document.getElementById('sonacove-titlebar')) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'sonacove-titlebar';
+    bar.innerHTML =
+        '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
+        '<div class="stb-menu">' +
+            '<button class="stb-btn" id="stb-about">About</button>' +
+            '<button class="stb-btn" id="stb-updates">Check for Updates</button>' +
+        '</div>';
+    document.body.prepend(bar);
+
+    document.getElementById('stb-about').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('show-about-dialog');
+    });
+    document.getElementById('stb-updates').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('check-for-updates');
+    });
+
+    // Keep the displayed title in sync with document.title changes.
+    var titleTarget = document.querySelector('title');
+    if (titleTarget) {
+        new MutationObserver(function() {
+            var el = document.querySelector('#sonacove-titlebar .stb-title');
+            if (el) el.textContent = document.title;
+        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
     }
+})();
+`.trim();
+
+/**
+ * Injects the custom title bar into the currently loaded page (Windows only).
+ */
+function injectWindowsTitleBar() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
+    mainWindow.webContents.executeJavaScript(TITLEBAR_JS).catch(() => {});
 }
 
 /**
@@ -270,6 +382,19 @@ function createJitsiMeetWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false,
+
+        // On Windows, hide the native menu bar row and show native window
+        // controls as an overlay. A custom in-page title bar is injected via
+        // injectWindowsTitleBar() on each page load.
+        ...(process.platform !== 'darwin' ? {
+            titleBarStyle: 'hidden',
+            titleBarOverlay: {
+                color: '#1a1a2e',
+                symbolColor: '#e0e0e0',
+                height: 32
+            }
+        } : {}),
+
         webPreferences: {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
@@ -601,6 +726,11 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
+    // Inject the custom in-page title bar on Windows after each page load.
+    if (process.platform !== 'darwin') {
+        mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
+    }
+
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
@@ -844,4 +974,14 @@ ipcMain.on('posthog-capture', (_, { event, properties } = {}) => {
     if (event && typeof event === 'string') {
         capture(event, properties || {});
     }
+});
+
+/**
+ * IPC handlers for the custom Windows title bar menu items.
+ */
+ipcMain.on('show-about-dialog', () => {
+    showAboutDialog();
+});
+ipcMain.on('check-for-updates', () => {
+    checkForUpdatesManually();
 });

@@ -24,7 +24,9 @@ const whitelistedIpcChannels = [
     'open-external',
     'pip-visibility-change',
     'pip-exited',
-    'posthog-capture'
+    'posthog-capture',
+    'show-about-dialog',
+    'check-for-updates'
 ];
 
 ipcRenderer.setMaxListeners(0);
