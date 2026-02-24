@@ -75,7 +75,6 @@ function baseProperties() {
  * @returns {void}
  */
 function initAnalytics() {
-    console.log(POSTHOG_API_KEY)
     if (!POSTHOG_API_KEY) {
         console.warn('⚠️  PostHog: API key not configured — Electron analytics disabled.');
 

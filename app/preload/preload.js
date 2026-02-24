@@ -20,11 +20,9 @@ const whitelistedIpcChannels = [
     'annotation-status',
     'toggle-click-through-request',
     'cleanup-whiteboards-for-viewers',
-    'jitsi-open-url',
     'open-external',
     'pip-visibility-change',
     'pip-exited',
-    'posthog-capture',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs'
@@ -39,7 +37,7 @@ ipcRenderer.setMaxListeners(0);
  * @returns {void}
  */
 function openExternalLink(url) {
-    ipcRenderer.send('jitsi-open-url', url);
+    ipcRenderer.send('open-external', url);
 }
 
 /**
@@ -94,22 +92,9 @@ if (navigator.mediaDevices) {
 }
 
 
-/**
- * Send a PostHog event from the renderer process through the main process.
- *
- * @param {string} event - PostHog event name.
- * @param {Object} [properties] - Extra properties to attach.
- * @returns {void}
- */
-function captureAnalyticsEvent(event, properties = {}) {
-    ipcRenderer.send('posthog-capture', { event,
-        properties });
-}
-
 window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
-    analytics: { capture: captureAnalyticsEvent },
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {
