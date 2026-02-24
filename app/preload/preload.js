@@ -20,10 +20,12 @@ const whitelistedIpcChannels = [
     'annotation-status',
     'toggle-click-through-request',
     'cleanup-whiteboards-for-viewers',
-    'jitsi-open-url',
     'open-external',
     'pip-visibility-change',
-    'pip-exited'
+    'pip-exited',
+    'show-about-dialog',
+    'check-for-updates',
+    'open-help-docs'
 ];
 
 ipcRenderer.setMaxListeners(0);
@@ -35,7 +37,7 @@ ipcRenderer.setMaxListeners(0);
  * @returns {void}
  */
 function openExternalLink(url) {
-    ipcRenderer.send('jitsi-open-url', url);
+    ipcRenderer.send('open-external', url);
 }
 
 /**

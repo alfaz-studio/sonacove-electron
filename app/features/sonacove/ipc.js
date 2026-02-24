@@ -8,9 +8,10 @@ const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards } = require('./
  *
  * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
  * @param {Electron.BrowserWindow} mainWindow - The main application window.
+ * @param {Object} [handlers] - Additional handlers (e.g., for About dialog).
  * @returns {void}
  */
-function setupSonacoveIPC(ipcMain, mainWindow) {
+function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     // Toggle Annotation Overlay
     ipcMain.on('toggle-annotation', (event, data) => {
@@ -51,6 +52,30 @@ function setupSonacoveIPC(ipcMain, mainWindow) {
     ipcMain.on('nav-to-home', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+        }
+    });
+
+    // Custom Windows Title Bar Handlers
+    ipcMain.on('show-about-dialog', () => {
+        if (handlers.showAboutDialog) {
+            handlers.showAboutDialog();
+        }
+    });
+
+    ipcMain.on('check-for-updates', () => {
+        if (handlers.checkForUpdatesManually) {
+            handlers.checkForUpdatesManually();
+        }
+    });
+
+    ipcMain.on('open-help-docs', () => {
+        shell.openExternal('https://docs.sonacove.com/');
+    });
+
+    // PostHog Analytics
+    ipcMain.on('posthog-capture', (_, { event, properties } = {}) => {
+        if (event && typeof event === 'string' && handlers.capture) {
+            handlers.capture(event, properties || {});
         }
     });
 }

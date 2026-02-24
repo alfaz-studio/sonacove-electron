@@ -13,7 +13,8 @@ const {
     app,
     ipcMain,
     desktopCapturer,
-    dialog
+    dialog,
+    shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
 const isDev = require('electron-is-dev');
@@ -25,6 +26,10 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
+const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+
+// Track the time the app process started for session duration calculation.
+const appLaunchTime = Date.now();
 
 // Set app user model ID at the very top for Windows icon support
 if (process.platform === 'win32') {
@@ -126,10 +131,11 @@ let pendingStartupDeepLink = null;
 /**
  * Resolves the absolute path to the application icon based on the current platform
  *
+ * @param {string} [format] - Optional format override (e.g., 'png').
  * @returns {string} The absolute path to the icon file (.ico for Windows, .png for others).
  */
-const getIconPath = () => {
-    const ext = process.platform === 'win32' ? 'ico' : 'png';
+const getIconPath = format => {
+    const ext = format || (process.platform === 'win32' ? 'ico' : 'png');
     const name = `icon.${ext}`;
 
     // 1. Try Development Root (Where you run npm start)
@@ -166,18 +172,80 @@ const getIconPath = () => {
 };
 
 /**
- * Sets the application menu. It is hidden on all platforms except macOS because
- * otherwise copy and paste functionality is not available.
+ * Shows a native About dialog with version and environment info.
+ */
+function showAboutDialog() {
+    dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: `About ${app.name}`,
+        message: app.name,
+        detail: [
+            `Version: ${app.getVersion()}`,
+            `Electron: ${process.versions.electron}`,
+            `Chrome: ${process.versions.chrome}`,
+            `Node: ${process.versions.node}`,
+            `Platform: ${process.platform} ${process.arch}`
+        ].join('\n'),
+        buttons: [ 'OK' ]
+    });
+}
+
+/**
+ * Triggers a manual update check and reports the result to the user.
+ */
+function checkForUpdatesManually() {
+    autoUpdater.checkForUpdates()
+        .then(result => {
+            if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
+                dialog.showMessageBox(mainWindow, {
+                    type: 'info',
+                    title: 'No Updates Available',
+                    message: `You're on the latest version (${app.getVersion()}).`,
+                    buttons: [ 'OK' ]
+                });
+            }
+
+            // If an update IS available, the existing autoUpdater event
+            // handlers (update-available → update-downloaded) take over.
+        })
+        .catch(err => {
+            console.error('Manual update check failed:', err);
+            dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                title: 'Update Check Failed',
+                message: 'Could not check for updates. Please try again later.',
+                detail: err.message,
+                buttons: [ 'OK' ]
+            });
+        });
+
+    capture('update_check_manual');
+}
+
+/**
+ * Sets the application menu.
+ *
+ * macOS: app-name menu with About, Check for Updates, and the standard
+ *        system actions (Services, Hide, Quit). Nothing else.
+ * Windows: null — the native menu bar is hidden (titleBarStyle:'hidden') and
+ *          the custom in-page title bar handles About / Check for Updates.
  */
 function setApplicationMenu() {
-    if (process.platform === 'darwin') {
-        const template = [ {
+    if (process.platform !== 'darwin') {
+        Menu.setApplicationMenu(null);
+
+        return;
+    }
+
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+        {
             label: app.name,
             submenu: [
-                {
-                    role: 'services',
-                    submenu: []
-                },
+                { label: `About ${app.name}`, click: showAboutDialog },
+                { type: 'separator' },
+                { label: 'Check for Updates…', click: checkForUpdatesManually },
+                { type: 'separator' },
+                { role: 'services', submenu: [] },
                 { type: 'separator' },
                 { role: 'hide' },
                 { role: 'hideothers' },
@@ -185,7 +253,8 @@ function setApplicationMenu() {
                 { type: 'separator' },
                 { role: 'quit' }
             ]
-        }, {
+        },
+        {
             label: 'Edit',
             submenu: [ {
                 label: 'Undo',
@@ -220,19 +289,151 @@ function setApplicationMenu() {
                 accelerator: 'CmdOrCtrl+A',
                 selector: 'selectAll:'
             } ]
-        }, {
+        },
+        {
             label: '&Window',
             role: 'window',
             submenu: [
                 { role: 'minimize' },
                 { role: 'close' }
             ]
-        } ];
+        },
+        {
+            label: '&Help',
+            role: 'help',
+            submenu: [
+                {
+                    label: 'Guides',
+                    click: async () => {
+                        await shell.openExternal('https://docs.sonacove.com/');
+                    }
+                }
+            ]
+        }
+    ]));
+}
 
-        Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-    } else {
-        Menu.setApplicationMenu(null);
+// ── Windows: in-page title bar ─────────────────────────────────────────────
+// Because we use titleBarStyle:'hidden' on Windows, the native menu bar is
+// gone. We inject a slim custom title bar into each loaded page so the user
+// still has About / Check for Updates without pressing Alt.
+
+const TITLEBAR_CSS = `
+#sonacove-titlebar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 32px;
+    background: #1a1a2e;
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    z-index: 2147483647;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    color: #c0c0c0;
+    user-select: none;
+    box-sizing: border-box;
+}
+#sonacove-titlebar .stb-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+#sonacove-titlebar .stb-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#sonacove-titlebar .stb-menu {
+    display: flex;
+    gap: 2px;
+    -webkit-app-region: no-drag;
+    margin-right: 140px; /* space for native window-controls overlay */
+}
+#sonacove-titlebar .stb-btn {
+    background: transparent;
+    border: none;
+    color: #a0a0a0;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1;
+}
+#sonacove-titlebar .stb-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: #ffffff;
+}
+body { margin-top: 32px !important; }
+`.trim();
+
+const getTitlebarJS = (iconBase64 = '') => `
+(function() {
+    if (document.getElementById('sonacove-titlebar')) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'sonacove-titlebar';
+    var iconHtml = '';
+    if ('${iconBase64}') {
+        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
     }
+    bar.innerHTML =
+        iconHtml +
+        '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
+        '<div class="stb-menu">' +
+            '<button class="stb-btn" id="stb-about">About</button>' +
+            '<button class="stb-btn" id="stb-updates">Check for Updates</button>' +
+            '<button class="stb-btn" id="stb-help">Help</button>' +
+        '</div>';
+    document.body.prepend(bar);
+
+    document.getElementById('stb-about').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('show-about-dialog');
+    });
+    document.getElementById('stb-updates').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('check-for-updates');
+    });
+    document.getElementById('stb-help').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('open-help-docs');
+    });
+
+    // Keep the displayed title in sync with document.title changes.
+    var titleTarget = document.querySelector('title');
+    if (titleTarget) {
+        new MutationObserver(function() {
+            var el = document.querySelector('#sonacove-titlebar .stb-title');
+            if (el) el.textContent = document.title;
+        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
+    }
+})();
+`.trim();
+
+/**
+ * Injects the custom title bar into the currently loaded page (Windows only).
+ */
+function injectWindowsTitleBar() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    let iconBase64 = '';
+    try {
+        const iconPath = getIconPath('png');
+        if (fs.existsSync(iconPath)) {
+            iconBase64 = fs.readFileSync(iconPath).toString('base64');
+        }
+    } catch (e) {
+        console.warn('Failed to load title bar icon:', e);
+    }
+
+    mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(iconBase64)).catch(() => {});
 }
 
 /**
@@ -266,6 +467,19 @@ function createJitsiMeetWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false,
+
+        // On Windows, hide the native menu bar row and show native window
+        // controls as an overlay. A custom in-page title bar is injected via
+        // injectWindowsTitleBar() on each page load.
+        ...(process.platform !== 'darwin' ? {
+            titleBarStyle: 'hidden',
+            titleBarOverlay: {
+                color: '#1a1a2e',
+                symbolColor: '#e0e0e0',
+                height: 32
+            }
+        } : {}),
+
         webPreferences: {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
@@ -324,6 +538,10 @@ function createJitsiMeetWindow() {
 
         autoUpdater.on('update-available', info => {
             console.log(`✅ Update available: ${info.version}`);
+            capture('update_available', {
+                new_version: info.version,
+                current_version: app.getVersion()
+            });
         });
 
         autoUpdater.on('update-not-available', info => {
@@ -331,6 +549,8 @@ function createJitsiMeetWindow() {
         });
 
         autoUpdater.on('update-downloaded', info => {
+            capture('update_downloaded', { new_version: info.version });
+
             dialog.showMessageBox(mainWindow, {
                 type: 'info',
                 title: 'Update Ready',
@@ -338,13 +558,17 @@ function createJitsiMeetWindow() {
                 buttons: [ 'Yes', 'Later' ]
             }).then(result => {
                 if (result.response === 0) {
+                    capture('update_install_clicked', { new_version: info.version });
                     autoUpdater.quitAndInstall(false, true);
+                } else {
+                    capture('update_deferred', { new_version: info.version });
                 }
             });
         });
 
         autoUpdater.on('error', err => {
             console.error('Updater Error:', err);
+            capture('update_error', { error_message: err.message });
         });
 
         // Only check for updates in production
@@ -459,12 +683,14 @@ function createJitsiMeetWindow() {
         }
     });
 
-    setupSonacoveIPC(ipcMain, mainWindow);
+    setupSonacoveIPC(ipcMain, mainWindow, {
+        showAboutDialog,
+        checkForUpdatesManually,
+        capture
+    });
 
     windowState.manage(mainWindow);
     mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
-
-    mainWindow.webContents.setWindowOpenHandler(windowOpenHandler);
 
     if (isDev) {
         mainWindow.webContents.session.clearCache();
@@ -488,14 +714,33 @@ function createJitsiMeetWindow() {
         // requests. Without Origin, the server's CORS middleware returns '*' and
         // better-auth's trustedOrigins/CSRF check fails, returning null sessions.
         // Inject the correct Origin header so the server treats us like a normal browser.
+        //
+        // IMPORTANT: We must use the *initiating frame's* origin, not the main page's
+        // origin. Third-party iframes (e.g. YouTube embeds) make same-origin requests
+        // to their own backend. Injecting the main page's origin on those requests
+        // causes 403 Forbidden errors.
         if (!details.requestHeaders.Origin && !details.url.startsWith('file://')) {
             try {
                 const reqUrl = new URL(details.url);
-                const pageUrl = mainWindow.webContents.getURL();
-                const pageOrigin = pageUrl ? new URL(pageUrl).origin : null;
 
-                if (pageOrigin && reqUrl.origin !== pageOrigin) {
-                    details.requestHeaders.Origin = pageOrigin;
+                // Determine the origin of the frame that initiated this request.
+                // details.frame (WebFrameMain) is available in Electron 40+.
+                let frameOrigin = null;
+
+                if (details.frame && details.frame.url) {
+                    frameOrigin = new URL(details.frame.url).origin;
+                } else {
+                    // Fallback: use the main page origin
+                    const pageUrl = mainWindow.webContents.getURL();
+
+                    frameOrigin = pageUrl ? new URL(pageUrl).origin : null;
+                }
+
+                // Only inject Origin when the request is cross-origin relative to the
+                // initiating frame. Same-origin requests (e.g. YouTube iframe → youtube.com)
+                // don't need an Origin header.
+                if (frameOrigin && reqUrl.origin !== frameOrigin) {
+                    details.requestHeaders.Origin = frameOrigin;
                 }
             } catch (e) {
                 // ignore
@@ -563,11 +808,16 @@ function createJitsiMeetWindow() {
         callback(true);
     });
 
-    initPopupsConfigurationMain(mainWindow);
+    initPopupsConfigurationMain(mainWindow, windowOpenHandler);
     setupPictureInPictureMain(mainWindow);
     setupPowerMonitorMain(mainWindow);
     if (ENABLE_REMOTE_CONTROL) {
         setupRemoteControlMain(mainWindow);
+    }
+
+    // Inject the custom in-page title bar on Windows after each page load.
+    if (process.platform !== 'darwin') {
+        mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
     }
 
     mainWindow.on('closed', () => {
@@ -655,6 +905,7 @@ function handleProtocolCall(fullProtocolCall) {
     }
 
     navigateDeepLink(fullProtocolCall);
+    capture('deep_link_opened', { deep_link: fullProtocolCall });
 
     if (app.isReady() && mainWindow === null) {
         createJitsiMeetWindow();
@@ -698,6 +949,9 @@ app.on('certificate-error',
 );
 
 app.on('ready', () => {
+    initAnalytics();
+    capture('app_launched');
+
     setupChildWindowIcon();
     createJitsiMeetWindow();
 
@@ -733,6 +987,35 @@ app.on('window-all-closed', () => {
     app.quit();
 });
 
+// Capture app_quit and flush PostHog before the process exits.
+// Uses a flag to avoid infinite recursion (before-quit → app.quit() → before-quit...).
+let analyticsShutdownDone = false;
+
+app.on('before-quit', event => {
+    if (analyticsShutdownDone) {
+        return;
+    }
+    event.preventDefault();
+    analyticsShutdownDone = true;
+
+    capture('app_quit', {
+        session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)
+    });
+
+    // Allow up to 3 s for PostHog to flush, then force-quit regardless.
+    const forceQuitTimeout = setTimeout(() => app.quit(), 3000);
+
+    shutdownAnalytics()
+        .then(() => {
+            clearTimeout(forceQuitTimeout);
+            app.quit();
+        })
+        .catch(() => {
+            clearTimeout(forceQuitTimeout);
+            app.quit();
+        });
+});
+
 // remove so we can register each time as we run the app.
 app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
 
@@ -757,17 +1040,4 @@ if (isDev && process.platform === 'win32') {
 app.on('open-url', (event, data) => {
     event.preventDefault();
     handleProtocolCall(data);
-});
-
-/**
- * This is to notify main.js [this] that front app is ready to receive messages.
- */
-// Note: Protocol handling now done directly in main process
-// No longer need renderer-ready handler for protocol data
-
-/**
- * Handle opening external links in the main process.
- */
-ipcMain.on('jitsi-open-url', (event, someUrl) => {
-    openExternalLink(someUrl);
 });
