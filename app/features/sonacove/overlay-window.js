@@ -87,7 +87,14 @@ function toggleOverlay(mainWindow, data) {
 
     const preloadPath = possiblePaths.find(p => fs.existsSync(p));
 
-    annotationWindow = new BrowserWindow({
+    if (preloadPath) {
+        console.log(`✅ Annotation Overlay using preload: ${preloadPath}`);
+    } else {
+        console.error('❌ CRITICAL: Could not find preload.js! Overlay will be broken.');
+        console.error('Searched in:', possiblePaths);
+    }
+
+    const windowOptions = {
         x: Math.floor(x),
         y: Math.floor(y),
         width: Math.floor(width),
@@ -103,6 +110,7 @@ function toggleOverlay(mainWindow, data) {
         skipTaskbar: true,
         show: false,
         backgroundColor: '#00000000',
+        icon: path.join(app.getAppPath(), 'resources', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: false,
@@ -110,7 +118,14 @@ function toggleOverlay(mainWindow, data) {
             sandbox: false,
             preload: preloadPath
         }
-    });
+    };
+
+    // On macOS, use utility type to hide from Alt+Tab
+    if (process.platform === 'darwin') {
+        windowOptions.type = 'utility';
+    }
+
+    annotationWindow = new BrowserWindow(windowOptions);
 
     if (isMac) {
         app.dock.show();
@@ -187,7 +202,6 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
 
-        // annotationWindow.close();
         annotationWindow.destroy();
         annotationWindow = null;
 

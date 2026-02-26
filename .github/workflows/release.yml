@@ -31,43 +31,49 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-
-          # 1. Fetch tags so we know what already exists
           git fetch --tags origin
-
-          # 2. Get the version from package.json
           VERSION=$(node -p "require('./package.json').version")
           
-          # 3. SELF-HEALING LOOP
-          # If a tag for the current version exists, keep bumping until we find a free one
           while git rev-parse "v$VERSION" >/dev/null 2>&1; do
             echo "Tag v$VERSION already exists. Bumping patch..."
             npm version patch --no-git-tag-version
             VERSION=$(node -p "require('./package.json').version")
           done
-
-          echo "Final Version to be used: $VERSION"
-          echo "target_version=v$VERSION" >> $GITHUB_OUTPUT
-          echo "skipped=false" >> $GITHUB_OUTPUT # Tell Job 2 to run
           
-          # 4. Commit and Push the bump
-          # If the last commit message already matches this version, we skip the commit
+          echo "target_version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "skipped=false" >> $GITHUB_OUTPUT
+          
           if [[ "$(git log -1 --pretty=format:%s)" == *"chore: bump version to $VERSION"* ]]; then
-            echo "Version $VERSION is already committed. Skipping commit step."
+            echo "Version $VERSION is already committed."
           else
             git add package.json package-lock.json
-            git commit -m "chore: bump version to $VERSION [skip ci]" || echo "Nothing to commit"
-            git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git main
+            git commit -m "chore: bump version to $VERSION [skip ci]" || true
+            git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git ${GITHUB_REF_NAME}
           fi
           
-          # 5. Create and push the tag
-          echo "Creating and pushing tag v$VERSION"
           git tag "v$VERSION"
           git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git "v$VERSION"
 
+      - name: Create Draft Release
+        if: steps.versioning.outputs.skipped == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.RELEASE_TOKEN }}
+          script: |
+            const tag = '${{ steps.versioning.outputs.target_version }}';
+            const version = tag.replace('v', '');
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Version ${version}`,
+              body: 'Automatically generated draft release.',
+              draft: true
+            });
+            console.log(`Created draft release for tag ${tag}`);
+
   build:
     needs: version
-    # Only run if versioning was successful and not skipped
     if: needs.version.outputs.skipped == 'false'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -88,17 +94,65 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build and Release
+      - name: Build without publishing (Windows)
+        if: matrix.os == 'windows-latest'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID_PASSWORD || '' }} 
-          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
-
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: npm run dist -- --publish=always
+        run: npm run dist -- --publish=never
+
+      - name: Build and publish (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run dist
+
+      - name: Regenerate and upload latest.yml (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          $file = "dist\Sonacove-Meets-Setup.exe"
+          $hash = Get-FileHash -Path $file -Algorithm SHA512
+          $sha512 = $hash.Hash.ToLower()
+          $size = (Get-Item $file).Length
+          $version = node -p "require('./package.json').version"
+          $date = Get-Date -Format "yyyy-MM-dd"
+          
+          Write-Host "Generating latest.yml"
+          Write-Host "SHA512: $sha512"
+          
+          $yaml = "version: $version`nfiles:`n  - url: Sonacove-Meets-Setup.exe`n    sha512: $sha512`n    size: $size`npath: Sonacove-Meets-Setup.exe`nsha512: $sha512`nreleaseDate: '$date'"
+          
+          Set-Content -Path "dist/latest.yml" -Value $yaml
+          
+          Write-Host ""
+          Write-Host "=== Generated latest.yml ==="
+          Get-Content "dist/latest.yml"
+          Write-Host ""
+          
+          $TAG_NAME = "${{ needs.version.outputs.new_tag }}"
+          Write-Host "Uploading to release: $TAG_NAME"
+          
+          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe
+          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe.blockmap
+          gh release upload $TAG_NAME --clobber dist/latest.yml
+          
+          Write-Host "Upload complete!"
+
+      - name: Verify mac universal and notarization
+        if: matrix.os == 'macos-latest'
+        run: |
+          hdiutil attach -quiet -mountpoint /Volumes/SonacoveMeets "dist/Sonacove Meets.dmg"
+          file "/Volumes/SonacoveMeets/Sonacove Meets.app/Contents/MacOS/Sonacove Meets"
+          codesign --verify --deep --strict "/Volumes/SonacoveMeets/Sonacove Meets.app"
+          spctl --assess --type execute --verbose "/Volumes/SonacoveMeets/Sonacove Meets.app" || true
+          hdiutil detach -quiet /Volumes/SonacoveMeets

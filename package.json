@@ -2,7 +2,7 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "2025.15.9",
+  "version": "2025.15.76",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
@@ -10,7 +10,7 @@
     "url": "https://github.com/alfaz-studio/sonacove-electron.git"
   },
   "scripts": {
-    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron ./build/main.js\"",
+    "start": "webpack --config ./webpack.main.js --mode development && concurrently \"npm:watch\" \"electron .\"",
     "start:prod": "npm run build && npx electron-builder --dir",
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",
@@ -49,6 +49,20 @@
       "hardenedRuntime": true,
       "entitlements": "resources/entitlements.mac.plist",
       "artifactName": "${productName}.${ext}",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "extendInfo": {
         "NSCameraUsageDescription": "Sonacove requires access to your camera for meetings.",
         "NSMicrophoneUsageDescription": "Sonacove requires access to your microphone for meetings.",
@@ -58,7 +72,9 @@
     },
     "win": {
       "target": "nsis",
-      "artifactName": "${productName}-Setup.${ext}"
+      "icon": "resources/icon.ico",
+      "artifactName": "Sonacove-Meets-Setup.${ext}",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -66,9 +82,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
     },
-    "afterSign": "sign.js",
+    "afterPack": "sign.js",
+    "afterAllArtifactBuild": "sign.js",
     "directories": {
       "buildResources": "resources"
     }
@@ -80,6 +99,7 @@
     "electron-reload": "^1.5.0",
     "electron-updater": "6.6.2",
     "electron-window-state": "^5.0.3",
+    "posthog-node": "^4.8.1",
     "prop-types": "^15.8.1"
   },
   "devDependencies": {
@@ -107,7 +127,7 @@
     "babel-loader": "^8.2.3",
     "concurrently": "5.1.0",
     "css-loader": "^6.7.1",
-    "electron": "30.1.0",
+    "electron": "40.3.0",
     "electron-builder": "26.0.12",
     "electron-context-menu": "^2.5.0",
     "electron-is-dev": "^1.2.0",
@@ -123,6 +143,7 @@
     "moment": "^2.29.2",
     "mousetrap": "^1.6.5",
     "patch-package": "8.0.1",
+    "rcedit": "^5.0.2",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-i18next": "^11.8.12",

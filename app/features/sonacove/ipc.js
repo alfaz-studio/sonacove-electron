@@ -7,16 +7,21 @@ const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow 
  * Registers all Sonacove-specific IPC listeners.
  *
  * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
+ * @param {Object} [handlers] - Additional handlers (e.g., for About dialog).
  * @returns {void}
  */
-function setupSonacoveIPC(ipcMain) {
+function setupSonacoveIPC(ipcMain, handlers = {}) {
     const channels = [
         'toggle-annotation',
         'open-external',
         'show-overlay',
         'set-ignore-mouse-events',
         'screenshare-stop',
-        'nav-to-home'
+        'nav-to-home',
+        'show-about-dialog',
+        'check-for-updates',
+        'open-help-docs',
+        'posthog-capture'
     ];
 
     channels.forEach(ch => ipcMain.removeAllListeners(ch));
@@ -81,6 +86,30 @@ function setupSonacoveIPC(ipcMain) {
 
         if (mw) {
             mw.loadURL(sonacoveConfig.currentConfig.landing);
+        }
+    });
+
+    // Custom Windows Title Bar Handlers
+    ipcMain.on('show-about-dialog', () => {
+        if (handlers.showAboutDialog) {
+            handlers.showAboutDialog();
+        }
+    });
+
+    ipcMain.on('check-for-updates', () => {
+        if (handlers.checkForUpdatesManually) {
+            handlers.checkForUpdatesManually();
+        }
+    });
+
+    ipcMain.on('open-help-docs', () => {
+        shell.openExternal('https://docs.sonacove.com/');
+    });
+
+    // PostHog Analytics
+    ipcMain.on('posthog-capture', (_, { event, properties } = {}) => {
+        if (event && typeof event === 'string' && handlers.capture) {
+            handlers.capture(event, properties || {});
         }
     });
 }

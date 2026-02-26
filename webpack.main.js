@@ -14,7 +14,8 @@ module.exports = {
     externals: [ {
         '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
         'electron-debug': 'require(\'electron-debug\')',
-        'electron-reload': 'require(\'electron-reload\')'
+        'electron-reload': 'require(\'electron-reload\')',
+        'posthog-node': 'require(\'posthog-node\')'
     } ],
     resolve: {
         modules: [

@@ -19,11 +19,14 @@ const whitelistedIpcChannels = [
     'screenshare-stop',
     'annotation-status',
     'toggle-click-through-request',
-    'auth-token-received',
-    'auth-logout-complete',
     'cleanup-whiteboards-for-viewers',
-    'jitsi-open-url',
-    'open-external'
+    'notify-overlay-closed',
+    'open-external',
+    'show-about-dialog',
+    'check-for-updates',
+    'open-help-docs',
+    'pip-visibility-change',
+    'pip-exited'
 ];
 
 ipcRenderer.setMaxListeners(0);
@@ -35,7 +38,7 @@ ipcRenderer.setMaxListeners(0);
  * @returns {void}
  */
 function openExternalLink(url) {
-    ipcRenderer.send('jitsi-open-url', url);
+    ipcRenderer.send('open-external', url);
 }
 
 /**
@@ -57,25 +60,36 @@ function setupRenderer(api, options = {}) {
 }
 
 // Intercept getUserMedia to track the last selected screenshare source
-if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = async (constraints) => {
-    if (constraints && constraints.video && typeof constraints.video === 'object') {
-        let sourceId = null;
-
-        if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
-            sourceId = constraints.video.mandatory.chromeMediaSourceId;
-        } else if (constraints.video.chromeMediaSourceId) {
-            sourceId = constraints.video.chromeMediaSourceId;
-        }
-
-        if (sourceId) {
-            window._lastScreenshareSourceId = sourceId;
-        }
+// navigator.mediaDevices may not be available at preload time, so defer the patch
+function patchGetUserMedia() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return;
     }
+    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-return originalGetUserMedia(constraints);
+    navigator.mediaDevices.getUserMedia = async constraints => {
+        if (constraints && constraints.video && typeof constraints.video === 'object') {
+            let sourceId = null;
+
+            if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
+                sourceId = constraints.video.mandatory.chromeMediaSourceId;
+            } else if (constraints.video.chromeMediaSourceId) {
+                sourceId = constraints.video.chromeMediaSourceId;
+            }
+
+            if (sourceId) {
+                window._lastScreenshareSourceId = sourceId;
+            }
+        }
+
+        return originalGetUserMedia(constraints);
     };
+}
+
+if (navigator.mediaDevices) {
+    patchGetUserMedia();
+} else {
+    window.addEventListener('DOMContentLoaded', patchGetUserMedia);
 }
 
 
@@ -164,21 +178,19 @@ window.addEventListener('DOMContentLoaded', () => {
         window.APP.API = {};
     }
 
-    window.APP.API.requestDesktopSources = (options) => {
-        return new Promise((resolve, reject) => {
-            window.JitsiMeetElectron.obtainDesktopStreams(
-                (sources) => {
+    window.APP.API.requestDesktopSources = options => new Promise((resolve, reject) => {
+        window.JitsiMeetElectron.obtainDesktopStreams(
+                sources => {
                     console.log('✅ APP.API: Desktop sources obtained:', sources.length);
                     resolve({ sources });
                 },
-                (error) => {
+                error => {
                     console.error('❌ APP.API: Error obtaining sources:', error);
                     reject({ error });
                 },
                 options
-            );
-        });
-    };
+        );
+    });
 
     console.log('✅ APP.API.requestDesktopSources registered');
 });
