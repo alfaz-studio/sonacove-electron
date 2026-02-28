@@ -127,6 +127,11 @@ function toggleOverlay(mainWindow, data) {
 
     annotationWindow = new BrowserWindow(windowOptions);
 
+    // Exclude the overlay from screen capture so annotations don't appear
+    // in the shared screen stream. On Windows 10 2004+ this uses
+    // WDA_EXCLUDEFROMCAPTURE; on macOS it sets NSWindowSharingNone.
+    annotationWindow.setContentProtection(true);
+
     if (isMac) {
         app.dock.show();
         annotationWindow.setAlwaysOnTop(true, 'screen-saver');
