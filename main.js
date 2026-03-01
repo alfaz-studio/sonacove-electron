@@ -146,10 +146,10 @@ function createJitsiMeetWindow() {
 
     const windowOpenHandler = createWindowOpenHandler();
 
+    mainWindow = new BrowserWindow(options);
+
     // Auto-Updater
     setupAutoUpdater(mainWindow, capture);
-
-    mainWindow = new BrowserWindow(options);
 
     // Set icon immediately after creating window for taskbar/PiP
     if (process.platform !== 'darwin') {
