@@ -211,6 +211,10 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
 
+        // Remove the 'closed' listener before destroy to prevent double-notify:
+        // destroy() fires 'closed' → cleanup() → notify, then closeOverlay would
+        // notify again below when notifyOthers is true.
+        annotationWindow.removeAllListeners('closed');
         annotationWindow.destroy();
         annotationWindow = null;
 
