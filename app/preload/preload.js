@@ -20,6 +20,7 @@ const whitelistedIpcChannels = [
     'annotation-status',
     'toggle-click-through-request',
     'cleanup-whiteboards-for-viewers',
+    'notify-overlay-closed',
     'open-external',
     'pip-visibility-change',
     'pip-exited',
@@ -28,7 +29,7 @@ const whitelistedIpcChannels = [
     'open-help-docs'
 ];
 
-ipcRenderer.setMaxListeners(0);
+ipcRenderer.setMaxListeners(20);
 
 /**
  * Open an external URL.
@@ -131,8 +132,11 @@ window.sonacoveElectronAPI = {
                 const sourceId = window._lastScreenshareSourceId;
                 const isWindow = sourceId ? sourceId.startsWith('window:') : false;
 
-                console.log(`DEBUG: PRELOAD: Augmenting toggle-annotation. SourceId: ${sourceId}, isWindowSharing: ${isWindow}`);
                 args[0].isWindowSharing = isWindow;
+            }
+
+            if (channel === 'screenshare-stop') {
+                window._lastScreenshareSourceId = null;
             }
 
             ipcRenderer.send(channel, ...args);
