@@ -132,7 +132,6 @@ window.sonacoveElectronAPI = {
                 const sourceId = window._lastScreenshareSourceId;
                 const isWindow = sourceId ? sourceId.startsWith('window:') : false;
 
-                console.log(`DEBUG: PRELOAD: Augmenting toggle-annotation. SourceId: ${sourceId}, isWindowSharing: ${isWindow}`);
                 args[0].isWindowSharing = isWindow;
             }
 

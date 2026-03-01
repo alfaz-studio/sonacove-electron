@@ -364,9 +364,9 @@ app.on('ready', () => {
     }, 500);
 });
 
-// if (isDev) {
-//     app.on('ready', createWebRTCInternalsWindow);
-// }
+if (isDev) {
+    app.on('ready', createWebRTCInternalsWindow);
+}
 
 app.on('second-instance', (event, commandLine) => {
     /**
