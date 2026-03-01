@@ -261,11 +261,6 @@ const setupChildWindowIcon = () => {
                 }
             };
         });
-
-        // Listen for window creation on this webContents
-        contents.on('new-window', (event, url, frameName, disposition, options) => {
-            options.icon = iconPath;
-        });
     });
 };
 
