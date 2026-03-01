@@ -54,8 +54,20 @@ function setupSonacoveIPC(ipcMain, handlers = {}) {
         toggleOverlay(mw, config);
     });
 
-    // Open External Links
-    ipcMain.on('open-external', (event, url) => shell.openExternal(url));
+    // Open External Links (only allow http/https to prevent arbitrary scheme execution)
+    ipcMain.on('open-external', (event, url) => {
+        try {
+            const parsed = new URL(url);
+
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                shell.openExternal(url);
+            } else {
+                console.warn(`⚠️ Blocked open-external with disallowed scheme: ${parsed.protocol}`);
+            }
+        } catch (e) {
+            console.warn('⚠️ Blocked open-external with invalid URL:', url);
+        }
+    });
 
     // Show Overlay
     ipcMain.on('show-overlay', () => {
