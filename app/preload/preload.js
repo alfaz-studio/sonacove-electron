@@ -29,7 +29,7 @@ const whitelistedIpcChannels = [
     'open-help-docs'
 ];
 
-ipcRenderer.setMaxListeners(0);
+ipcRenderer.setMaxListeners(20);
 
 /**
  * Open an external URL.
