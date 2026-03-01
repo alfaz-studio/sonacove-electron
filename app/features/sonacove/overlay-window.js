@@ -177,6 +177,8 @@ function toggleOverlay(mainWindow, data) {
 
     // Cleanup
     const cleanup = (reason = 'overlay-closed') => {
+        globalShortcut.unregister('Alt+X');
+
         const mw = getMainWindow();
 
         restoreMainWindow();
@@ -204,6 +206,8 @@ function toggleOverlay(mainWindow, data) {
  * @returns {void}
  */
 function closeOverlay(notifyOthers = false, reason = 'manual') {
+    globalShortcut.unregister('Alt+X');
+
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
 
