@@ -135,6 +135,10 @@ window.sonacoveElectronAPI = {
                 args[0].isWindowSharing = isWindow;
             }
 
+            if (channel === 'screenshare-stop') {
+                window._lastScreenshareSourceId = null;
+            }
+
             ipcRenderer.send(channel, ...args);
         }
     }
