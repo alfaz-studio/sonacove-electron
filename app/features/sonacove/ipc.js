@@ -1,7 +1,7 @@
 const { BrowserWindow, shell } = require('electron');
 
 const sonacoveConfig = require('./config');
-const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay-window');
+const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
 
 /**
  * Registers all Sonacove-specific IPC listeners.

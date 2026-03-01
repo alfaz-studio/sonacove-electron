@@ -44,7 +44,7 @@ const {
     processDeepLinkOnStartup
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
-const { closeOverlay } = require('./app/features/sonacove/overlay-window');
+const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
 

@@ -2,7 +2,7 @@ const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 
 const sonacoveConfig = require('./config');
-const { closeOverlay } = require('./overlay-window');
+const { closeOverlay } = require('./overlay/overlay-window');
 
 let pendingStartupDeepLink = null;
 
