@@ -77,7 +77,7 @@ function setupSonacoveIPC(ipcMain, handlers = {}) {
 
     // Screenshare Cleanup
     ipcMain.on('screenshare-stop', (event, data) => {
-        closeViewersWhiteboards(data.sharerId);
+        closeViewersWhiteboards(data?.sharerId);
     });
 
     // Navigation
