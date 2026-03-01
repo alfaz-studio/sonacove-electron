@@ -62,7 +62,7 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
-    if (!collabDetails?.roomId || !collabDetails?.roomKey) {
+    if (!annotationsUrl && (!collabDetails?.roomId || !collabDetails?.roomKey)) {
         console.error('❌ Cannot open annotation: Missing Collab Details.');
 
         return;
