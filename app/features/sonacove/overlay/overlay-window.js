@@ -52,6 +52,11 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
+    // Already open — don't create a second window
+    if (annotationWindow) {
+        return;
+    }
+
     // Validate required data (guard skipped when annotationsUrl is present)
     if (!annotationsUrl && (!collabDetails?.roomId || !collabDetails?.roomKey)) {
         console.error('❌ Cannot open annotation: Missing Collab Details.');
