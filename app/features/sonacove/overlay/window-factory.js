@@ -55,7 +55,12 @@ function createOverlayWindow(screenBounds, preloadPath) {
         windowOptions.type = 'utility';
     }
 
-    return new BrowserWindow(windowOptions);
+    const win = new BrowserWindow(windowOptions);
+
+    // Tag so getMainWindow() can exclude the overlay from its search
+    win._isAnnotationOverlay = true;
+
+    return win;
 }
 
 /**

@@ -15,7 +15,7 @@ const {
  * @returns {BrowserWindow|undefined} The main window instance.
  */
 function getMainWindow() {
-    const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed());
+    const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !w._isAnnotationOverlay);
 
     // 1. Try by title
     const byTitle = windows.find(w => w.getTitle().includes('Sonacove'));
