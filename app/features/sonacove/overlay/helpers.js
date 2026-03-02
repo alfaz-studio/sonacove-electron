@@ -125,7 +125,7 @@ function resolvePreloadPath() {
  * @returns {string} The fully-formed overlay URL.
  */
 function buildOverlayUrl(data) {
-    const { annotationsUrl, roomUrl, collabDetails, collabServerUrl } = data;
+    const { annotationsUrl, roomUrl, collabDetails, collabServerUrl, localParticipantName } = data;
 
     if (annotationsUrl) {
         console.log(`🖌️ Opening Annotations Overlay: ${annotationsUrl}`);
@@ -139,6 +139,10 @@ function buildOverlayUrl(data) {
     joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
     joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
     joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
+
+    if (localParticipantName) {
+        joinUrl.searchParams.set('userName', localParticipantName);
+    }
 
     const url = joinUrl.toString();
 
