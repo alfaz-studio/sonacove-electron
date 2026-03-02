@@ -2,10 +2,7 @@ const { BrowserWindow, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const {
-    OVERLAY_PRELOAD_FILENAME,
-    FALLBACK_PRELOAD_FILENAME
-} = require('./constants');
+const { OVERLAY_PRELOAD_FILENAME } = require('./constants');
 
 // ── Window lookup ───────────────────────────────────────────────────────────
 
@@ -76,13 +73,16 @@ function restoreMainWindow(mainWindow) {
 
 /**
  * Resolves the absolute path to the overlay preload script by searching
- * known candidate locations. Prefers the dedicated overlay-preload; falls
- * back to the main preload for backward compatibility.
+ * known candidate locations.
+ *
+ * Only the dedicated overlay-preload script is accepted. The main preload.js
+ * is NOT a valid fallback because it relies on `window.sonacoveElectronAPI`
+ * (no contextBridge), which silently fails in the sandboxed overlay window
+ * (contextIsolation: true, sandbox: true).
  *
  * @returns {string|undefined} The resolved preload path, or undefined if not found.
  */
 function resolvePreloadPath() {
-    const filenames = [ OVERLAY_PRELOAD_FILENAME, FALLBACK_PRELOAD_FILENAME ];
     const dirs = [
         path.join(app.getAppPath(), 'build'),
         app.getAppPath(),
@@ -92,21 +92,20 @@ function resolvePreloadPath() {
         path.join(__dirname, '..', '..', '..', '..', '..', 'build')
     ];
 
-    for (const filename of filenames) {
-        for (const dir of dirs) {
-            const candidate = path.join(dir, filename);
+    for (const dir of dirs) {
+        const candidate = path.join(dir, OVERLAY_PRELOAD_FILENAME);
 
-            if (fs.existsSync(candidate)) {
-                console.log(`✅ Annotation Overlay using preload: ${candidate}`);
+        if (fs.existsSync(candidate)) {
+            console.log(`✅ Annotation Overlay using preload: ${candidate}`);
 
-                return candidate;
-            }
+            return candidate;
         }
     }
 
-    console.error('❌ CRITICAL: Could not find overlay preload script!');
+    console.error(`❌ CRITICAL: Could not find ${OVERLAY_PRELOAD_FILENAME}!`);
+    console.error('   The main preload.js is NOT a valid substitute — it lacks');
+    console.error('   contextBridge bindings required by the sandboxed overlay.');
     console.error('Searched directories:', dirs);
-    console.error('Searched filenames:', filenames);
 
     return undefined;
 }
