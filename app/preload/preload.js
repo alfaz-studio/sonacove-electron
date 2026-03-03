@@ -156,11 +156,8 @@ window.JitsiMeetElectron = {
      * @param {Object} options.thumbnailSize - Thumbnail dimensions.
      */
     obtainDesktopStreams: (callback, errorCallback, options = {}) => {
-        console.log('🖥️ Renderer: Requesting desktop sources...', options);
-
         ipcRenderer.invoke('jitsi-screen-sharing-get-sources', options)
             .then(sources => {
-                console.log(`✅ Renderer: Received ${sources.length} sources`);
                 callback(sources);
             })
             .catch(error => {
@@ -185,7 +182,6 @@ window.addEventListener('DOMContentLoaded', () => {
     window.APP.API.requestDesktopSources = options => new Promise((resolve, reject) => {
         window.JitsiMeetElectron.obtainDesktopStreams(
                 sources => {
-                    console.log('✅ APP.API: Desktop sources obtained:', sources.length);
                     resolve({ sources });
                 },
                 error => {
@@ -196,5 +192,4 @@ window.addEventListener('DOMContentLoaded', () => {
         );
     });
 
-    console.log('✅ APP.API.requestDesktopSources registered');
 });
