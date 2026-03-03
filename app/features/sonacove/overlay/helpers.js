@@ -97,7 +97,9 @@ function resolvePreloadPath() {
         const candidate = path.join(dir, OVERLAY_PRELOAD_FILENAME);
 
         if (fs.existsSync(candidate)) {
-            console.log(`✅ Annotation Overlay using preload: ${candidate}`);
+            if (isDev) {
+                console.log(`✅ Annotation Overlay using preload: ${candidate}`);
+            }
 
             return candidate;
         }

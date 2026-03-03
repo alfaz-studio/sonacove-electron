@@ -1,4 +1,5 @@
 const { screen, globalShortcut } = require('electron');
+const isDev = require('electron-is-dev');
 
 const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
@@ -71,11 +72,13 @@ function toggleOverlay(mainWindow, data) {
         : screen.getPrimaryDisplay().bounds;
     const currentScreen = screen.getDisplayMatching(displayBounds);
 
-    console.log(
-        `🖌️ Launching Overlay on Screen: ${currentScreen.label}`
-        + ` at ${currentScreen.bounds.x},${currentScreen.bounds.y}`
-        + ` (${currentScreen.bounds.width}x${currentScreen.bounds.height})`
-    );
+    if (isDev) {
+        console.log(
+            `🖌️ Launching Overlay on Screen: ${currentScreen.label}`
+            + ` at ${currentScreen.bounds.x},${currentScreen.bounds.y}`
+            + ` (${currentScreen.bounds.width}x${currentScreen.bounds.height})`
+        );
+    }
 
     // Resolve preload, create window, configure platform
     const preloadPath = resolvePreloadPath();
@@ -125,7 +128,9 @@ function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
     globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
 
     if (annotationWindow) {
-        console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
+        if (isDev) {
+            console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
+        }
 
         // Remove the 'closed' listener before destroy to prevent double-notify:
         // destroy() fires 'closed' → cleanup → notify, then we'd notify again below.
