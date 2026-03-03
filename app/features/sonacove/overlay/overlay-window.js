@@ -80,6 +80,12 @@ function toggleOverlay(mainWindow, data) {
     // Resolve preload, create window, configure platform
     const preloadPath = resolvePreloadPath();
 
+    if (!preloadPath) {
+        console.error('❌ Cannot open annotation: overlay preload script not found.');
+
+        return;
+    }
+
     annotationWindow = createOverlayWindow(currentScreen.bounds, preloadPath);
     configurePlatform(annotationWindow, currentScreen.bounds);
 
