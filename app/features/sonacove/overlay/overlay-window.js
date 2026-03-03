@@ -58,8 +58,8 @@ function toggleOverlay(mainWindow, data) {
     }
 
     // Validate required data (guard skipped when annotationsUrl is present)
-    if (!annotationsUrl && (!collabDetails?.roomId || !collabDetails?.roomKey)) {
-        console.error('❌ Cannot open annotation: Missing Collab Details.');
+    if (!annotationsUrl && (!collabDetails?.roomId || !collabDetails?.roomKey || !data.roomUrl)) {
+        console.error('❌ Cannot open annotation: Missing Collab Details or roomUrl.');
 
         return;
     }
