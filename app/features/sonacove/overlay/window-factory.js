@@ -101,11 +101,18 @@ function configurePlatform(win, screenBounds) {
  * @returns {void}
  */
 function registerShortcut(win) {
-    globalShortcut.register(SHORTCUT_TOGGLE_CLICK_THROUGH, () => {
+    const success = globalShortcut.register(SHORTCUT_TOGGLE_CLICK_THROUGH, () => {
         if (win && !win.isDestroyed()) {
             win.webContents.send(IPC_TOGGLE_CLICK_THROUGH);
         }
     });
+
+    if (!success) {
+        console.warn(
+            `⚠️ Failed to register shortcut "${SHORTCUT_TOGGLE_CLICK_THROUGH}".`
+            + ' Another application may have claimed it. Click-through toggle will not work.'
+        );
+    }
 }
 
 /**
