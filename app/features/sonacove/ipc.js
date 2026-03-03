@@ -1,4 +1,5 @@
 const { BrowserWindow, shell } = require('electron');
+const isDev = require('electron-is-dev');
 
 const sonacoveConfig = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
@@ -54,7 +55,17 @@ function setupSonacoveIPC(ipcMain, handlers = {}) {
             };
         }
 
-        console.log('🖌️ IPC: toggle-annotation received.', config);
+        if (isDev) {
+            console.log('🖌️ IPC: toggle-annotation received.', {
+                enabled: config.enabled,
+                roomId: config.collabDetails?.roomId,
+                hasRoomKey: Boolean(config.collabDetails?.roomKey),
+                hasAnnotationsUrl: Boolean(config.annotationsUrl),
+                isWindowSharing: config.isWindowSharing,
+                sourceWidth: config.sourceWidth,
+                sourceHeight: config.sourceHeight
+            });
+        }
 
         // Find main window dynamically to handle refreshes
         const mw = getMainWindow();
