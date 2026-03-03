@@ -1,6 +1,7 @@
 const { BrowserWindow, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const isDev = require('electron-is-dev');
 
 const { OVERLAY_PRELOAD_FILENAME } = require('./constants');
 
@@ -127,7 +128,9 @@ function buildOverlayUrl(data) {
     const { annotationsUrl, roomUrl, collabDetails, collabServerUrl, localParticipantName } = data;
 
     if (annotationsUrl) {
-        console.log(`🖌️ Opening Annotations Overlay: ${annotationsUrl}`);
+        if (isDev) {
+            console.log(`🖌️ Opening Annotations Overlay: ${annotationsUrl}`);
+        }
 
         return annotationsUrl;
     }
@@ -145,7 +148,9 @@ function buildOverlayUrl(data) {
 
     const url = joinUrl.toString();
 
-    console.log(`🖌️ Opening Standalone Whiteboard: ${url}`);
+    if (isDev) {
+        console.log(`🖌️ Opening Standalone Whiteboard: ${url}`);
+    }
 
     return url;
 }
