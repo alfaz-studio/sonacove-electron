@@ -84,7 +84,16 @@ function toggleOverlay(mainWindow, data) {
     configurePlatform(annotationWindow, currentScreen.bounds);
 
     // Load URL, register shortcut, wire events
-    annotationWindow.loadURL(buildOverlayUrl(data));
+    const overlayUrl = buildOverlayUrl(data);
+
+    if (!overlayUrl) {
+        annotationWindow.destroy();
+        annotationWindow = null;
+
+        return;
+    }
+
+    annotationWindow.loadURL(overlayUrl);
     registerShortcut(annotationWindow);
     wireEvents(annotationWindow, {
         onClosed: () => {

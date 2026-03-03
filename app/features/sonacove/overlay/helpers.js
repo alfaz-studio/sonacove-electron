@@ -135,7 +135,15 @@ function buildOverlayUrl(data) {
         return annotationsUrl;
     }
 
-    const joinUrl = new URL(roomUrl);
+    let joinUrl;
+
+    try {
+        joinUrl = new URL(roomUrl);
+    } catch {
+        console.error(`❌ buildOverlayUrl: invalid roomUrl "${roomUrl}"`);
+
+        return null;
+    }
 
     joinUrl.searchParams.set('standalone', 'true');
     joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
