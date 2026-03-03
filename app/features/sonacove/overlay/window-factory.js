@@ -1,5 +1,4 @@
 const { BrowserWindow, app, globalShortcut } = require('electron');
-const path = require('path');
 
 const {
     ALWAYS_ON_TOP_LEVEL,
@@ -7,6 +6,7 @@ const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     IPC_TOGGLE_CLICK_THROUGH
 } = require('./constants');
+const { getIconPath } = require('../../main-window/icon');
 
 /**
  * Creates the BrowserWindow instance for the annotation overlay.
@@ -35,7 +35,7 @@ function createOverlayWindow(screenBounds, preloadPath) {
         skipTaskbar: true,
         show: false,
         backgroundColor: TRANSPARENT_BG,
-        icon: path.join(app.getAppPath(), 'resources', 'icon.png'),
+        icon: getIconPath(),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
