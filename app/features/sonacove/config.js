@@ -1,6 +1,11 @@
 const { app } = require('electron');
 
-const appEnv = process.env.APP_ENV || (app.isPackaged ? 'production' : 'staging');
+// Staging CI patches app name to 'sonacove-staging', so detect that.
+// Local dev (not packaged) also defaults to staging.
+const appEnv = process.env.APP_ENV
+    || (app.name === 'sonacove-staging' ? 'staging'
+        : app.isPackaged ? 'production'
+            : 'staging');
 const isProd = appEnv === 'production';
 
 const URLS = {
@@ -11,12 +16,10 @@ const URLS = {
         defaultServerURL: 'https://sonacove.com'
     },
     staging: {
-        landing: 'https://26c4a307-sonacove.catfurr.workers.dev/dashboard',
-        // landing: 'http://localhost:4321/dashboard',
-        meetRoot: 'https://dea29a3a-sona-app.catfurr.workers.dev/meet',
-        // meetRoot: 'https://localhost:5173/meet/',
-        allowedHosts: [ 'dea29a3a-sona-app.catfurr.workers.dev', '26c4a307-sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
-        defaultServerURL: 'https://sonacove.com'
+        landing: 'https://sonacove.catfurr.workers.dev/dashboard',
+        meetRoot: 'https://675ad424-sona-app.catfurr.workers.dev/meet',
+        allowedHosts: [ '675ad424-sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        defaultServerURL: 'https://sonacove.catfurr.workers.dev'
     }
 };
 
