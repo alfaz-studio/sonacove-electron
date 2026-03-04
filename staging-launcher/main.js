@@ -713,11 +713,27 @@ ipcMain.handle('check-for-updates', async () => {
 // IPC: return current app version
 ipcMain.handle('get-app-version', () => app.getVersion());
 
-app.whenReady().then(() => {
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
-    createWindow();
-    setupAutoUpdater();
-});
+// Enforce single instance — focus existing window instead of opening a second
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+            }
+            mainWindow.focus();
+        }
+    });
+
+    app.whenReady().then(() => {
+        fs.mkdirSync(CACHE_DIR, { recursive: true });
+        createWindow();
+        setupAutoUpdater();
+    });
+}
 
 app.on('window-all-closed', () => app.quit());
 
