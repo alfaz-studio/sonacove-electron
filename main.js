@@ -829,6 +829,41 @@ function createJitsiMeetWindow() {
         mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
     }
 
+    // Inject a visible staging banner so testers know they're on a PR build.
+    if (isStaging) {
+        mainWindow.webContents.on('did-finish-load', () => {
+            mainWindow.webContents.insertCSS(`
+                #sonacove-staging-banner {
+                    position: fixed;
+                    bottom: 0; left: 0; right: 0;
+                    height: 28px;
+                    background: #d97706;
+                    color: #000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    font-size: 12px;
+                    font-weight: 600;
+                    z-index: 2147483647;
+                    user-select: none;
+                    letter-spacing: 0.5px;
+                }
+            `).catch(() => {});
+            mainWindow.webContents.executeJavaScript(`
+                (function() {
+                    if (document.getElementById('sonacove-staging-banner')) return;
+                    var banner = document.createElement('div');
+                    banner.id = 'sonacove-staging-banner';
+                    banner.textContent = 'STAGING BUILD — ' + (require('electron').remote
+                        ? require('electron').remote.app.getVersion()
+                        : '${app.getVersion()}');
+                    document.body.appendChild(banner);
+                })();
+            `).catch(() => {});
+        });
+    }
+
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
