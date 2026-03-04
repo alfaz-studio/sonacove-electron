@@ -21,8 +21,6 @@ function setupScreenSharing() {
         try {
             const sources = await desktopCapturer.getSources(validOptions);
 
-            console.log(`✅ Main: Found ${sources.length} sources`);
-
             const mappedSources = sources.map(source => {
                 return {
                     id: source.id,

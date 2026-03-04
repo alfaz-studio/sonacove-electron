@@ -57,7 +57,7 @@ const TITLEBAR_CSS = `
     background: rgba(255,255,255,0.1);
     color: #ffffff;
 }
-body { margin-top: 32px !important; }
+html { box-sizing: border-box !important; padding-top: 32px !important; }
 `.trim();
 
 /**
