@@ -201,9 +201,21 @@ ipcMain.handle('get-staging-prs', async (_event, token) => {
     return { prs: results, rateLimit };
 });
 
+// Validate PR number to prevent path traversal
+function validPR(prNumber) {
+    const n = parseInt(prNumber, 10);
+
+    if (!Number.isFinite(n) || n <= 0) {
+        throw new Error('Invalid PR number');
+    }
+
+    return n;
+}
+
 // Download a build
 ipcMain.handle('download-build', async (event, { prNumber, assetUrl, sha, token }) => {
-    const cacheDir = path.join(CACHE_DIR, `pr-${prNumber}`);
+    const prNum = validPR(prNumber);
+    const cacheDir = path.join(CACHE_DIR, `pr-${prNum}`);
     const zipPath = path.join(cacheDir, 'build.zip');
     const extractDir = path.join(cacheDir, 'app');
 
@@ -242,7 +254,8 @@ ipcMain.handle('download-build', async (event, { prNumber, assetUrl, sha, token 
 
 // Launch a cached build
 ipcMain.handle('launch-build', async (_event, { prNumber }) => {
-    const extractDir = path.join(CACHE_DIR, `pr-${prNumber}`, 'app');
+    const prNum = validPR(prNumber);
+    const extractDir = path.join(CACHE_DIR, `pr-${prNum}`, 'app');
 
     if (process.platform === 'darwin') {
         // Find the .app bundle
@@ -283,7 +296,9 @@ ipcMain.handle('clear-cache', async (_event, { prNumber }) => {
     const targets = [];
 
     if (prNumber) {
-        targets.push(path.join(CACHE_DIR, `pr-${prNumber}`));
+        const prNum = validPR(prNumber);
+
+        targets.push(path.join(CACHE_DIR, `pr-${prNum}`));
     } else if (fs.existsSync(CACHE_DIR)) {
         for (const entry of fs.readdirSync(CACHE_DIR)) {
             targets.push(path.join(CACHE_DIR, entry));
