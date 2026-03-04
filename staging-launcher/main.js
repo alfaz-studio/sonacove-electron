@@ -498,9 +498,17 @@ function getDirSize(dirPath) {
 // ── Window ──────────────────────────────────────────────────────────────────
 
 function getIconPath() {
-    // Try the main app's resources icon (works in dev when running from repo root)
-    const repoIcon = path.join(__dirname, '..', 'resources',
-        process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+    const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+
+    // Staging-launcher's own color-shifted icon
+    const launcherIcon = path.join(__dirname, 'resources', iconFile);
+
+    if (fs.existsSync(launcherIcon)) {
+        return launcherIcon;
+    }
+
+    // Fallback to the main app's icon
+    const repoIcon = path.join(__dirname, '..', 'resources', iconFile);
 
     if (fs.existsSync(repoIcon)) {
         return repoIcon;

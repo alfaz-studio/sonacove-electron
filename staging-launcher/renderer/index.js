@@ -13,7 +13,7 @@ const errorMessage = document.getElementById('error-message');
 const statusBadge = document.getElementById('status-badge');
 const rateLimitEl = document.getElementById('rate-limit');
 const cacheTotalEl = document.getElementById('cache-total');
-const settingsPanel = document.getElementById('settings-panel');
+const settingsOverlay = document.getElementById('settings-overlay');
 const tokenInput = document.getElementById('github-token');
 const cacheSizeEl = document.getElementById('cache-size');
 
@@ -110,28 +110,35 @@ function buildPRCardHTML(pr) {
     const isLaunching = launching[pr.prNumber];
     const progress = downloading[pr.prNumber] || 0;
 
+    // Determine accent class for left border color
+    let accentClass = 'accent-default';
     let statusHTML;
     let actionsHTML;
 
     if (!pr.hasAsset) {
+        accentClass = 'accent-danger';
         statusHTML = '<span class="status-tag no-asset">No build for this platform</span>';
         actionsHTML = '';
     } else if (isDownloading) {
+        accentClass = 'accent-active';
         statusHTML = '<span class="status-tag not-cached">Downloading...</span>';
         actionsHTML = `
             <div class="progress-bar"><div class="progress-bar-fill" style="width: ${progress}%"></div></div>
             <span class="progress-text">${progress}%</span>`;
     } else if (isLaunching) {
+        accentClass = 'accent-success';
         statusHTML = '<span class="status-tag cached">Cached</span>';
         actionsHTML = `
             <button class="btn btn-primary btn-action" disabled>Launching...</button>`;
     } else if (pr.updateAvailable) {
+        accentClass = 'accent-warning';
         statusHTML = '<span class="status-tag update">Update Available</span>';
         actionsHTML = `
             <button class="btn btn-primary btn-action" data-action="update" data-pr="${pr.prNumber}">Update & Launch</button>
             <button class="btn btn-secondary btn-action" data-action="launch" data-pr="${pr.prNumber}">Launch Cached</button>
             <button class="delete-cache-btn btn-action" data-action="delete" data-pr="${pr.prNumber}">Clear cache</button>`;
     } else if (pr.cached) {
+        accentClass = 'accent-success';
         statusHTML = '<span class="status-tag cached">Cached</span>';
         actionsHTML = `
             <button class="btn btn-primary btn-action" data-action="launch" data-pr="${pr.prNumber}">Launch</button>
@@ -142,26 +149,42 @@ function buildPRCardHTML(pr) {
             <button class="btn btn-primary btn-action" data-action="download" data-pr="${pr.prNumber}">Download & Launch</button>`;
     }
 
+    const initial = (pr.author || '?')[0].toUpperCase();
     const avatarHTML = pr.authorAvatar
         ? `<img class="pr-avatar" src="${pr.authorAvatar}" alt="${pr.author}">`
-        : '<div class="pr-avatar" style="background:#30363d"></div>';
+        : `<div class="pr-avatar pr-avatar-fallback">${initial}</div>`;
 
     const timeAgo = formatTimeAgo(pr.updatedAt);
     const sizeStr = pr.assetSize ? formatBytes(pr.assetSize) : '';
 
     const prUrl = `https://github.com/alfaz-studio/sonacove-electron/pull/${pr.prNumber}`;
 
+    const commitHTML = pr.commitMessage
+        ? `<div class="pr-commit">
+               <svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                   <path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/>
+               </svg>
+               <a class="ext-link commit-link" href="#" data-url="https://github.com/alfaz-studio/sonacove-electron/commit/${pr.sha}">${pr.sha.substring(0, 7)}</a>
+               <span class="commit-msg">${escapeHtml(pr.commitMessage)}</span>
+           </div>`
+        : '';
+
     return `
-        <div class="pr-card" id="pr-card-${pr.prNumber}">
+        <div class="pr-card ${accentClass}" id="pr-card-${pr.prNumber}">
             <div class="pr-card-header">
                 ${avatarHTML}
                 <div class="pr-info">
-                    <div class="pr-title">
+                    <div class="pr-title-row">
                         <a class="pr-link" href="#" data-url="${prUrl}">#${pr.prNumber}</a>
-                        ${escapeHtml(pr.title)}
+                        <span class="pr-title">${escapeHtml(pr.title)}</span>
                     </div>
-                    <div class="pr-meta">${escapeHtml(pr.author)} &middot; ${timeAgo}${sizeStr ? ` &middot; ${sizeStr}` : ''}</div>
-                    ${pr.commitMessage ? `<div class="pr-commit"><a class="ext-link commit-link" href="#" data-url="https://github.com/alfaz-studio/sonacove-electron/commit/${pr.sha}">${pr.sha.substring(0, 7)}</a> ${escapeHtml(pr.commitMessage)}</div>` : ''}
+                    <div class="pr-meta">
+                        <span>${escapeHtml(pr.author)}</span>
+                        <span class="meta-sep">&middot;</span>
+                        <span>${timeAgo}</span>
+                        ${sizeStr ? `<span class="meta-sep">&middot;</span><span>${sizeStr}</span>` : ''}
+                    </div>
+                    ${commitHTML}
                 </div>
                 <div class="pr-status">${statusHTML}</div>
             </div>
@@ -278,21 +301,36 @@ async function handleAction(action, prNumber) {
 }
 
 // ── Settings ────────────────────────────────────────────────────────────────
-document.getElementById('btn-settings').addEventListener('click', () => {
-    settingsPanel.classList.toggle('hidden');
-    if (!settingsPanel.classList.contains('hidden')) {
-        refreshCacheInfo();
+function openSettings() {
+    settingsOverlay.classList.remove('hidden');
+    refreshCacheInfo();
+}
+
+function closeSettings() {
+    settingsOverlay.classList.add('hidden');
+}
+
+document.getElementById('btn-settings').addEventListener('click', openSettings);
+document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
+
+// Close modal when clicking the backdrop (not the panel itself)
+settingsOverlay.addEventListener('click', e => {
+    if (e.target === settingsOverlay) {
+        closeSettings();
     }
 });
 
-document.getElementById('btn-close-settings').addEventListener('click', () => {
-    settingsPanel.classList.add('hidden');
+// Close modal on Escape key
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !settingsOverlay.classList.contains('hidden')) {
+        closeSettings();
+    }
 });
 
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
     token = tokenInput.value.trim() || null;
     await window.stagingAPI.saveSettings({ token });
-    settingsPanel.classList.add('hidden');
+    closeSettings();
     await refreshPRs();
 });
 
