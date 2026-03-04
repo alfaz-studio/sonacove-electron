@@ -20,10 +20,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           PR_NUM=${{ github.event.pull_request.number }}
           TAG="staging-pr-${PR_NUM}"
-          TITLE="Staging: PR #${PR_NUM} - ${{ github.event.pull_request.title }}"
+          TITLE="Staging: PR #${PR_NUM} - ${PR_TITLE}"
           SHA="${{ github.event.pull_request.head.sha }}"
           SHORT_SHA="${SHA:0:7}"
 
