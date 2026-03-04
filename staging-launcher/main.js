@@ -165,7 +165,14 @@ ipcMain.handle('download-build', async (event, { prNumber, assetUrl, sha, token 
     const extractDir = path.join(cacheDir, 'app');
 
     // Clean previous download
-    fs.rmSync(cacheDir, { recursive: true, force: true });
+    if (fs.existsSync(cacheDir)) {
+        if (process.platform === 'win32') {
+            await execFileAsync('cmd', [ '/c', 'rd', '/s', '/q', cacheDir ]);
+        } else {
+            fs.rmSync(cacheDir, { recursive: true, force: true });
+        }
+    }
+
     fs.mkdirSync(extractDir, { recursive: true });
 
     // Download the asset (GitHub API redirects to S3)
@@ -227,29 +234,42 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
 });
 
 // Clear cache for a specific PR or all.
-ipcMain.handle('clear-cache', (_event, { prNumber }) => {
-    const target = prNumber
-        ? path.join(CACHE_DIR, `pr-${prNumber}`)
-        : CACHE_DIR;
+// Use "rd /s /q" on Windows — Node's fs.rmSync consistently hits EPERM
+// on directories even with maxRetries and original-fs.
+ipcMain.handle('clear-cache', async (_event, { prNumber }) => {
+    const targets = [];
 
-    if (!fs.existsSync(target)) {
-        return { success: true };
+    if (prNumber) {
+        targets.push(path.join(CACHE_DIR, `pr-${prNumber}`));
+    } else if (fs.existsSync(CACHE_DIR)) {
+        for (const entry of fs.readdirSync(CACHE_DIR)) {
+            targets.push(path.join(CACHE_DIR, entry));
+        }
     }
 
-    try {
-        fs.rmSync(target, { recursive: true, force: true });
+    const errors = [];
 
-        if (!prNumber) {
-            fs.mkdirSync(CACHE_DIR, { recursive: true });
+    for (const target of targets) {
+        if (!fs.existsSync(target)) {
+            continue;
         }
 
-        return { success: true };
-    } catch (err) {
-        return {
-            success: false,
-            error: err.message || 'Failed to delete cached files.'
-        };
+        try {
+            if (process.platform === 'win32') {
+                await execFileAsync('cmd', [ '/c', 'rd', '/s', '/q', target ]);
+            } else {
+                fs.rmSync(target, { recursive: true, force: true });
+            }
+        } catch (err) {
+            errors.push(err.message);
+        }
     }
+
+    if (errors.length > 0) {
+        return { success: false, error: errors.join('\n') };
+    }
+
+    return { success: true };
 });
 
 // Get cache info
