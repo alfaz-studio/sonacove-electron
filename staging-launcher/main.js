@@ -18,6 +18,8 @@ let mainWindow = null;
 
 // ── Settings ────────────────────────────────────────────────────────────────
 
+// TODO: migrate token storage to safeStorage.encryptString/decryptString
+// to use the OS keychain instead of plaintext JSON.
 function loadSettings() {
     try {
         return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
