@@ -153,9 +153,11 @@ ipcMain.handle('get-staging-prs', async (_event, token) => {
                 );
 
                 commitMap.set(sha, data.commit.message.split('\n')[0]);
-            } catch {
-                // Ignore — commit message is optional; stop early on rate limit
-                break;
+            } catch (err) {
+                // Stop fetching on rate limit; skip individual failures
+                if (err.message.includes('403') || err.message.includes('429')) {
+                    break;
+                }
             }
         }
     }
