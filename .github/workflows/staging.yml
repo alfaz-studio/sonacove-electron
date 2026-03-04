@@ -156,8 +156,6 @@ jobs:
             zip -r ../sonacove-staging-mac-x64.zip "Sonacove Staging.app"
             cd ../..
             echo "Created: dist/sonacove-staging-mac-x64.zip"
-          else
-            echo "::error::dist/mac not found — x64 build may have been skipped"
           fi
 
           # Zip arm64 build
@@ -166,16 +164,13 @@ jobs:
             zip -r ../sonacove-staging-mac-arm64.zip "Sonacove Staging.app"
             cd ../..
             echo "Created: dist/sonacove-staging-mac-arm64.zip"
-          else
-            echo "::error::dist/mac-arm64 not found — arm64 build may have been skipped"
           fi
 
-          # Fail if no zips were produced
-          count=$(ls dist/sonacove-staging-*.zip 2>/dev/null | wc -l)
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No macOS zip artifacts produced"
-            exit 1
-          fi
+          # Fail if any expected zip is missing
+          missing=0
+          [ -f "dist/sonacove-staging-mac-x64.zip" ]   || { echo "::error::x64 zip not produced"; missing=1; }
+          [ -f "dist/sonacove-staging-mac-arm64.zip" ] || { echo "::error::arm64 zip not produced"; missing=1; }
+          [ "$missing" -eq 1 ] && exit 1
           ls -lh dist/sonacove-staging-*.zip
 
       - name: Upload to staging release
