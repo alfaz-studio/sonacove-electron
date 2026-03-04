@@ -150,12 +150,18 @@ jobs:
         run: |
           set -e
 
-          # Zip x64 build
-          if [ -d "dist/mac" ]; then
-            cd dist/mac
+          # Zip x64 build (output dir is "mac" on x64 hosts, "mac-x64" on arm64 hosts)
+          X64_DIR=""
+          if [ -d "dist/mac-x64" ]; then
+            X64_DIR="dist/mac-x64"
+          elif [ -d "dist/mac" ]; then
+            X64_DIR="dist/mac"
+          fi
+          if [ -n "$X64_DIR" ]; then
+            cd "$X64_DIR"
             zip -r ../sonacove-staging-mac-x64.zip "Sonacove Staging.app"
             cd ../..
-            echo "Created: dist/sonacove-staging-mac-x64.zip"
+            echo "Created: dist/sonacove-staging-mac-x64.zip (from $X64_DIR)"
           fi
 
           # Zip arm64 build
