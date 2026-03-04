@@ -223,16 +223,31 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
     return { success: true };
 });
 
-// Clear cache for a specific PR or all
+// Clear cache for a specific PR or all.
+// On Windows, files may be locked if the staging app is still running.
+// Use maxRetries to handle transient locks, and return a clear error
+// message if the files are still in use.
 ipcMain.handle('clear-cache', (_event, { prNumber }) => {
-    if (prNumber) {
-        fs.rmSync(path.join(CACHE_DIR, `pr-${prNumber}`), { recursive: true, force: true });
-    } else {
-        fs.rmSync(CACHE_DIR, { recursive: true, force: true });
-        fs.mkdirSync(CACHE_DIR, { recursive: true });
-    }
+    const rmOpts = { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 };
 
-    return { success: true };
+    try {
+        if (prNumber) {
+            fs.rmSync(path.join(CACHE_DIR, `pr-${prNumber}`), rmOpts);
+        } else {
+            fs.rmSync(CACHE_DIR, rmOpts);
+            fs.mkdirSync(CACHE_DIR, { recursive: true });
+        }
+
+        return { success: true };
+    } catch (err) {
+        if (err.code === 'EPERM' || err.code === 'EBUSY') {
+            return {
+                success: false,
+                error: 'Close the staging app first — Windows locks files while they\'re in use.'
+            };
+        }
+        throw err;
+    }
 });
 
 // Get cache info

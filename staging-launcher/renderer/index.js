@@ -218,13 +218,20 @@ async function handleAction(action, prNumber) {
         }
         break;
 
-    case 'delete':
-        await window.stagingAPI.clearCache({ prNumber: pr.prNumber });
+    case 'delete': {
+        const result = await window.stagingAPI.clearCache({ prNumber: pr.prNumber });
+
+        if (result && !result.success) {
+            alert(result.error || 'Failed to clear cache.');
+            break;
+        }
+
         pr.cached = false;
         pr.updateAvailable = false;
         renderPRCard(prNumber);
         await refreshCacheInfo();
         break;
+    }
     }
 }
 
@@ -248,7 +255,14 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
 });
 
 document.getElementById('btn-clear-cache').addEventListener('click', async () => {
-    await window.stagingAPI.clearCache({});
+    const result = await window.stagingAPI.clearCache({});
+
+    if (result && !result.success) {
+        alert(result.error || 'Failed to clear cache.');
+
+        return;
+    }
+
     await refreshCacheInfo();
     await refreshPRs(); // re-render to update cached status
 });
