@@ -59,8 +59,12 @@ jobs:
             delete pkg.build.afterPack;
             delete pkg.build.afterAllArtifactBuild;
 
-            // Windows: portable dir output instead of NSIS installer
+            // Windows: portable dir output instead of NSIS installer.
+            // Re-enable signAndEditExecutable so electron-builder applies the
+            // icon via rcedit (production sets this to false because it uses a
+            // custom afterPack signing script which we just removed).
             pkg.build.win.target = 'dir';
+            pkg.build.win.signAndEditExecutable = true;
             delete pkg.build.nsis;
             delete pkg.build.win.artifactName;
 
@@ -75,6 +79,11 @@ jobs:
 
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
             console.log('Patched package.json for staging build');
+            console.log('  name:', pkg.name);
+            console.log('  appId:', pkg.build.appId);
+            console.log('  productName:', pkg.productName);
+            console.log('  win.target:', pkg.build.win.target);
+            console.log('  signAndEditExecutable:', pkg.build.win.signAndEditExecutable);
           "
 
       - name: Create staging marker file

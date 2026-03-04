@@ -32,15 +32,12 @@ const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/so
 const appLaunchTime = Date.now();
 
 // Set app user model ID at the very top for Windows icon support.
-// Staging builds use a different ID to avoid conflicting with production.
-// The .staging marker lives inside build/ (created by CI), so we check
-// both build/.staging and the app root for robustness.
+// Staging builds have their package.json "name" changed to "sonacove-staging"
+// by CI, which is the most reliable detection method (no file path issues).
 if (process.platform === 'win32') {
-    const isStagingBuild
-        = fs.existsSync(path.join(app.getAppPath(), 'build', '.staging'))
-        || fs.existsSync(path.join(app.getAppPath(), '.staging'));
-
-    app.setAppUserModelId(isStagingBuild ? 'com.sonacove.staging' : 'com.sonacove.meet');
+    app.setAppUserModelId(
+        app.name === 'sonacove-staging' ? 'com.sonacove.staging' : 'com.sonacove.meet'
+    );
 }
 
 const config = require('./app/features/config');
@@ -54,11 +51,9 @@ const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
-// Staging builds include a .staging marker file created by the CI workflow.
-// When detected, we skip auto-update and protocol registration to avoid
-// conflicting with the production install.
-const isStaging = fs.existsSync(path.join(app.getAppPath(), 'build', '.staging'))
-    || fs.existsSync(path.join(app.getAppPath(), '.staging'));
+// Staging builds have their package.json "name" set to "sonacove-staging" by CI.
+// This is more reliable than marker files since webpack rewrites __dirname.
+const isStaging = app.name === 'sonacove-staging';
 
 if (!isStaging) {
     registerProtocol();
