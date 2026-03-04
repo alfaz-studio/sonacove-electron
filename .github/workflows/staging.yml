@@ -222,6 +222,7 @@ jobs:
               issue_number: pr,
             });
             const botComment = comments.data.find(c =>
+              c.user.login === 'github-actions[bot]' &&
               c.body.includes('## Staging Build Ready')
             );
 
