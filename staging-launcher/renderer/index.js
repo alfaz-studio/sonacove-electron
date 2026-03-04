@@ -2,6 +2,7 @@
 let prs = [];
 let token = null;
 let downloading = {}; // { prNumber: progress% }
+let launching = {};   // { prNumber: true }
 
 // ── DOM refs ────────────────────────────────────────────────────────────────
 const listItems = document.getElementById('pr-list-items');
@@ -106,6 +107,7 @@ function renderPRCard(prNumber) {
 
 function buildPRCardHTML(pr) {
     const isDownloading = downloading[pr.prNumber] !== undefined;
+    const isLaunching = launching[pr.prNumber];
     const progress = downloading[pr.prNumber] || 0;
 
     let statusHTML;
@@ -119,6 +121,10 @@ function buildPRCardHTML(pr) {
         actionsHTML = `
             <div class="progress-bar"><div class="progress-bar-fill" style="width: ${progress}%"></div></div>
             <span class="progress-text">${progress}%</span>`;
+    } else if (isLaunching) {
+        statusHTML = '<span class="status-tag cached">Cached</span>';
+        actionsHTML = `
+            <button class="btn btn-primary btn-action" disabled>Launching...</button>`;
     } else if (pr.updateAvailable) {
         statusHTML = '<span class="status-tag update">Update Available</span>';
         actionsHTML = `
@@ -223,19 +229,34 @@ async function handleAction(action, prNumber) {
         await refreshCacheInfo();
 
         // Auto-launch (errors here shouldn't affect the cached state)
+        launching[prNumber] = true;
+        renderPRCard(prNumber);
+
         try {
             await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
+            await new Promise(r => setTimeout(r, 3000));
         } catch (err) {
             alert(`Launch failed: ${err.message}`);
         }
+
+        delete launching[prNumber];
+        renderPRCard(prNumber);
         break;
 
     case 'launch':
+        launching[prNumber] = true;
+        renderPRCard(prNumber);
+
         try {
             await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
+            // Keep "Launching..." visible long enough for the app to open
+            await new Promise(r => setTimeout(r, 3000));
         } catch (err) {
             alert(`Launch failed: ${err.message}`);
         }
+
+        delete launching[prNumber];
+        renderPRCard(prNumber);
         break;
 
     case 'delete': {
