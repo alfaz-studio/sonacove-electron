@@ -172,6 +172,7 @@ ipcMain.handle('get-staging-prs', async (_event, token) => {
             title: pr ? pr.title : `PR #${prNum}`,
             author: pr ? pr.user.login : 'unknown',
             authorAvatar: pr ? pr.user.avatar_url : null,
+            draft: pr ? !!pr.draft : false,
             sha: headSha || release.target_commitish,
             commitMessage: headSha ? (commitMap.get(headSha) || null) : null,
             updatedAt: release.published_at || release.created_at,

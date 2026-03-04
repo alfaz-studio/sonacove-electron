@@ -176,6 +176,7 @@ function buildPRCardHTML(pr) {
                 <div class="pr-info">
                     <div class="pr-title-row">
                         <a class="pr-link" href="#" data-url="${prUrl}">#${pr.prNumber}</a>
+                        ${pr.draft ? '<span class="draft-badge">Draft</span>' : ''}
                         <span class="pr-title">${escapeHtml(pr.title)}</span>
                     </div>
                     <div class="pr-meta">
