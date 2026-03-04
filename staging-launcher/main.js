@@ -235,6 +235,10 @@ function validPR(prNumber) {
 
 // Download a build
 ipcMain.handle('download-build', async (event, { prNumber, assetUrl, sha, token }) => {
+    if (!assetUrl.startsWith('https://api.github.com/')) {
+        throw new Error('Asset URL must be from api.github.com');
+    }
+
     const prNum = validPR(prNumber);
     const cacheDir = path.join(CACHE_DIR, `pr-${prNum}`);
     const zipPath = path.join(cacheDir, 'build.zip');
