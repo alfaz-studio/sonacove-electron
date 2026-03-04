@@ -503,7 +503,7 @@ function extractZip(zipPath, destDir) {
                 [
                     '-NoProfile',
                     '-Command',
-                    `Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force`
+                    `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`
                 ],
                 err => {
                     err ? reject(err) : resolve();
