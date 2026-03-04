@@ -127,19 +127,38 @@ ipcMain.handle('get-staging-prs', async (_event, token) => {
     }
 
     const commitMap = new Map();
+    const shas = [ ...shasToPrs.keys() ];
 
-    await Promise.all([ ...shasToPrs.keys() ].map(async sha => {
-        try {
-            const { data } = await githubApi(
-                `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits/${sha}`,
-                token
-            );
+    // Fetch commit messages — parallel when authenticated, sequential without
+    // a token to avoid exhausting the 60 req/hr unauthenticated rate limit.
+    if (token) {
+        await Promise.all(shas.map(async sha => {
+            try {
+                const { data } = await githubApi(
+                    `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits/${sha}`,
+                    token
+                );
 
-            commitMap.set(sha, data.commit.message.split('\n')[0]); // first line only
-        } catch {
-            // Ignore — commit message is optional
+                commitMap.set(sha, data.commit.message.split('\n')[0]);
+            } catch {
+                // Ignore — commit message is optional
+            }
+        }));
+    } else {
+        for (const sha of shas) {
+            try {
+                const { data } = await githubApi(
+                    `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits/${sha}`,
+                    token
+                );
+
+                commitMap.set(sha, data.commit.message.split('\n')[0]);
+            } catch {
+                // Ignore — commit message is optional; stop early on rate limit
+                break;
+            }
         }
-    }));
+    }
 
     // 4. Merge release + PR + commit data
     const results = stagingReleases.map(release => {
@@ -451,9 +470,14 @@ function downloadAsset(assetUrl, destPath, token, onProgress) {
 function downloadUrl(url, destPath, onProgress) {
     return new Promise((resolve, reject) => {
         const parsedUrl = new URL(url);
-        const protocol = parsedUrl.protocol === 'https:' ? https : require('http');
 
-        const req = protocol.get(url, res => {
+        if (parsedUrl.protocol !== 'https:') {
+            reject(new Error('Redirect to non-HTTPS URL rejected'));
+
+            return;
+        }
+
+        const req = https.get(url, res => {
             if (res.statusCode !== 200) {
                 reject(new Error(`Download failed: HTTP ${res.statusCode}`));
 

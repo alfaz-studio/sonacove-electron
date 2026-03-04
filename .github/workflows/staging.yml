@@ -9,8 +9,49 @@ on:
     branches: [main]
 
 jobs:
-  build-staging:
+  create-staging-release:
     # Only run for PRs from this repo (not forks) to protect secrets
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create or update staging release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          TAG="staging-pr-${PR_NUM}"
+          TITLE="Staging: PR #${PR_NUM} - ${{ github.event.pull_request.title }}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          # Create or update the tag
+          gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
+            --method PATCH \
+            --field sha="${SHA}" 2>/dev/null || \
+          gh api "repos/${{ github.repository }}/git/refs" \
+            --method POST \
+            --field ref="refs/tags/${TAG}" \
+            --field sha="${SHA}"
+
+          # Create release if it doesn't exist, or update its title
+          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+            gh release edit "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --notes "Staging build for PR #${PR_NUM} (commit ${SHORT_SHA})"
+          else
+            gh release create "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --notes "Staging build for PR #${PR_NUM} (commit ${SHORT_SHA})" \
+              --prerelease
+          fi
+
+  build-staging:
+    needs: create-staging-release
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ${{ matrix.os }}
     strategy:
@@ -18,7 +59,6 @@ jobs:
         os: [windows-latest, macos-latest]
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout PR code
         uses: actions/checkout@v4
@@ -132,32 +172,6 @@ jobs:
         run: |
           PR_NUM=${{ github.event.pull_request.number }}
           TAG="staging-pr-${PR_NUM}"
-          TITLE="Staging: PR #${PR_NUM} - ${{ github.event.pull_request.title }}"
-          SHA="${{ github.event.pull_request.head.sha }}"
-          SHORT_SHA="${SHA:0:7}"
-
-          # Create or update the tag
-          gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
-            --method PATCH \
-            --field sha="${SHA}" 2>/dev/null || \
-          gh api "repos/${{ github.repository }}/git/refs" \
-            --method POST \
-            --field ref="refs/tags/${TAG}" \
-            --field sha="${SHA}"
-
-          # Create release if it doesn't exist, or update its title
-          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
-            gh release edit "${TAG}" \
-              --repo "${{ github.repository }}" \
-              --title "${TITLE}" \
-              --notes "Staging build for PR #${PR_NUM} (commit ${SHORT_SHA})"
-          else
-            gh release create "${TAG}" \
-              --repo "${{ github.repository }}" \
-              --title "${TITLE}" \
-              --notes "Staging build for PR #${PR_NUM} (commit ${SHORT_SHA})" \
-              --prerelease
-          fi
 
           # Upload zip artifacts (clobber existing ones from previous push)
           for f in dist/sonacove-staging-*.zip; do
