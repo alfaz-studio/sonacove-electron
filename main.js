@@ -31,9 +31,14 @@ const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/so
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
 
-// Set app user model ID at the very top for Windows icon support
+// Set app user model ID at the very top for Windows icon support.
+// Staging builds use a different ID to avoid conflicting with production.
 if (process.platform === 'win32') {
-    app.setAppUserModelId('com.sonacove.meet');
+    const stagingMarker = path.join(__dirname, '..', '.staging');
+    const isStagingBuild = fs.existsSync(stagingMarker)
+        || fs.existsSync(path.join(app.getAppPath(), '.staging'));
+
+    app.setAppUserModelId(isStagingBuild ? 'com.sonacove.staging' : 'com.sonacove.meet');
 }
 
 const config = require('./app/features/config');
@@ -47,8 +52,14 @@ const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
+// Staging builds include a .staging marker file created by the CI workflow.
+// When detected, we skip auto-update and protocol registration to avoid
+// conflicting with the production install.
+const isStaging = fs.existsSync(path.join(app.getAppPath(), '.staging'));
 
-registerProtocol();
+if (!isStaging) {
+    registerProtocol();
+}
 
 // For enabling remote control, please change the ENABLE_REMOTE_CONTROL flag in
 // app/features/conference/components/Conference.js to true as well
@@ -522,7 +533,7 @@ function createJitsiMeetWindow() {
     };
 
 
-    if (!process.mas) {
+    if (!process.mas && !isStaging) {
         // Setup Logger
         autoUpdater.logger = require('electron-log');
         autoUpdater.logger.transports.file.level = 'info';
@@ -1016,20 +1027,24 @@ app.on('before-quit', event => {
         });
 });
 
-// remove so we can register each time as we run the app.
-app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
+// Staging builds must not register as the default protocol handler —
+// that would hijack deeplinks from the production install.
+if (!isStaging) {
+    // remove so we can register each time as we run the app.
+    app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
 
-// If we are running a non-packaged version of the app && on windows
-if (isDev && process.platform === 'win32') {
-    // Set the path of electron.exe and your app.
-    // These two additional parameters are only available on windows.
-    app.setAsDefaultProtocolClient(
-        config.default.appProtocolPrefix,
-        process.execPath,
-        [ path.resolve(process.argv[1]) ]
-    );
-} else {
-    app.setAsDefaultProtocolClient(config.default.appProtocolPrefix);
+    // If we are running a non-packaged version of the app && on windows
+    if (isDev && process.platform === 'win32') {
+        // Set the path of electron.exe and your app.
+        // These two additional parameters are only available on windows.
+        app.setAsDefaultProtocolClient(
+            config.default.appProtocolPrefix,
+            process.execPath,
+            [ path.resolve(process.argv[1]) ]
+        );
+    } else {
+        app.setAsDefaultProtocolClient(config.default.appProtocolPrefix);
+    }
 }
 
 /**

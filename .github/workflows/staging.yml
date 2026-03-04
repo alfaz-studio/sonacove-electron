@@ -1,0 +1,239 @@
+name: Staging PR Builds
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  build-staging:
+    if: github.event.action != 'closed'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Patch app identity for staging build
+        shell: bash
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+
+            // Change app identity to avoid conflicts with production
+            pkg.build.appId = 'com.sonacove.staging';
+            pkg.build.productName = 'Sonacove Staging';
+            pkg.productName = 'Sonacove Staging';
+
+            // Change protocol to staging variant
+            if (pkg.build.protocols && pkg.build.protocols[0]) {
+              pkg.build.protocols[0].schemes = ['sonacove-staging'];
+            }
+
+            // Remove code signing hooks (staging builds are unsigned)
+            delete pkg.build.afterPack;
+            delete pkg.build.afterAllArtifactBuild;
+
+            // Windows: portable dir output instead of NSIS installer
+            pkg.build.win.target = 'dir';
+            delete pkg.build.nsis;
+            delete pkg.build.win.artifactName;
+
+            // macOS: dir output for each arch separately (universal requires signing)
+            pkg.build.mac.target = [
+              { target: 'dir', arch: ['x64'] },
+              { target: 'dir', arch: ['arm64'] }
+            ];
+            delete pkg.build.mac.hardenedRuntime;
+            delete pkg.build.mac.entitlements;
+            delete pkg.build.mac.artifactName;
+
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Patched package.json for staging build');
+          "
+
+      - name: Create staging marker file
+        shell: bash
+        run: |
+          mkdir -p build
+          echo "staging-pr-${{ github.event.pull_request.number }}" > build/.staging
+
+      - name: Build (webpack)
+        run: npm run build
+
+      - name: Package portable build
+        run: npx electron-builder --dir --publish=never
+        env:
+          # No signing env vars — intentionally unsigned
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Zip portable build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\win-unpacked\*" -DestinationPath "dist\sonacove-staging-win-x64.zip"
+          Write-Host "Created: dist\sonacove-staging-win-x64.zip"
+          Write-Host "Size: $((Get-Item 'dist\sonacove-staging-win-x64.zip').Length / 1MB) MB"
+
+      - name: Zip portable build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Zip x64 build
+          if [ -d "dist/mac" ]; then
+            cd dist/mac
+            zip -r ../sonacove-staging-mac-x64.zip "Sonacove Staging.app"
+            cd ../..
+            echo "Created: dist/sonacove-staging-mac-x64.zip"
+          fi
+
+          # Zip arm64 build
+          if [ -d "dist/mac-arm64" ]; then
+            cd dist/mac-arm64
+            zip -r ../sonacove-staging-mac-arm64.zip "Sonacove Staging.app"
+            cd ../..
+            echo "Created: dist/sonacove-staging-mac-arm64.zip"
+          fi
+
+          ls -lh dist/sonacove-staging-*.zip 2>/dev/null || echo "Warning: no zip files found"
+
+      - name: Upload to staging release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          TAG="staging-pr-${PR_NUM}"
+          TITLE="Staging: PR #${PR_NUM} - ${{ github.event.pull_request.title }}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          # Create or update the tag
+          gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
+            --method PATCH \
+            --field sha="${SHA}" 2>/dev/null || \
+          gh api "repos/${{ github.repository }}/git/refs" \
+            --method POST \
+            --field ref="refs/tags/${TAG}" \
+            --field sha="${SHA}"
+
+          # Create release if it doesn't exist, or update its title
+          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+            gh release edit "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --notes "Staging build for PR #${PR_NUM} (commit ${SHORT_SHA})"
+          else
+            gh release create "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --notes "Staging build for PR #${PR_NUM} (commit ${SHORT_SHA})" \
+              --prerelease
+          fi
+
+          # Upload zip artifacts (clobber existing ones from previous push)
+          for f in dist/sonacove-staging-*.zip; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done
+
+      - name: Comment on PR with build links
+        if: matrix.os == 'windows-latest'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.RELEASE_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request.number;
+            const tag = `staging-pr-${pr}`;
+            const sha = context.payload.pull_request.head.sha.substring(0, 7);
+            const releaseUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tag}`;
+
+            const body = [
+              `## Staging Build Ready`,
+              ``,
+              `Commit: \`${sha}\``,
+              ``,
+              `**[Download staging builds](${releaseUrl})**`,
+              ``,
+              `| Platform | Asset |`,
+              `|----------|-------|`,
+              `| Windows x64 | \`sonacove-staging-win-x64.zip\` |`,
+              `| macOS x64 (Intel) | \`sonacove-staging-mac-x64.zip\` |`,
+              `| macOS arm64 (Apple Silicon) | \`sonacove-staging-mac-arm64.zip\` |`,
+              ``,
+              `Or use the **Sonacove Staging Launcher** to download and run automatically.`,
+            ].join('\n');
+
+            // Find and update existing bot comment, or create new one
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const botComment = comments.data.find(c =>
+              c.body.includes('## Staging Build Ready')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
+
+  cleanup-staging:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete staging release and tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          TAG="staging-pr-${PR_NUM}"
+
+          echo "Cleaning up staging release for PR #${PR_NUM}..."
+
+          # Delete the release
+          gh release delete "${TAG}" --repo "${{ github.repository }}" --yes 2>/dev/null || \
+            echo "No release found for ${TAG}"
+
+          # Delete the tag
+          gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
+            --method DELETE 2>/dev/null || \
+            echo "No tag found for ${TAG}"
+
+          echo "Cleanup complete."
