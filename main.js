@@ -205,6 +205,17 @@ function showAboutDialog() {
  * Triggers a manual update check and reports the result to the user.
  */
 function checkForUpdatesManually() {
+    if (isStaging) {
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Staging Build',
+            message: 'Staging builds do not receive auto-updates.',
+            buttons: [ 'OK' ]
+        });
+
+        return;
+    }
+
     autoUpdater.checkForUpdates()
         .then(result => {
             if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
