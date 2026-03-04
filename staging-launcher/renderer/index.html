@@ -93,6 +93,7 @@
             </div>
 
             <div class="modal-footer">
+                <button id="btn-check-update" class="btn btn-secondary">Check for Updates</button>
                 <button id="btn-save-settings" class="btn btn-primary">Save Changes</button>
             </div>
         </div>
@@ -145,6 +146,13 @@
         <div class="status-item">
             <span class="status-dot dot-blue"></span>
             <span id="cache-total"></span>
+        </div>
+        <div class="status-item" id="updater-status-item" style="display:none">
+            <span class="status-dot dot-amber"></span>
+            <span id="updater-status-text"></span>
+        </div>
+        <div class="status-item status-version">
+            <span id="app-version"></span>
         </div>
     </footer>
 

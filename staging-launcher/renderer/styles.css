@@ -280,6 +280,7 @@ body {
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
 }
 
 /* ── Settings Sections ──────────────────────────────────────────────────── */
@@ -830,7 +831,7 @@ main {
 /* ── Status Bar ──────────────────────────────────────────────────────────── */
 #status-bar {
     display: flex;
-    justify-content: space-between;
+    gap: 16px;
     padding: 6px 20px;
     font-size: 11px;
     color: var(--text-muted);
@@ -855,6 +856,16 @@ main {
 
 .status-dot.dot-blue {
     background: var(--text-secondary);
+}
+
+.status-dot.dot-amber {
+    background: var(--warning);
+}
+
+.status-version {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */

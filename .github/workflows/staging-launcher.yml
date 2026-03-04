@@ -1,0 +1,132 @@
+name: Staging Launcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'staging-launcher/**'
+
+jobs:
+  build-launcher:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bump version for auto-update detection
+        working-directory: staging-launcher
+        shell: bash
+        run: |
+          NEW_VERSION="1.0.${{ github.run_number }}"
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+            pkg.version = '${NEW_VERSION}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Version bumped to:', pkg.version);
+          "
+
+      - name: Install launcher dependencies
+        working-directory: staging-launcher
+        run: npm install
+
+      - name: Build launcher (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: staging-launcher
+        run: npx electron-builder --win --publish never
+
+      - name: Build launcher (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: staging-launcher
+        run: npx electron-builder --mac --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: List build output
+        shell: bash
+        run: ls -lhR staging-launcher/dist/ || true
+
+      - name: Upload Windows artifacts
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="staging-launcher"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          # Create release if it doesn't exist
+          if ! gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+            gh release create "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "Sonacove Staging Launcher" \
+              --notes "Download the Staging Launcher to browse, download, and run PR builds.
+
+          Updated automatically when \`staging-launcher/\` changes on main." \
+              --latest=false
+          fi
+
+          # Update release notes with latest commit
+          gh release edit "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --notes "Download the Staging Launcher to browse, download, and run PR builds.
+
+          **Latest:** ${SHORT_SHA} ($(date -u '+%Y-%m-%d %H:%M UTC'))
+
+          Updated automatically when \`staging-launcher/\` changes on main."
+
+          # Upload Windows installer (clobber old one)
+          for f in staging-launcher/dist/*.exe; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done
+
+          # Upload latest.yml for electron-updater (Windows)
+          if [ -f "staging-launcher/dist/latest.yml" ]; then
+            echo "Uploading: latest.yml"
+            gh release upload "${TAG}" "staging-launcher/dist/latest.yml" --clobber --repo "${{ github.repository }}"
+          fi
+
+      - name: Upload macOS artifacts
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="staging-launcher"
+
+          # Wait for the release to be created by the Windows job
+          for i in $(seq 1 30); do
+            if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+              break
+            fi
+            echo "Waiting for release to be created... (attempt $i)"
+            sleep 10
+          done
+
+          # Upload macOS DMG (clobber old one)
+          for f in staging-launcher/dist/*.dmg; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done
+
+          # Upload latest-mac.yml for electron-updater (macOS)
+          if [ -f "staging-launcher/dist/latest-mac.yml" ]; then
+            echo "Uploading: latest-mac.yml"
+            gh release upload "${TAG}" "staging-launcher/dist/latest-mac.yml" --clobber --repo "${{ github.repository }}"
+          fi

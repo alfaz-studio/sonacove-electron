@@ -366,6 +366,33 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     await refreshPRs();
 });
 
+document.getElementById('btn-check-update').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-check-update');
+
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+
+    try {
+        const result = await window.stagingAPI.checkForUpdates();
+
+        if (!result.updateAvailable) {
+            btn.textContent = 'Up to date';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Check for Updates';
+            }, 3000);
+        }
+
+        // If update IS available, the updater-status event handler takes over
+    } catch {
+        btn.textContent = 'Check failed';
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = 'Check for Updates';
+        }, 3000);
+    }
+});
+
 document.getElementById('btn-clear-cache').addEventListener('click', async () => {
     const result = await window.stagingAPI.clearCache({});
 
@@ -471,6 +498,46 @@ document.addEventListener('click', e => {
     if (link) {
         e.preventDefault();
         window.stagingAPI.openExternal(link.dataset.url);
+    }
+});
+
+// ── Auto-Update Status ──────────────────────────────────────────────────────
+const updaterStatusItem = document.getElementById('updater-status-item');
+const updaterStatusText = document.getElementById('updater-status-text');
+const appVersionEl = document.getElementById('app-version');
+
+window.stagingAPI.getAppVersion().then(version => {
+    appVersionEl.textContent = `v${version}`;
+});
+
+window.stagingAPI.onUpdaterStatus(({ status, version, percent, error }) => {
+    updaterStatusItem.style.display = '';
+
+    switch (status) {
+    case 'checking':
+        updaterStatusText.textContent = 'Checking for updates...';
+        break;
+    case 'downloading':
+        updaterStatusText.textContent = percent
+            ? `Downloading update... ${percent}%`
+            : `Update ${version} available`;
+        break;
+    case 'ready':
+        updaterStatusText.textContent = `v${version} ready — restart to update`;
+        break;
+    case 'up-to-date':
+        // Hide after a few seconds if up to date
+        updaterStatusText.textContent = 'Up to date';
+        setTimeout(() => {
+            updaterStatusItem.style.display = 'none';
+        }, 5000);
+        break;
+    case 'error':
+        updaterStatusText.textContent = 'Update check failed';
+        setTimeout(() => {
+            updaterStatusItem.style.display = 'none';
+        }, 8000);
+        break;
     }
 });
 

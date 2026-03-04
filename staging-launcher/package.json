@@ -9,6 +9,10 @@
   "build": {
     "appId": "com.sonacove.staging-launcher",
     "productName": "Sonacove Staging Launcher",
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/alfaz-studio/sonacove-electron/releases/download/staging-launcher"
+    },
     "files": [
       "main.js",
       "preload.js",
@@ -36,6 +40,9 @@
       "oneClick": true,
       "perMachine": false
     }
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
   },
   "devDependencies": {
     "electron": "40.3.0",

@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const https = require('https');
 // Use original-fs to bypass Electron's asar patching.  The patched fs
 // opens .asar files transparently, which holds file handles and causes
@@ -553,9 +554,109 @@ function createWindow() {
     });
 }
 
+// ── Auto-Update ─────────────────────────────────────────────────────────────
+
+function setupAutoUpdater() {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('checking-for-update', () => {
+        console.log('[updater] Checking for launcher update...');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater-status', {
+                status: 'checking'
+            });
+        }
+    });
+
+    autoUpdater.on('update-available', info => {
+        console.log(`[updater] Update available: ${info.version}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater-status', {
+                status: 'downloading',
+                version: info.version
+            });
+        }
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        console.log('[updater] No update available.');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater-status', {
+                status: 'up-to-date'
+            });
+        }
+    });
+
+    autoUpdater.on('download-progress', progress => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater-status', {
+                status: 'downloading',
+                percent: Math.round(progress.percent)
+            });
+        }
+    });
+
+    autoUpdater.on('update-downloaded', info => {
+        console.log(`[updater] Update downloaded: ${info.version}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater-status', {
+                status: 'ready',
+                version: info.version
+            });
+
+            dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Launcher Update Ready',
+                message: `Staging Launcher v${info.version} has been downloaded. Restart to update?`,
+                buttons: [ 'Restart Now', 'Later' ]
+            }).then(result => {
+                if (result.response === 0) {
+                    autoUpdater.quitAndInstall(false, true);
+                }
+            });
+        }
+    });
+
+    autoUpdater.on('error', err => {
+        console.error('[updater] Error:', err.message);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater-status', {
+                status: 'error',
+                error: err.message
+            });
+        }
+    });
+
+    // Check for updates after a short delay to let the UI load first
+    setTimeout(() => {
+        autoUpdater.checkForUpdates().catch(err => {
+            console.error('[updater] Check failed:', err.message);
+        });
+    }, 3000);
+}
+
+// IPC: allow renderer to request a manual update check
+ipcMain.handle('check-for-updates', async () => {
+    try {
+        const result = await autoUpdater.checkForUpdates();
+
+        return {
+            updateAvailable: result && result.updateInfo
+                && result.updateInfo.version !== app.getVersion()
+        };
+    } catch (err) {
+        return { updateAvailable: false, error: err.message };
+    }
+});
+
+// IPC: return current app version
+ipcMain.handle('get-app-version', () => app.getVersion());
+
 app.whenReady().then(() => {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
     createWindow();
+    setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => app.quit());
