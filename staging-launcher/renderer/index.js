@@ -161,6 +161,7 @@ function buildPRCardHTML(pr) {
                         ${escapeHtml(pr.title)}
                     </div>
                     <div class="pr-meta">${escapeHtml(pr.author)} &middot; ${timeAgo}${sizeStr ? ` &middot; ${sizeStr}` : ''}</div>
+                    ${pr.commitMessage ? `<div class="pr-commit"><a class="ext-link commit-link" href="#" data-url="https://github.com/alfaz-studio/sonacove-electron/commit/${pr.sha}">${pr.sha.substring(0, 7)}</a> ${escapeHtml(pr.commitMessage)}</div>` : ''}
                 </div>
                 <div class="pr-status">${statusHTML}</div>
             </div>
