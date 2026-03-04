@@ -9,12 +9,15 @@ contextBridge.exposeInMainWorld('stagingAPI', {
     getSettings: () => ipcRenderer.invoke('get-settings'),
     saveSettings: settings => ipcRenderer.invoke('save-settings', settings),
     openExternal: url => ipcRenderer.invoke('open-external', url),
+    getRepoInfo: () => ipcRenderer.invoke('get-repo-info'),
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     onDownloadProgress: callback => {
+        ipcRenderer.removeAllListeners('download-progress');
         ipcRenderer.on('download-progress', (_event, data) => callback(data));
     },
     onUpdaterStatus: callback => {
+        ipcRenderer.removeAllListeners('updater-status');
         ipcRenderer.on('updater-status', (_event, data) => callback(data));
     }
 });

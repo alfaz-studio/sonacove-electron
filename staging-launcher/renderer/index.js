@@ -4,6 +4,7 @@ let token = null;
 let downloading = {}; // { prNumber: progress% }
 let launching = {};   // { prNumber: true }
 let closedExpanded = false;
+let repoBaseUrl = 'https://github.com/alfaz-studio/sonacove-electron'; // fallback
 
 // ── DOM refs ────────────────────────────────────────────────────────────────
 const listItems = document.getElementById('pr-list-items');
@@ -29,6 +30,15 @@ async function init() {
     token = settings.token || null;
     if (token) {
         tokenInput.value = token;
+    }
+
+    // Fetch repo info so URLs aren't hardcoded
+    try {
+        const info = await window.stagingAPI.getRepoInfo();
+
+        repoBaseUrl = info.baseUrl;
+    } catch {
+        // keep fallback
     }
 
     // Listen for download progress
@@ -186,14 +196,14 @@ function buildPRCardHTML(pr) {
     const timeAgo = formatTimeAgo(pr.updatedAt);
     const sizeStr = pr.assetSize ? formatBytes(pr.assetSize) : '';
 
-    const prUrl = `https://github.com/alfaz-studio/sonacove-electron/pull/${pr.prNumber}`;
+    const prUrl = `${repoBaseUrl}/pull/${pr.prNumber}`;
 
     const commitHTML = pr.commitMessage
         ? `<div class="pr-commit">
                <svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                    <path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/>
                </svg>
-               <a class="ext-link commit-link" href="#" data-url="https://github.com/alfaz-studio/sonacove-electron/commit/${pr.sha}">${pr.sha.substring(0, 7)}</a>
+               <a class="ext-link commit-link" href="#" data-url="${repoBaseUrl}/commit/${pr.sha}">${pr.sha.substring(0, 7)}</a>
                <span class="commit-msg">${escapeHtml(pr.commitMessage)}</span>
            </div>`
         : '';

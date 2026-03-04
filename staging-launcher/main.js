@@ -366,6 +366,13 @@ ipcMain.handle('save-settings', (_event, settings) => {
     return { success: true };
 });
 
+// Expose repo constants so the renderer has a single source of truth
+ipcMain.handle('get-repo-info', () => ({
+    owner: GITHUB_OWNER,
+    repo: GITHUB_REPO,
+    baseUrl: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`
+}));
+
 // Open external link — restrict to http/https to prevent arbitrary scheme execution
 ipcMain.handle('open-external', (_event, url) => {
     const parsed = new URL(url);
