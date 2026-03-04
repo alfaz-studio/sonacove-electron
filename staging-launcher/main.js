@@ -88,16 +88,23 @@ ipcMain.handle('get-staging-prs', async (_event, token) => {
         r => r.prerelease && r.tag_name.startsWith('staging-pr-')
     );
 
-    // 2. Get open PRs for metadata
+    // 2. Get all PRs for metadata (open + closed/merged)
     let prs = [];
 
     try {
-        const { data } = await githubApi(
-            `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/pulls?state=open&per_page=50`,
-            token
-        );
+        // Fetch open and closed PRs in parallel
+        const [ openRes, closedRes ] = await Promise.all([
+            githubApi(
+                `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/pulls?state=open&per_page=50`,
+                token
+            ),
+            githubApi(
+                `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/pulls?state=closed&per_page=50`,
+                token
+            )
+        ]);
 
-        prs = data;
+        prs = [ ...openRes.data, ...closedRes.data ];
     } catch {
         // If PR fetch fails, we still have release data
     }
@@ -167,12 +174,17 @@ ipcMain.handle('get-staging-prs', async (_event, token) => {
             }
         }
 
+        const prState = pr ? pr.state : 'open'; // assume open if no PR metadata
+        const merged = pr ? !!pr.merged_at : false;
+
         return {
             prNumber: prNum,
             title: pr ? pr.title : `PR #${prNum}`,
             author: pr ? pr.user.login : 'unknown',
             authorAvatar: pr ? pr.user.avatar_url : null,
             draft: pr ? !!pr.draft : false,
+            state: prState,
+            merged,
             sha: headSha || release.target_commitish,
             commitMessage: headSha ? (commitMap.get(headSha) || null) : null,
             updatedAt: release.published_at || release.created_at,

@@ -3,6 +3,7 @@ let prs = [];
 let token = null;
 let downloading = {}; // { prNumber: progress% }
 let launching = {};   // { prNumber: true }
+let closedExpanded = false;
 
 // ── DOM refs ────────────────────────────────────────────────────────────────
 const listItems = document.getElementById('pr-list-items');
@@ -16,6 +17,10 @@ const cacheTotalEl = document.getElementById('cache-total');
 const settingsOverlay = document.getElementById('settings-overlay');
 const tokenInput = document.getElementById('github-token');
 const cacheSizeEl = document.getElementById('cache-size');
+const closedSection = document.getElementById('closed-section');
+const closedListItems = document.getElementById('closed-list-items');
+const closedCountEl = document.getElementById('closed-count');
+const toggleClosedBtn = document.getElementById('btn-toggle-closed');
 
 // ── Init ────────────────────────────────────────────────────────────────────
 async function init() {
@@ -58,7 +63,9 @@ async function refreshPRs() {
                 `API: ${result.rateLimit.remaining}/${result.rateLimit.limit} requests remaining`;
         }
 
-        statusBadge.textContent = `${prs.length} build${prs.length !== 1 ? 's' : ''}`;
+        const openCount = prs.filter(p => p.state === 'open').length;
+
+        statusBadge.textContent = `${openCount} build${openCount !== 1 ? 's' : ''}`;
         statusBadge.className = 'badge online';
 
         renderList();
@@ -72,19 +79,41 @@ async function refreshPRs() {
 
 // ── Render ───────────────────────────────────────────────────────────────────
 function renderList() {
-    if (prs.length === 0) {
+    const openPRs = prs.filter(pr => pr.state === 'open');
+    const closedPRs = prs.filter(pr => pr.state === 'closed');
+
+    if (openPRs.length === 0 && closedPRs.length === 0) {
         listItems.innerHTML = '';
+        closedSection.classList.add('hidden');
         listEmpty.classList.remove('hidden');
 
         return;
     }
 
     listEmpty.classList.add('hidden');
-    listItems.innerHTML = prs.map(pr => buildPRCardHTML(pr)).join('');
 
-    // Attach event listeners
-    for (const pr of prs) {
+    // Render open PRs
+    listItems.innerHTML = openPRs.map(pr => buildPRCardHTML(pr)).join('');
+
+    for (const pr of openPRs) {
         attachCardListeners(pr.prNumber);
+    }
+
+    // Render closed/merged section
+    if (closedPRs.length > 0) {
+        closedSection.classList.remove('hidden');
+        closedCountEl.textContent = `Closed / Merged (${closedPRs.length})`;
+        closedListItems.innerHTML = closedPRs.map(pr => buildPRCardHTML(pr)).join('');
+
+        for (const pr of closedPRs) {
+            attachCardListeners(pr.prNumber);
+        }
+
+        // Preserve expand/collapse state
+        closedListItems.classList.toggle('hidden', !closedExpanded);
+        toggleClosedBtn.classList.toggle('expanded', closedExpanded);
+    } else {
+        closedSection.classList.add('hidden');
     }
 }
 
@@ -170,13 +199,15 @@ function buildPRCardHTML(pr) {
         : '';
 
     return `
-        <div class="pr-card ${accentClass}" id="pr-card-${pr.prNumber}">
+        <div class="pr-card ${accentClass}${pr.draft ? ' pr-draft' : ''}" id="pr-card-${pr.prNumber}">
             <div class="pr-card-header">
                 ${avatarHTML}
                 <div class="pr-info">
                     <div class="pr-title-row">
                         <a class="pr-link" href="#" data-url="${prUrl}">#${pr.prNumber}</a>
                         ${pr.draft ? '<span class="draft-badge">Draft</span>' : ''}
+                        ${pr.merged ? '<span class="merged-badge">Merged</span>' : ''}
+                        ${pr.state === 'closed' && !pr.merged ? '<span class="closed-badge">Closed</span>' : ''}
                         <span class="pr-title">${escapeHtml(pr.title)}</span>
                     </div>
                     <div class="pr-meta">
@@ -346,6 +377,13 @@ document.getElementById('btn-clear-cache').addEventListener('click', async () =>
 
     await refreshCacheInfo();
     await refreshPRs(); // re-render to update cached status
+});
+
+// ── Closed section toggle ────────────────────────────────────────────────────
+toggleClosedBtn.addEventListener('click', () => {
+    closedExpanded = !closedExpanded;
+    closedListItems.classList.toggle('hidden', !closedExpanded);
+    toggleClosedBtn.classList.toggle('expanded', closedExpanded);
 });
 
 // ── Refresh ─────────────────────────────────────────────────────────────────

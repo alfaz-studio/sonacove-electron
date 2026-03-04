@@ -398,6 +398,48 @@ body {
     color: var(--text-primary);
 }
 
+/* ── Closed / Merged Section ─────────────────────────────────────────────── */
+.closed-section {
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+
+.section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px 4px;
+    width: 100%;
+    transition: color 0.15s ease;
+}
+
+.section-toggle:hover {
+    color: var(--text-secondary);
+}
+
+.toggle-chevron {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.section-toggle.expanded .toggle-chevron {
+    transform: rotate(90deg);
+}
+
+.closed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 8px;
+}
+
 /* ── Main / PR List ──────────────────────────────────────────────────────── */
 main {
     flex: 1;
@@ -408,7 +450,7 @@ main {
 #pr-list-items {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 10px;
 }
 
 /* ── Loading / Empty / Error ─────────────────────────────────────────────── */
@@ -514,6 +556,16 @@ main {
     box-shadow: var(--shadow-sm);
 }
 
+/* Draft PR — dimmed card */
+.pr-card.pr-draft {
+    opacity: 0.65;
+    border-style: dashed;
+}
+
+.pr-card.pr-draft:hover {
+    opacity: 0.85;
+}
+
 /* Left accent border by state */
 .pr-card.accent-success { border-left: 2px solid var(--success); }
 .pr-card.accent-warning { border-left: 2px solid var(--warning); }
@@ -566,17 +618,33 @@ main {
     font-weight: 600;
 }
 
-.draft-badge {
+.draft-badge, .merged-badge, .closed-badge {
     flex-shrink: 0;
     font-size: 10px;
     font-weight: 600;
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: var(--radius-pill);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-muted);
-    border: 1px solid var(--border);
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    border: 1px solid transparent;
+}
+
+.draft-badge {
+    background: var(--warning-bg);
+    color: var(--warning);
+    border-color: rgba(251, 191, 36, 0.15);
+}
+
+.merged-badge {
+    background: rgba(168, 85, 247, 0.08);
+    color: #a855f7;
+    border-color: rgba(168, 85, 247, 0.15);
+}
+
+.closed-badge {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: rgba(248, 113, 113, 0.15);
 }
 
 .pr-title {

@@ -123,6 +123,17 @@
             <button id="btn-retry" class="btn btn-primary">Retry</button>
         </div>
         <div id="pr-list-items"></div>
+
+        <!-- Closed / Merged PRs (collapsible) -->
+        <div id="closed-section" class="closed-section hidden">
+            <button id="btn-toggle-closed" class="section-toggle">
+                <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z"/>
+                </svg>
+                <span id="closed-count">Closed</span>
+            </button>
+            <div id="closed-list-items" class="closed-list hidden"></div>
+        </div>
     </main>
 
     <!-- Status bar -->
