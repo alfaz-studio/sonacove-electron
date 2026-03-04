@@ -1,9 +1,11 @@
 const { app } = require('electron');
 
-// Staging CI patches app name to 'sonacove-staging', so detect that.
-// Local dev (not packaged) also defaults to staging.
+// Staging CI patches app name/productName to include "staging".
+// app.name may return 'sonacove-staging' (name) or 'Sonacove Staging' (productName)
+// depending on Electron version, so check case-insensitively.
+const isStagingBuild = (app.name || '').toLowerCase().includes('staging');
 const appEnv = process.env.APP_ENV
-    || (app.name === 'sonacove-staging' ? 'staging'
+    || (isStagingBuild ? 'staging'
         : app.isPackaged ? 'production'
             : 'staging');
 const isProd = appEnv === 'production';

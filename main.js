@@ -32,11 +32,13 @@ const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/so
 const appLaunchTime = Date.now();
 
 // Set app user model ID at the very top for Windows icon support.
-// Staging builds have their package.json "name" changed to "sonacove-staging"
-// by CI, which is the most reliable detection method (no file path issues).
+// Staging builds have their package.json name/productName changed to include
+// "staging" by CI. app.name may return either depending on Electron version.
+const _appNameLower = (app.name || '').toLowerCase();
+
 if (process.platform === 'win32') {
     app.setAppUserModelId(
-        app.name === 'sonacove-staging' ? 'com.sonacove.staging' : 'com.sonacove.meet'
+        _appNameLower.includes('staging') ? 'com.sonacove.staging' : 'com.sonacove.meet'
     );
 }
 
@@ -51,9 +53,9 @@ const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
-// Staging builds have their package.json "name" set to "sonacove-staging" by CI.
-// This is more reliable than marker files since webpack rewrites __dirname.
-const isStaging = app.name === 'sonacove-staging';
+// Staging builds have their package.json name/productName set to include "staging" by CI.
+// Check case-insensitively since app.name may return name or productName.
+const isStaging = _appNameLower.includes('staging');
 
 if (!isStaging) {
     registerProtocol();
