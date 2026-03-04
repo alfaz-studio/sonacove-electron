@@ -87,12 +87,6 @@ jobs:
             console.log('  signAndEditExecutable:', pkg.build.win.signAndEditExecutable);
           "
 
-      - name: Create staging marker file
-        shell: bash
-        run: |
-          mkdir -p build
-          echo "staging-pr-${{ github.event.pull_request.number }}" > build/.staging
-
       - name: Build (webpack)
         run: npm run build
 
