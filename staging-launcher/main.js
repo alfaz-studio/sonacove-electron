@@ -349,8 +349,16 @@ ipcMain.handle('save-settings', (_event, settings) => {
     return { success: true };
 });
 
-// Open external link
-ipcMain.handle('open-external', (_event, url) => shell.openExternal(url));
+// Open external link — restrict to http/https to prevent arbitrary scheme execution
+ipcMain.handle('open-external', (_event, url) => {
+    const parsed = new URL(url);
+
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        throw new Error('Only http/https URLs are allowed');
+    }
+
+    return shell.openExternal(url);
+});
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
