@@ -33,9 +33,11 @@ const appLaunchTime = Date.now();
 
 // Set app user model ID at the very top for Windows icon support.
 // Staging builds use a different ID to avoid conflicting with production.
+// The .staging marker lives inside build/ (created by CI), so we check
+// both build/.staging and the app root for robustness.
 if (process.platform === 'win32') {
-    const stagingMarker = path.join(__dirname, '..', '.staging');
-    const isStagingBuild = fs.existsSync(stagingMarker)
+    const isStagingBuild
+        = fs.existsSync(path.join(app.getAppPath(), 'build', '.staging'))
         || fs.existsSync(path.join(app.getAppPath(), '.staging'));
 
     app.setAppUserModelId(isStagingBuild ? 'com.sonacove.staging' : 'com.sonacove.meet');
@@ -55,7 +57,8 @@ const { openExternalLink } = require('./app/features/utils/openExternalLink');
 // Staging builds include a .staging marker file created by the CI workflow.
 // When detected, we skip auto-update and protocol registration to avoid
 // conflicting with the production install.
-const isStaging = fs.existsSync(path.join(app.getAppPath(), '.staging'));
+const isStaging = fs.existsSync(path.join(app.getAppPath(), 'build', '.staging'))
+    || fs.existsSync(path.join(app.getAppPath(), '.staging'));
 
 if (!isStaging) {
     registerProtocol();

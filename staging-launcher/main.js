@@ -431,6 +431,19 @@ function getDirSize(dirPath) {
 
 // ── Window ──────────────────────────────────────────────────────────────────
 
+function getIconPath() {
+    // Try the main app's resources icon (works in dev when running from repo root)
+    const repoIcon = path.join(__dirname, '..', 'resources',
+        process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+
+    if (fs.existsSync(repoIcon)) {
+        return repoIcon;
+    }
+
+    // Packaged launcher: icon is bundled by electron-builder
+    return undefined;
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 960,
@@ -438,6 +451,7 @@ function createWindow() {
         minWidth: 700,
         minHeight: 500,
         title: 'Sonacove Staging Launcher',
+        icon: getIconPath(),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,

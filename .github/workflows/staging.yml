@@ -41,7 +41,11 @@ jobs:
             const fs = require('fs');
             const pkg = require('./package.json');
 
-            // Change app identity to avoid conflicts with production
+            // Change app identity to avoid conflicts with production.
+            // Changing 'name' is critical — Electron uses it for the
+            // single-instance lock, so without this the staging build
+            // would just focus the production window and quit.
+            pkg.name = 'sonacove-staging';
             pkg.build.appId = 'com.sonacove.staging';
             pkg.build.productName = 'Sonacove Staging';
             pkg.productName = 'Sonacove Staging';
