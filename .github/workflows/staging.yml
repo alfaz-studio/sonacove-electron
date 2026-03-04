@@ -167,8 +167,14 @@ jobs:
             fi
           done
 
+  comment-on-pr:
+    needs: build-staging
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
       - name: Comment on PR with build links
-        if: matrix.os == 'windows-latest'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.RELEASE_TOKEN }}

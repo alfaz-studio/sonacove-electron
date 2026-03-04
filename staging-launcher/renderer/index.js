@@ -190,7 +190,7 @@ function buildPRCardHTML(pr) {
 
     const initial = (pr.author || '?')[0].toUpperCase();
     const avatarHTML = pr.authorAvatar
-        ? `<img class="pr-avatar" src="${pr.authorAvatar}" alt="${pr.author}">`
+        ? `<img class="pr-avatar" src="${escapeHtml(pr.authorAvatar)}" alt="${escapeHtml(pr.author)}">`
         : `<div class="pr-avatar pr-avatar-fallback">${initial}</div>`;
 
     const timeAgo = formatTimeAgo(pr.updatedAt);
