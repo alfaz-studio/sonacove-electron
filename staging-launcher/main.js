@@ -1,9 +1,12 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const https = require('https');
-const fs = require('fs');
+// Use original-fs to bypass Electron's asar patching.  The patched fs
+// opens .asar files transparently, which holds file handles and causes
+// EPERM when we later try to delete the cache directory.
+const fs = require('original-fs');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
-const { createWriteStream } = require('fs');
+const { createWriteStream } = require('original-fs');
 
 const GITHUB_OWNER = 'alfaz-studio';
 const GITHUB_REPO = 'sonacove-electron';
@@ -224,29 +227,28 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
 });
 
 // Clear cache for a specific PR or all.
-// On Windows, files may be locked if the staging app is still running.
-// Use maxRetries to handle transient locks, and return a clear error
-// message if the files are still in use.
 ipcMain.handle('clear-cache', (_event, { prNumber }) => {
-    const rmOpts = { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 };
+    const target = prNumber
+        ? path.join(CACHE_DIR, `pr-${prNumber}`)
+        : CACHE_DIR;
+
+    if (!fs.existsSync(target)) {
+        return { success: true };
+    }
 
     try {
-        if (prNumber) {
-            fs.rmSync(path.join(CACHE_DIR, `pr-${prNumber}`), rmOpts);
-        } else {
-            fs.rmSync(CACHE_DIR, rmOpts);
+        fs.rmSync(target, { recursive: true, force: true });
+
+        if (!prNumber) {
             fs.mkdirSync(CACHE_DIR, { recursive: true });
         }
 
         return { success: true };
     } catch (err) {
-        if (err.code === 'EPERM' || err.code === 'EBUSY') {
-            return {
-                success: false,
-                error: 'Close the staging app first — Windows locks files while they\'re in use.'
-            };
-        }
-        throw err;
+        return {
+            success: false,
+            error: err.message || 'Failed to delete cached files.'
+        };
     }
 });
 

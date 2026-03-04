@@ -143,12 +143,17 @@ function buildPRCardHTML(pr) {
     const timeAgo = formatTimeAgo(pr.updatedAt);
     const sizeStr = pr.assetSize ? formatBytes(pr.assetSize) : '';
 
+    const prUrl = `https://github.com/alfaz-studio/sonacove-electron/pull/${pr.prNumber}`;
+
     return `
         <div class="pr-card" id="pr-card-${pr.prNumber}">
             <div class="pr-card-header">
                 ${avatarHTML}
                 <div class="pr-info">
-                    <div class="pr-title">#${pr.prNumber} ${escapeHtml(pr.title)}</div>
+                    <div class="pr-title">
+                        <a class="pr-link" href="#" data-url="${prUrl}">#${pr.prNumber}</a>
+                        ${escapeHtml(pr.title)}
+                    </div>
                     <div class="pr-meta">${escapeHtml(pr.author)} &middot; ${timeAgo}${sizeStr ? ` &middot; ${sizeStr}` : ''}</div>
                 </div>
                 <div class="pr-status">${statusHTML}</div>
@@ -172,6 +177,13 @@ function attachCardListeners(prNumber) {
             handleAction(action, pr);
         });
     }
+
+    for (const link of card.querySelectorAll('.pr-link')) {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            window.stagingAPI.openExternal(link.dataset.url);
+        });
+    }
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -185,28 +197,36 @@ async function handleAction(action, prNumber) {
     switch (action) {
     case 'download':
     case 'update':
-        try {
-            downloading[prNumber] = 0;
-            renderPRCard(prNumber);
+        downloading[prNumber] = 0;
+        renderPRCard(prNumber);
 
+        try {
             await window.stagingAPI.downloadBuild({
                 prNumber: pr.prNumber,
                 assetUrl: pr.assetUrl,
                 sha: pr.sha,
                 token
             });
-
-            delete downloading[prNumber];
-            pr.cached = true;
-            pr.updateAvailable = false;
-            renderPRCard(prNumber);
-
-            // Auto-launch after download
-            await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
         } catch (err) {
             delete downloading[prNumber];
             renderPRCard(prNumber);
             alert(`Download failed: ${err.message}`);
+            break;
+        }
+
+        // Download succeeded — update state and re-render
+        delete downloading[prNumber];
+        pr.cached = true;
+        pr.cachedSha = pr.sha;
+        pr.updateAvailable = false;
+        renderPRCard(prNumber);
+        await refreshCacheInfo();
+
+        // Auto-launch (errors here shouldn't affect the cached state)
+        try {
+            await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
+        } catch (err) {
+            alert(`Launch failed: ${err.message}`);
         }
         break;
 
@@ -344,6 +364,16 @@ function formatTimeAgo(dateStr) {
 
     return `${diffDays}d ago`;
 }
+
+// ── External links ──────────────────────────────────────────────────────────
+document.addEventListener('click', e => {
+    const link = e.target.closest('.ext-link');
+
+    if (link) {
+        e.preventDefault();
+        window.stagingAPI.openExternal(link.dataset.url);
+    }
+});
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 init();

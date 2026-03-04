@@ -291,6 +291,16 @@ main {
     white-space: nowrap;
 }
 
+.pr-link, .ext-link {
+    color: #388bfd;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.pr-link:hover, .ext-link:hover {
+    text-decoration: underline;
+}
+
 .pr-meta {
     font-size: 12px;
     color: #8b949e;
