@@ -420,7 +420,7 @@ function downloadAsset(assetUrl, destPath, token, onProgress) {
         const url = new URL(assetUrl);
 
         const req = https.get(
-            { hostname: url.hostname, path: url.pathname, headers },
+            { hostname: url.hostname, path: url.pathname + url.search, headers },
             res => {
                 // GitHub redirects to S3 — follow the redirect
                 if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
