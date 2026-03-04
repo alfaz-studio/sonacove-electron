@@ -148,12 +148,16 @@ jobs:
       - name: Zip portable build (macOS)
         if: matrix.os == 'macos-latest'
         run: |
+          set -e
+
           # Zip x64 build
           if [ -d "dist/mac" ]; then
             cd dist/mac
             zip -r ../sonacove-staging-mac-x64.zip "Sonacove Staging.app"
             cd ../..
             echo "Created: dist/sonacove-staging-mac-x64.zip"
+          else
+            echo "::error::dist/mac not found — x64 build may have been skipped"
           fi
 
           # Zip arm64 build
@@ -162,9 +166,17 @@ jobs:
             zip -r ../sonacove-staging-mac-arm64.zip "Sonacove Staging.app"
             cd ../..
             echo "Created: dist/sonacove-staging-mac-arm64.zip"
+          else
+            echo "::error::dist/mac-arm64 not found — arm64 build may have been skipped"
           fi
 
-          ls -lh dist/sonacove-staging-*.zip 2>/dev/null || echo "Warning: no zip files found"
+          # Fail if no zips were produced
+          count=$(ls dist/sonacove-staging-*.zip 2>/dev/null | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No macOS zip artifacts produced"
+            exit 1
+          fi
+          ls -lh dist/sonacove-staging-*.zip
 
       - name: Upload to staging release
         shell: bash
