@@ -54,7 +54,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --publish=never
 
-      - name: Upload to launcher release
+      - name: Upload to versioned release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -74,6 +74,31 @@ jobs:
           for f in *.exe *.dmg *.zip; do
             if [ -f "$f" ]; then
               echo "Uploading: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done
+
+      - name: Upload to auto-update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          # Also upload to the "staging-launcher" tag that electron-updater
+          # checks (publish.url in package.json). This ensures signed builds
+          # become the auto-update source of truth.
+          TAG="staging-launcher"
+
+          gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null || \
+          gh release create "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --title "Sonacove Staging Launcher" \
+            --notes "Download the Staging Launcher to browse, download, and run PR builds." \
+            --latest=false
+
+          cd staging-launcher/dist
+          for f in *.exe *.dmg *.zip latest.yml latest-mac.yml; do
+            if [ -f "$f" ]; then
+              echo "Uploading to ${TAG}: $f"
               gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
             fi
           done
