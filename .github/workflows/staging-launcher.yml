@@ -8,7 +8,28 @@ on:
       - 'staging-launcher/**'
 
 jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="staging-launcher"
+          if ! gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+            gh release create "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "Sonacove Staging Launcher" \
+              --notes "Download the Staging Launcher to browse, download, and run PR builds.
+
+          Updated automatically when \`staging-launcher/\` changes on main." \
+              --latest=false
+          fi
+
   build-launcher:
+    needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -57,8 +78,7 @@ jobs:
         shell: bash
         run: ls -lhR staging-launcher/dist/ || true
 
-      - name: Upload Windows artifacts
-        if: matrix.os == 'windows-latest'
+      - name: Upload artifacts
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -66,17 +86,6 @@ jobs:
           TAG="staging-launcher"
           SHA="${{ github.sha }}"
           SHORT_SHA="${SHA:0:7}"
-
-          # Create release if it doesn't exist
-          if ! gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
-            gh release create "${TAG}" \
-              --repo "${{ github.repository }}" \
-              --title "Sonacove Staging Launcher" \
-              --notes "Download the Staging Launcher to browse, download, and run PR builds.
-
-          Updated automatically when \`staging-launcher/\` changes on main." \
-              --latest=false
-          fi
 
           # Update release notes with latest commit
           gh release edit "${TAG}" \
@@ -87,47 +96,18 @@ jobs:
 
           Updated automatically when \`staging-launcher/\` changes on main."
 
-          # Upload Windows installer (clobber old one)
-          for f in staging-launcher/dist/*.exe; do
+          # Upload platform installers (clobber old ones)
+          for f in staging-launcher/dist/*.exe staging-launcher/dist/*.dmg; do
             if [ -f "$f" ]; then
               echo "Uploading: $f"
               gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
             fi
           done
 
-          # Upload latest.yml for electron-updater (Windows)
-          if [ -f "staging-launcher/dist/latest.yml" ]; then
-            echo "Uploading: latest.yml"
-            gh release upload "${TAG}" "staging-launcher/dist/latest.yml" --clobber --repo "${{ github.repository }}"
-          fi
-
-      - name: Upload macOS artifacts
-        if: matrix.os == 'macos-latest'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          TAG="staging-launcher"
-
-          # Wait for the release to be created by the Windows job
-          for i in $(seq 1 30); do
-            if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
-              break
-            fi
-            echo "Waiting for release to be created... (attempt $i)"
-            sleep 10
-          done
-
-          # Upload macOS DMG (clobber old one)
-          for f in staging-launcher/dist/*.dmg; do
+          # Upload electron-updater manifests
+          for f in staging-launcher/dist/latest.yml staging-launcher/dist/latest-mac.yml; do
             if [ -f "$f" ]; then
               echo "Uploading: $f"
               gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
             fi
           done
-
-          # Upload latest-mac.yml for electron-updater (macOS)
-          if [ -f "staging-launcher/dist/latest-mac.yml" ]; then
-            echo "Uploading: latest-mac.yml"
-            gh release upload "${TAG}" "staging-launcher/dist/latest-mac.yml" --clobber --repo "${{ github.repository }}"
-          fi
