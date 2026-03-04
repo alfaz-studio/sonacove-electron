@@ -857,9 +857,7 @@ function createJitsiMeetWindow() {
                     if (document.getElementById('sonacove-staging-banner')) return;
                     var banner = document.createElement('div');
                     banner.id = 'sonacove-staging-banner';
-                    banner.textContent = 'STAGING BUILD — ' + (require('electron').remote
-                        ? require('electron').remote.app.getVersion()
-                        : '${app.getVersion()}');
+                    banner.textContent = 'STAGING BUILD — ${app.getVersion()}';
                     document.body.appendChild(banner);
                 })();
             `).catch(() => {});
