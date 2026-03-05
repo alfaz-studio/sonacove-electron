@@ -2,6 +2,7 @@ const { ipcMain, shell } = require('electron');
 const { GITHUB_OWNER, GITHUB_REPO, CACHE_DIR, loadSettings, saveSettings } = require('./config');
 const { fetchStagingPRs } = require('./github');
 const { downloadBuild, launchBuild, clearCache, getCacheInfo } = require('./builds');
+const { validPR } = require('./fs-utils');
 
 /**
  * Register all IPC handlers.
@@ -43,6 +44,8 @@ function registerIpcHandlers({ getMainWindow }) {
 
     // Per-PR URL overrides
     ipcMain.handle('save-pr-override', (_event, { prNumber, landingUrl, meetUrl }) => {
+        const prNum = validPR(prNumber);
+
         // Validate URLs server-side (the renderer's <input type="url"> catches most
         // issues, but this prevents invalid strings from reaching config.js where
         // new URL() would throw and crash the launched app).
@@ -60,9 +63,9 @@ function registerIpcHandlers({ getMainWindow }) {
         }
 
         if (landingUrl || meetUrl) {
-            settings.prOverrides[prNumber] = { landingUrl, meetUrl };
+            settings.prOverrides[prNum] = { landingUrl, meetUrl };
         } else {
-            delete settings.prOverrides[prNumber];
+            delete settings.prOverrides[prNum];
         }
 
         saveSettings(settings);

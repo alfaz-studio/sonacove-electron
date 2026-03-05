@@ -237,7 +237,7 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
             stdio: 'ignore',
             env
         }).unref();
-    } else {
+    } else if (process.platform === 'win32') {
         // Find the .exe
         const entries = fs.readdirSync(extractDir);
         const exe = entries.find(e => e.endsWith('.exe') && !e.includes('Uninstall'));
@@ -249,6 +249,21 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
         const exePath = path.join(extractDir, exe);
 
         spawn(exePath, launchArgs, { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
+    } else {
+        // Linux — look for the main executable (no extension, executable bit set)
+        const entries = fs.readdirSync(extractDir);
+        const binary = entries.find(e => !e.includes('.') && !e.includes('Uninstall'));
+
+        if (!binary) {
+            throw new Error('No executable found in extracted build');
+        }
+
+        const binPath = path.join(extractDir, binary);
+
+        // Ensure the binary is executable (ZIP extraction may not preserve mode bits)
+        await execFileAsync('chmod', [ '+x', binPath ]);
+
+        spawn(binPath, launchArgs, { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
     }
 
     return { success: true };
