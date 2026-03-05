@@ -1,6 +1,13 @@
 const { app } = require('electron');
 
-const appEnv = process.env.APP_ENV || (app.isPackaged ? 'production' : 'staging');
+// Staging CI patches app name/productName to include "staging".
+// app.name may return 'sonacove-staging' (name) or 'Sonacove Staging' (productName)
+// depending on Electron version, so check case-insensitively.
+const isStagingBuild = (app.name || '').toLowerCase().includes('staging');
+const appEnv = process.env.APP_ENV
+    || (isStagingBuild ? 'staging'
+        : app.isPackaged ? 'production'
+            : 'staging');
 const isProd = appEnv === 'production';
 
 const URLS = {
@@ -10,15 +17,36 @@ const URLS = {
         allowedHosts: [ 'sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
         defaultServerURL: 'https://sonacove.com'
     },
+    // ⚠ staging-launcher/main.js patchMainJs() replaces these URL strings
+    // directly in compiled builds — keep in sync with the patterns there.
     staging: {
-        landing: 'https://26c4a307-sonacove.catfurr.workers.dev/dashboard',
-        // landing: 'http://localhost:4321/dashboard',
-        meetRoot: 'https://dea29a3a-sona-app.catfurr.workers.dev/meet',
-        // meetRoot: 'https://localhost:5173/meet/',
-        allowedHosts: [ 'dea29a3a-sona-app.catfurr.workers.dev', '26c4a307-sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        landing: 'https://sonacove.catfurr.workers.dev/dashboard',
+        meetRoot: 'https://sona-app.catfurr.workers.dev/meet',
+        allowedHosts: [ 'sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
         defaultServerURL: 'https://sonacove.com'
     }
 };
+
+// Allow the staging launcher (or dev env) to override URLs via environment variables.
+// This lets testers point staging builds at custom preview deployments.
+if (!isProd) {
+    if (process.env.STAGING_LANDING_URL) {
+        URLS.staging.landing = process.env.STAGING_LANDING_URL;
+        const host = new URL(process.env.STAGING_LANDING_URL).hostname;
+
+        if (!URLS.staging.allowedHosts.includes(host)) {
+            URLS.staging.allowedHosts.push(host);
+        }
+    }
+    if (process.env.STAGING_MEET_URL) {
+        URLS.staging.meetRoot = process.env.STAGING_MEET_URL;
+        const host = new URL(process.env.STAGING_MEET_URL).hostname;
+
+        if (!URLS.staging.allowedHosts.includes(host)) {
+            URLS.staging.allowedHosts.push(host);
+        }
+    }
+}
 
 const currentConfig = isProd ? URLS.production : URLS.staging;
 
