@@ -19,11 +19,32 @@ const URLS = {
     },
     staging: {
         landing: 'https://sonacove.catfurr.workers.dev/dashboard',
-        meetRoot: 'https://675ad424-sona-app.catfurr.workers.dev/meet',
-        allowedHosts: [ '675ad424-sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
-        defaultServerURL: 'https://sonacove.catfurr.workers.dev'
+        meetRoot: 'https://sona-app.catfurr.workers.dev/meet',
+        allowedHosts: [ 'sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        defaultServerURL: 'https://sonacove.com'
     }
 };
+
+// Allow the staging launcher (or dev env) to override URLs via environment variables.
+// This lets testers point staging builds at custom preview deployments.
+if (!isProd) {
+    if (process.env.STAGING_LANDING_URL) {
+        URLS.staging.landing = process.env.STAGING_LANDING_URL;
+        const host = new URL(process.env.STAGING_LANDING_URL).hostname;
+
+        if (!URLS.staging.allowedHosts.includes(host)) {
+            URLS.staging.allowedHosts.push(host);
+        }
+    }
+    if (process.env.STAGING_MEET_URL) {
+        URLS.staging.meetRoot = process.env.STAGING_MEET_URL;
+        const host = new URL(process.env.STAGING_MEET_URL).hostname;
+
+        if (!URLS.staging.allowedHosts.includes(host)) {
+            URLS.staging.allowedHosts.push(host);
+        }
+    }
+}
 
 const currentConfig = isProd ? URLS.production : URLS.staging;
 

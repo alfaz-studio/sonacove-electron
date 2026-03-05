@@ -279,10 +279,27 @@ ipcMain.handle('download-build', async (event, { prNumber, assetUrl, sha, token 
     return { success: true };
 });
 
+// Build a spawn environment that forwards custom preview URLs to the staging app.
+// The app's config.js reads STAGING_LANDING_URL / STAGING_MEET_URL env vars.
+function buildLaunchEnv() {
+    const settings = loadSettings();
+    const env = { ...process.env };
+
+    if (settings.landingUrl) {
+        env.STAGING_LANDING_URL = settings.landingUrl;
+    }
+    if (settings.meetUrl) {
+        env.STAGING_MEET_URL = settings.meetUrl;
+    }
+
+    return env;
+}
+
 // Launch a cached build
 ipcMain.handle('launch-build', async (_event, { prNumber }) => {
     const prNum = validPR(prNumber);
     const extractDir = path.join(CACHE_DIR, `pr-${prNum}`, 'app');
+    const env = buildLaunchEnv();
 
     if (process.platform === 'darwin') {
         // Find the .app bundle
@@ -298,7 +315,21 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
         // Strip quarantine attribute so macOS doesn't block unsigned app
         await execFileAsync('xattr', [ '-cr', appPath ]);
 
-        spawn('open', [ '-a', appPath ], { detached: true, stdio: 'ignore' }).unref();
+        // Launch the inner binary directly so env vars are forwarded.
+        // `open -a` doesn't pass environment variables to the child process.
+        const macOSDir = path.join(appPath, 'Contents', 'MacOS');
+        const binaries = fs.readdirSync(macOSDir);
+        const binary = binaries[0]; // There's typically one executable
+
+        if (!binary) {
+            throw new Error('No executable found in .app/Contents/MacOS/');
+        }
+
+        spawn(path.join(macOSDir, binary), [], {
+            detached: true,
+            stdio: 'ignore',
+            env
+        }).unref();
     } else {
         // Find the .exe
         const entries = fs.readdirSync(extractDir);
@@ -310,7 +341,7 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
 
         const exePath = path.join(extractDir, exe);
 
-        spawn(exePath, [], { detached: true, stdio: 'ignore', cwd: extractDir }).unref();
+        spawn(exePath, [], { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
     }
 
     return { success: true };

@@ -7,6 +7,8 @@ let closedExpanded = false;
 let repoBaseUrl = 'https://github.com/alfaz-studio/sonacove-electron'; // fallback
 
 // ── DOM refs ────────────────────────────────────────────────────────────────
+const landingUrlInput = document.getElementById('landing-url');
+const meetUrlInput = document.getElementById('meet-url');
 const listItems = document.getElementById('pr-list-items');
 const listLoading = document.getElementById('pr-list-loading');
 const listEmpty = document.getElementById('pr-list-empty');
@@ -30,6 +32,12 @@ async function init() {
     token = settings.token || null;
     if (token) {
         tokenInput.value = token;
+    }
+    if (settings.landingUrl) {
+        landingUrlInput.value = settings.landingUrl;
+    }
+    if (settings.meetUrl) {
+        meetUrlInput.value = settings.meetUrl;
     }
 
     // Fetch repo info so URLs aren't hardcoded
@@ -371,7 +379,10 @@ document.addEventListener('keydown', e => {
 
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
     token = tokenInput.value.trim() || null;
-    await window.stagingAPI.saveSettings({ token });
+    const landingUrl = landingUrlInput.value.trim() || null;
+    const meetUrl = meetUrlInput.value.trim() || null;
+
+    await window.stagingAPI.saveSettings({ token, landingUrl, meetUrl });
     closeSettings();
     await refreshPRs();
 });
