@@ -103,13 +103,17 @@ async function main() {
         // Alpha unchanged
     }
 
+    // electron-builder requires at least 512x512 for macOS; target 1024x1024
+    const TARGET_SIZE = 1024;
+
     await sharp(pixels, {
         raw: { width: info.width, height: info.height, channels: 4 }
     })
+        .resize(TARGET_SIZE, TARGET_SIZE, { kernel: 'lanczos3' })
         .png()
         .toFile(DEST);
 
-    console.log(`✓ Generated amber icon: ${DEST} (${info.width}×${info.height})`);
+    console.log(`✓ Generated amber icon: ${DEST} (${TARGET_SIZE}×${TARGET_SIZE})`);
 }
 
 main().catch(err => {
