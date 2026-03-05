@@ -205,7 +205,7 @@ function buildPRCardHTML(pr) {
                <svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                    <path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/>
                </svg>
-               <a class="ext-link commit-link" href="#" data-url="${repoBaseUrl}/commit/${pr.sha}">${pr.sha.substring(0, 7)}</a>
+               <a class="ext-link commit-link" href="#" data-url="${repoBaseUrl}/commit/${escapeHtml(pr.sha)}">${escapeHtml(pr.sha.substring(0, 7))}</a>
                <span class="commit-msg">${escapeHtml(pr.commitMessage)}</span>
            </div>`
         : '';

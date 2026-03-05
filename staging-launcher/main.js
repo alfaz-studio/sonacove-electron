@@ -567,6 +567,9 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
     // with a self-signed certificate (e.g. Vite --https).  Electron rejects
     // self-signed certs by default, resulting in chrome-error:// pages.
     // Pass the Chromium flag to allow them for this launched instance only.
+    // Security note: --ignore-certificate-errors is intentional here. The staging
+    // launcher's UI shows a visible ".has-override" indicator when custom URLs are
+    // active, making it clear to the user that cert validation is relaxed.
     const hasOverrides = !!(overrides.landingUrl || overrides.meetUrl);
     const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
