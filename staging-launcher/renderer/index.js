@@ -7,8 +7,7 @@ let closedExpanded = false;
 let repoBaseUrl = 'https://github.com/alfaz-studio/sonacove-electron'; // fallback
 
 // ── DOM refs ────────────────────────────────────────────────────────────────
-const landingUrlInput = document.getElementById('landing-url');
-const meetUrlInput = document.getElementById('meet-url');
+let prOverrides = {};  // { prNumber: { landingUrl, meetUrl } }
 const listItems = document.getElementById('pr-list-items');
 const listLoading = document.getElementById('pr-list-loading');
 const listEmpty = document.getElementById('pr-list-empty');
@@ -33,12 +32,7 @@ async function init() {
     if (token) {
         tokenInput.value = token;
     }
-    if (settings.landingUrl) {
-        landingUrlInput.value = settings.landingUrl;
-    }
-    if (settings.meetUrl) {
-        meetUrlInput.value = settings.meetUrl;
-    }
+    prOverrides = settings.prOverrides || {};
 
     // Fetch repo info so URLs aren't hardcoded
     try {
@@ -216,6 +210,41 @@ function buildPRCardHTML(pr) {
            </div>`
         : '';
 
+    // Per-PR URL override toggle + config panel
+    const hasOverride = !!(prOverrides[pr.prNumber]
+        && (prOverrides[pr.prNumber].landingUrl || prOverrides[pr.prNumber].meetUrl));
+    const override = prOverrides[pr.prNumber] || {};
+
+    if (pr.hasAsset && !isDownloading && !isLaunching && actionsHTML) {
+        actionsHTML += `
+            <button class="url-config-toggle${hasOverride ? ' has-override' : ''}" data-action="toggle-urls" data-pr="${pr.prNumber}" title="${hasOverride ? 'Custom URLs active' : 'Custom preview URLs'}">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
+                    <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
+                </svg>
+            </button>`;
+    }
+
+    const urlConfigHTML = pr.hasAsset ? `
+        <div class="pr-url-config hidden" id="pr-url-config-${pr.prNumber}">
+            <div class="url-field">
+                <label>Landing URL</label>
+                <input type="url" class="url-input" id="landing-${pr.prNumber}"
+                       value="${escapeHtml(override.landingUrl || '')}"
+                       placeholder="https://sonacove.catfurr.workers.dev/dashboard">
+            </div>
+            <div class="url-field">
+                <label>Meet Root URL</label>
+                <input type="url" class="url-input" id="meet-${pr.prNumber}"
+                       value="${escapeHtml(override.meetUrl || '')}"
+                       placeholder="https://sona-app.catfurr.workers.dev/meet">
+            </div>
+            <div class="url-config-actions">
+                <button class="btn btn-sm btn-primary" data-action="save-urls" data-pr="${pr.prNumber}">Save URLs</button>
+                ${hasOverride ? `<button class="btn btn-sm btn-secondary" data-action="clear-urls" data-pr="${pr.prNumber}">Reset</button>` : ''}
+            </div>
+        </div>` : '';
+
     return `
         <div class="pr-card ${accentClass}${pr.draft ? ' pr-draft' : ''}" id="pr-card-${pr.prNumber}">
             <div class="pr-card-header">
@@ -239,6 +268,7 @@ function buildPRCardHTML(pr) {
                 <div class="pr-status">${statusHTML}</div>
             </div>
             <div class="pr-card-actions">${actionsHTML}</div>
+            ${urlConfigHTML}
         </div>`;
 }
 
@@ -262,6 +292,55 @@ function attachCardListeners(prNumber) {
         link.addEventListener('click', e => {
             e.preventDefault();
             window.stagingAPI.openExternal(link.dataset.url);
+        });
+    }
+
+    // URL config toggle
+    const toggleUrlsBtn = card.querySelector('[data-action="toggle-urls"]');
+
+    if (toggleUrlsBtn) {
+        toggleUrlsBtn.addEventListener('click', () => {
+            const configPanel = document.getElementById(`pr-url-config-${prNumber}`);
+
+            if (configPanel) {
+                configPanel.classList.toggle('hidden');
+            }
+        });
+    }
+
+    // Save per-PR URLs
+    const saveUrlsBtn = card.querySelector('[data-action="save-urls"]');
+
+    if (saveUrlsBtn) {
+        saveUrlsBtn.addEventListener('click', async () => {
+            const landingInput = document.getElementById(`landing-${prNumber}`);
+            const meetInput = document.getElementById(`meet-${prNumber}`);
+            const landingUrl = landingInput ? landingInput.value.trim() : '';
+            const meetUrl = meetInput ? meetInput.value.trim() : '';
+
+            if (landingUrl || meetUrl) {
+                prOverrides[prNumber] = { landingUrl: landingUrl || null, meetUrl: meetUrl || null };
+            } else {
+                delete prOverrides[prNumber];
+            }
+
+            await window.stagingAPI.savePROverride({
+                prNumber,
+                landingUrl: landingUrl || null,
+                meetUrl: meetUrl || null
+            });
+            renderPRCard(prNumber);
+        });
+    }
+
+    // Clear per-PR URLs
+    const clearUrlsBtn = card.querySelector('[data-action="clear-urls"]');
+
+    if (clearUrlsBtn) {
+        clearUrlsBtn.addEventListener('click', async () => {
+            delete prOverrides[prNumber];
+            await window.stagingAPI.savePROverride({ prNumber, landingUrl: null, meetUrl: null });
+            renderPRCard(prNumber);
         });
     }
 }
@@ -379,10 +458,8 @@ document.addEventListener('keydown', e => {
 
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
     token = tokenInput.value.trim() || null;
-    const landingUrl = landingUrlInput.value.trim() || null;
-    const meetUrl = meetUrlInput.value.trim() || null;
 
-    await window.stagingAPI.saveSettings({ token, landingUrl, meetUrl });
+    await window.stagingAPI.saveSettings({ token });
     closeSettings();
     await refreshPRs();
 });

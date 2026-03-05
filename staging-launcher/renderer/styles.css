@@ -828,6 +828,89 @@ main {
     background: var(--danger-bg);
 }
 
+/* ── Per-PR URL Config ──────────────────────────────────────────────────── */
+.url-config-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s ease;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.url-config-toggle:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.url-config-toggle.has-override {
+    color: var(--success);
+}
+
+.url-config-toggle.has-override:hover {
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.pr-url-config {
+    margin-top: 10px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.url-field {
+    margin-bottom: 8px;
+}
+
+.url-field:last-of-type {
+    margin-bottom: 0;
+}
+
+.url-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.url-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    transition: border-color 0.15s ease;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--text-secondary);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.04);
+}
+
+.url-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.url-config-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
 /* ── Status Bar ──────────────────────────────────────────────────────────── */
 #status-bar {
     display: flex;

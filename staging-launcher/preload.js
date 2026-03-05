@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('stagingAPI', {
     getCacheInfo: () => ipcRenderer.invoke('get-cache-info'),
     getSettings: () => ipcRenderer.invoke('get-settings'),
     saveSettings: settings => ipcRenderer.invoke('save-settings', settings),
+    savePROverride: opts => ipcRenderer.invoke('save-pr-override', opts),
     openExternal: url => ipcRenderer.invoke('open-external', url),
     getRepoInfo: () => ipcRenderer.invoke('get-repo-info'),
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

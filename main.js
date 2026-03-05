@@ -696,7 +696,10 @@ function createJitsiMeetWindow() {
             if (parsedUrl.hostname !== meetRootUrl.hostname) {
                 event.preventDefault();
 
-                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${parsedUrl.pathname}${parsedUrl.search}`;
+                // Strip the /meet prefix from pathname — meetRoot already
+                // includes it, so we'd otherwise get /meet/meet/room.
+                const roomPath = parsedUrl.pathname.replace(/^\/meet/, '');
+                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${roomPath}${parsedUrl.search}`;
 
                 setImmediate(() => {
                     mainWindow.loadURL(targetUrl);
@@ -848,19 +851,18 @@ function createJitsiMeetWindow() {
             mainWindow.webContents.insertCSS(`
                 #sonacove-staging-banner {
                     position: fixed;
-                    bottom: 0; left: 0; right: 0;
-                    height: 28px;
-                    background: #d97706;
+                    bottom: 8px; right: 8px;
+                    padding: 2px 8px;
+                    background: rgba(217, 119, 6, 0.7);
                     color: #000;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    border-radius: 4px;
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    font-size: 12px;
+                    font-size: 10px;
                     font-weight: 600;
                     z-index: 2147483647;
                     user-select: none;
-                    letter-spacing: 0.5px;
+                    pointer-events: none;
+                    opacity: 0.8;
                 }
             `).catch(() => {});
             mainWindow.webContents.executeJavaScript(`

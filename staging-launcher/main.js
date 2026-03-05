@@ -6,6 +6,9 @@ const https = require('https');
 // EPERM when we later try to delete the cache directory.
 const fs = require('original-fs');
 const path = require('path');
+// Electron-patched fs — reads asar archives transparently.  We use this
+// to extract files from app.asar when patching builds with custom URLs.
+const nodeFs = require('fs');
 const { spawn, execFile } = require('child_process');
 const { createWriteStream } = require('original-fs');
 
@@ -279,17 +282,249 @@ ipcMain.handle('download-build', async (event, { prNumber, assetUrl, sha, token 
     return { success: true };
 });
 
-// Build a spawn environment that forwards custom preview URLs to the staging app.
-// The app's config.js reads STAGING_LANDING_URL / STAGING_MEET_URL env vars.
-function buildLaunchEnv() {
+// ── URL Override: asar extraction + main.js patching ────────────────────────
+//
+// Staging builds package the app code inside resources/app.asar.  To override
+// hardcoded URLs we:
+//   1. Back up app.asar → app-backup.asar  (preserves original for restore)
+//   2. Extract all files from the asar into resources/app/  (Electron uses
+//      the directory over the asar when both exist)
+//   3. String-replace the hardcoded URLs in build/main.js
+//
+// When no overrides are set, we restore the original asar.
+
+// Recursively copy files out of an asar archive.  `nodeFs` (Electron's
+// patched fs) reads asar contents transparently, including files that the
+// asar marks as "unpacked" (native .node binaries in app.asar.unpacked/).
+// We write with `fs` (original-fs) so we create real files on disk.
+function copyFromAsar(srcDir, destDir) {
+    fs.mkdirSync(destDir, { recursive: true });
+
+    const entries = nodeFs.readdirSync(srcDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const srcPath = path.join(srcDir, entry.name);
+        const destPath = path.join(destDir, entry.name);
+
+        if (entry.isDirectory()) {
+            copyFromAsar(srcPath, destPath);
+        } else if (entry.isSymbolicLink()) {
+            try {
+                const target = nodeFs.readlinkSync(srcPath);
+
+                fs.symlinkSync(target, destPath);
+            } catch {
+                // Skip unreadable symlinks
+            }
+        } else {
+            try {
+                fs.writeFileSync(destPath, nodeFs.readFileSync(srcPath));
+            } catch {
+                // Skip files that can't be read — the asar header can list
+                // files as "unpacked" that don't actually exist in the
+                // .asar.unpacked directory (e.g. .eslintignore, dev configs).
+            }
+        }
+    }
+}
+
+// Recursively copy a real directory (using original-fs, no asar patching).
+// Used to overlay the .asar.unpacked contents onto the extracted app dir.
+function copyDirReal(srcDir, destDir) {
+    fs.mkdirSync(destDir, { recursive: true });
+
+    const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const srcPath = path.join(srcDir, entry.name);
+        const destPath = path.join(destDir, entry.name);
+
+        if (entry.isDirectory()) {
+            copyDirReal(srcPath, destPath);
+        } else {
+            try {
+                fs.copyFileSync(srcPath, destPath);
+            } catch {
+                // Skip files that can't be copied (e.g. locked)
+            }
+        }
+    }
+}
+
+function patchMainJs(mainJsPath, overrides) {
+    let mainJs = fs.readFileSync(mainJsPath, 'utf-8');
+
+    if (overrides.landingUrl) {
+        // Replace the full landing URL first
+        mainJs = mainJs.replaceAll(
+            'https://sonacove.catfurr.workers.dev/dashboard',
+            overrides.landingUrl
+        );
+
+        // Replace the standalone hostname so allowedHosts, windowOpenHandler,
+        // Origin injection, and any other host-based checks use the new host.
+        // Use a word-boundary-aware regex to avoid double-replacing when the
+        // new hostname contains the old one as a substring (e.g. the custom
+        // host '404b3320-sona-app.catfurr.workers.dev' contains the default
+        // meet host 'sona-app.catfurr.workers.dev').
+        try {
+            const newHost = new URL(overrides.landingUrl).hostname;
+
+            mainJs = mainJs.replace(
+                /(?<![a-zA-Z0-9-])sonacove\.catfurr\.workers\.dev(?![a-zA-Z0-9-])/g,
+                newHost
+            );
+        } catch {
+            // ignore invalid URL
+        }
+    }
+    if (overrides.meetUrl) {
+        // Only replace the hostname, NOT the full URL.  The meet config value
+        // is `https://sona-app.catfurr.workers.dev/meet` — if we replaced the
+        // full URL we'd clobber the `/meet` path, and the will-navigate handler
+        // in the app's main.js would reconstruct it as `/meet/meet/roomname`
+        // (it concatenates meetRoot + pathname, both starting with /meet).
+        // By swapping just the hostname, meetRoot stays as
+        // `https://<new-host>/meet` and the hostname check passes, so the
+        // handler never fires and the path stays correct.
+        try {
+            const newHost = new URL(overrides.meetUrl).hostname;
+
+            mainJs = mainJs.replace(
+                /(?<![a-zA-Z0-9-])sona-app\.catfurr\.workers\.dev(?![a-zA-Z0-9-])/g,
+                newHost
+            );
+        } catch {
+            // ignore invalid URL
+        }
+    }
+
+    // Shrink the staging banner from a full-width bottom bar to a small
+    // bottom-right pill.  The compiled CSS contains literal \n (backslash-n)
+    // for newlines, so we use \\n to match those, then \s* for indentation.
+    mainJs = mainJs.replace(
+        /bottom: 0; left: 0; right: 0;\\n\s*height: 28px;\\n\s*background: #d97706;/,
+        'bottom:8px;right:8px;padding:2px 8px;border-radius:4px;pointer-events:none;opacity:.8;background:rgba(217,119,6,0.7);'
+    );
+    mainJs = mainJs.replace(
+        /font-size: 12px;\\n\s*font-weight: 600;\\n\s*z-index: 2147483647;/,
+        'font-size:10px;font-weight:600;z-index:2147483647;'
+    );
+
+    // Fix the will-navigate handler's URL construction bug present in builds
+    // compiled before the source fix.  The handler concatenates meetRoot
+    // (ending in /meet) with the full pathname (starting with /meet),
+    // producing /meet/meet/room.  We inject a .replace() to strip the
+    // leading /meet from pathname.
+    //
+    // Compiled template-literal form:
+    //   `${X.currentConfig.meetRoot}${Y.pathname}${Y.search}`
+    mainJs = mainJs.replace(
+        /\.currentConfig\.meetRoot\}\$\{(\w+)\.pathname\}\$\{(\w+)\.search\}/g,
+        '.currentConfig.meetRoot}${$1.pathname.replace(/^\\/meet/,"")}${$2.search}'
+    );
+    // Compiled string-concatenation form (terser may convert template literals):
+    //   X.currentConfig.meetRoot+Y.pathname+Y.search
+    mainJs = mainJs.replace(
+        /\.currentConfig\.meetRoot\+(\w+)\.pathname\+(\w+)\.search/g,
+        '.currentConfig.meetRoot+$1.pathname.replace(/^\\/meet/,"")+$2.search'
+    );
+
+    fs.writeFileSync(mainJsPath, mainJs);
+}
+
+async function rmDir(dirPath) {
+    if (process.platform === 'win32') {
+        await execFileAsync('cmd', [ '/c', 'rd', '/s', '/q', dirPath ]);
+    } else {
+        fs.rmSync(dirPath, { recursive: true, force: true });
+    }
+}
+
+async function patchBuildUrls(extractDir, overrides) {
+    const resourcesDir = path.join(extractDir, 'resources');
+    const asarPath = path.join(resourcesDir, 'app.asar');
+    const asarBackup = path.join(resourcesDir, 'app-backup.asar');
+    const asarUnpacked = path.join(resourcesDir, 'app.asar.unpacked');
+    const asarUnpackedBackup = path.join(resourcesDir, 'app-backup.asar.unpacked');
+    const appDir = path.join(resourcesDir, 'app');
+
+    const hasOverrides = !!(overrides.landingUrl || overrides.meetUrl);
+
+    if (!hasOverrides) {
+        // Restore original asar if it was backed up
+        if (fs.existsSync(asarBackup)) {
+            if (fs.existsSync(appDir)) {
+                await rmDir(appDir);
+            }
+            fs.renameSync(asarBackup, asarPath);
+            if (fs.existsSync(asarUnpackedBackup)) {
+                fs.renameSync(asarUnpackedBackup, asarUnpacked);
+            }
+        }
+
+        return;
+    }
+
+    // If resources/app/ already exists and there's no asar at all, the build
+    // uses an unpacked app directory — patch main.js in place.
+    if (fs.existsSync(appDir) && !fs.existsSync(asarPath) && !fs.existsSync(asarBackup)) {
+        patchMainJs(path.join(appDir, 'build', 'main.js'), overrides);
+
+        return;
+    }
+
+    // ── Asar-based build ────────────────────────────────────────────────────
+
+    // 1. Create backup on first override (preserves pristine copy)
+    if (fs.existsSync(asarPath) && !fs.existsSync(asarBackup)) {
+        fs.renameSync(asarPath, asarBackup);
+        if (fs.existsSync(asarUnpacked)) {
+            fs.renameSync(asarUnpacked, asarUnpackedBackup);
+        }
+    }
+
+    if (!fs.existsSync(asarBackup)) {
+        throw new Error('No app.asar backup found — cannot apply URL overrides');
+    }
+
+    // 2. Clean up any previous extraction
+    if (fs.existsSync(appDir)) {
+        await rmDir(appDir);
+    }
+    if (fs.existsSync(asarPath)) {
+        fs.unlinkSync(asarPath);
+    }
+
+    // 3. Extract all files from the backup asar into resources/app/
+    copyFromAsar(asarBackup, appDir);
+
+    // 4. Overlay the real unpacked directory on top.  Native modules and
+    //    some JS files live in app.asar.unpacked/ — the asar header lists
+    //    them but nodeFs can fail to read files that are missing from disk.
+    //    Copying the unpacked directory directly fills in anything that the
+    //    asar-based extraction missed.
+    if (fs.existsSync(asarUnpackedBackup)) {
+        copyDirReal(asarUnpackedBackup, appDir);
+    }
+
+    // 5. Patch build/main.js with URL replacements
+    patchMainJs(path.join(appDir, 'build', 'main.js'), overrides);
+}
+
+// Build a spawn environment that forwards custom preview URLs to the staging
+// app via env vars.  Builds with config.js env-var support will pick these up
+// directly; for older builds patchBuildUrls() handles it via main.js patching.
+function buildLaunchEnv(prNumber) {
     const settings = loadSettings();
+    const overrides = (settings.prOverrides || {})[prNumber] || {};
     const env = { ...process.env };
 
-    if (settings.landingUrl) {
-        env.STAGING_LANDING_URL = settings.landingUrl;
+    if (overrides.landingUrl) {
+        env.STAGING_LANDING_URL = overrides.landingUrl;
     }
-    if (settings.meetUrl) {
-        env.STAGING_MEET_URL = settings.meetUrl;
+    if (overrides.meetUrl) {
+        env.STAGING_MEET_URL = overrides.meetUrl;
     }
 
     return env;
@@ -299,7 +534,22 @@ function buildLaunchEnv() {
 ipcMain.handle('launch-build', async (_event, { prNumber }) => {
     const prNum = validPR(prNumber);
     const extractDir = path.join(CACHE_DIR, `pr-${prNum}`, 'app');
-    const env = buildLaunchEnv();
+
+    // Apply URL overrides by patching the build's main.js inside the asar.
+    // If no overrides are set, this restores the original asar.
+    const settings = loadSettings();
+    const overrides = (settings.prOverrides || {})[prNum] || {};
+
+    await patchBuildUrls(extractDir, overrides);
+
+    const env = buildLaunchEnv(prNum);
+
+    // When URL overrides are active the target may be a local dev server
+    // with a self-signed certificate (e.g. Vite --https).  Electron rejects
+    // self-signed certs by default, resulting in chrome-error:// pages.
+    // Pass the Chromium flag to allow them for this launched instance only.
+    const hasOverrides = !!(overrides.landingUrl || overrides.meetUrl);
+    const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
     if (process.platform === 'darwin') {
         // Find the .app bundle
@@ -325,7 +575,7 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
             throw new Error('No executable found in .app/Contents/MacOS/');
         }
 
-        spawn(path.join(macOSDir, binary), [], {
+        spawn(path.join(macOSDir, binary), launchArgs, {
             detached: true,
             stdio: 'ignore',
             env
@@ -341,7 +591,7 @@ ipcMain.handle('launch-build', async (_event, { prNumber }) => {
 
         const exePath = path.join(extractDir, exe);
 
-        spawn(exePath, [], { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
+        spawn(exePath, launchArgs, { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
     }
 
     return { success: true };
@@ -417,6 +667,27 @@ ipcMain.handle('get-cache-info', () => {
 // Settings
 ipcMain.handle('get-settings', () => loadSettings());
 ipcMain.handle('save-settings', (_event, settings) => {
+    const current = loadSettings();
+
+    saveSettings({ ...current, ...settings });
+
+    return { success: true };
+});
+
+// Per-PR URL overrides
+ipcMain.handle('save-pr-override', (_event, { prNumber, landingUrl, meetUrl }) => {
+    const settings = loadSettings();
+
+    if (!settings.prOverrides) {
+        settings.prOverrides = {};
+    }
+
+    if (landingUrl || meetUrl) {
+        settings.prOverrides[prNumber] = { landingUrl, meetUrl };
+    } else {
+        delete settings.prOverrides[prNumber];
+    }
+
     saveSettings(settings);
 
     return { success: true };
