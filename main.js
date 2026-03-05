@@ -31,9 +31,15 @@ const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/so
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
 
-// Set app user model ID at the very top for Windows icon support
+// Set app user model ID at the very top for Windows icon support.
+// Staging builds have their package.json name/productName changed to include
+// "staging" by CI. app.name may return either depending on Electron version.
+const _appNameLower = (app.name || '').toLowerCase();
+
 if (process.platform === 'win32') {
-    app.setAppUserModelId('com.sonacove.meet');
+    app.setAppUserModelId(
+        _appNameLower.includes('staging') ? 'com.sonacove.staging' : 'com.sonacove.meet'
+    );
 }
 
 const config = require('./app/features/config');
@@ -47,8 +53,13 @@ const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
+// Staging builds have their package.json name/productName set to include "staging" by CI.
+// Check case-insensitively since app.name may return name or productName.
+const isStaging = _appNameLower.includes('staging');
 
-registerProtocol();
+if (!isStaging) {
+    registerProtocol();
+}
 
 // For enabling remote control, please change the ENABLE_REMOTE_CONTROL flag in
 // app/features/conference/components/Conference.js to true as well
@@ -194,6 +205,17 @@ function showAboutDialog() {
  * Triggers a manual update check and reports the result to the user.
  */
 function checkForUpdatesManually() {
+    if (isStaging) {
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Staging Build',
+            message: 'Staging builds do not receive auto-updates.',
+            buttons: [ 'OK' ]
+        });
+
+        return;
+    }
+
     autoUpdater.checkForUpdates()
         .then(result => {
             if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
@@ -522,7 +544,7 @@ function createJitsiMeetWindow() {
     };
 
 
-    if (!process.mas) {
+    if (!process.mas && !isStaging) {
         // Setup Logger
         autoUpdater.logger = require('electron-log');
         autoUpdater.logger.transports.file.level = 'info';
@@ -674,7 +696,10 @@ function createJitsiMeetWindow() {
             if (parsedUrl.hostname !== meetRootUrl.hostname) {
                 event.preventDefault();
 
-                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${parsedUrl.pathname}${parsedUrl.search}`;
+                // Strip the /meet prefix from pathname — meetRoot already
+                // includes it, so we'd otherwise get /meet/meet/room.
+                const roomPath = parsedUrl.pathname.replace(/^\/meet/, '');
+                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${roomPath}${parsedUrl.search}`;
 
                 setImmediate(() => {
                     mainWindow.loadURL(targetUrl);
@@ -818,6 +843,38 @@ function createJitsiMeetWindow() {
     // Inject the custom in-page title bar on Windows after each page load.
     if (process.platform !== 'darwin') {
         mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
+    }
+
+    // Inject a visible staging banner so testers know they're on a PR build.
+    if (isStaging) {
+        mainWindow.webContents.on('did-finish-load', () => {
+            mainWindow.webContents.insertCSS(`
+                #sonacove-staging-banner {
+                    position: fixed;
+                    bottom: 8px; right: 8px;
+                    padding: 2px 8px;
+                    background: rgba(217, 119, 6, 0.7);
+                    color: #000;
+                    border-radius: 4px;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    font-size: 10px;
+                    font-weight: 600;
+                    z-index: 2147483647;
+                    user-select: none;
+                    pointer-events: none;
+                    opacity: 0.8;
+                }
+            `).catch(() => {});
+            mainWindow.webContents.executeJavaScript(`
+                (function() {
+                    if (document.getElementById('sonacove-staging-banner')) return;
+                    var banner = document.createElement('div');
+                    banner.id = 'sonacove-staging-banner';
+                    banner.textContent = 'STAGING BUILD — ${app.getVersion()}';
+                    document.body.appendChild(banner);
+                })();
+            `).catch(() => {});
+        });
     }
 
     mainWindow.on('closed', () => {
@@ -1016,20 +1073,24 @@ app.on('before-quit', event => {
         });
 });
 
-// remove so we can register each time as we run the app.
-app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
+// Staging builds must not register as the default protocol handler —
+// that would hijack deeplinks from the production install.
+if (!isStaging) {
+    // remove so we can register each time as we run the app.
+    app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
 
-// If we are running a non-packaged version of the app && on windows
-if (isDev && process.platform === 'win32') {
-    // Set the path of electron.exe and your app.
-    // These two additional parameters are only available on windows.
-    app.setAsDefaultProtocolClient(
-        config.default.appProtocolPrefix,
-        process.execPath,
-        [ path.resolve(process.argv[1]) ]
-    );
-} else {
-    app.setAsDefaultProtocolClient(config.default.appProtocolPrefix);
+    // If we are running a non-packaged version of the app && on windows
+    if (isDev && process.platform === 'win32') {
+        // Set the path of electron.exe and your app.
+        // These two additional parameters are only available on windows.
+        app.setAsDefaultProtocolClient(
+            config.default.appProtocolPrefix,
+            process.execPath,
+            [ path.resolve(process.argv[1]) ]
+        );
+    } else {
+        app.setAsDefaultProtocolClient(config.default.appProtocolPrefix);
+    }
 }
 
 /**

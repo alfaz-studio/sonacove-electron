@@ -1,0 +1,104 @@
+name: Build Staging Launcher
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Launcher version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install launcher dependencies
+        working-directory: staging-launcher
+        run: npm ci
+
+      - name: Set version
+        working-directory: staging-launcher
+        run: npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Build launcher (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: staging-launcher
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: npx electron-builder --publish=never
+
+      - name: Build launcher (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: staging-launcher
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --publish=never
+
+      - name: Upload to versioned release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="launcher-v${{ inputs.version }}"
+
+          # Create release if it doesn't exist
+          gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null || \
+          gh release create "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --title "Staging Launcher v${{ inputs.version }}" \
+            --notes "Sonacove Staging Launcher - install once to test PR builds." \
+            --latest=false
+
+          # Upload built artifacts
+          cd staging-launcher/dist
+          for f in *.exe *.dmg *.zip; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done
+
+      - name: Upload to auto-update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          # Also upload to the "staging-launcher" tag that electron-updater
+          # checks (publish.url in package.json). This ensures signed builds
+          # become the auto-update source of truth.
+          TAG="staging-launcher"
+
+          gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null || \
+          gh release create "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --title "Sonacove Staging Launcher" \
+            --notes "Download the Staging Launcher to browse, download, and run PR builds." \
+            --latest=false
+
+          cd staging-launcher/dist
+          for f in *.exe *.dmg *.zip latest.yml latest-mac.yml; do
+            if [ -f "$f" ]; then
+              echo "Uploading to ${TAG}: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done

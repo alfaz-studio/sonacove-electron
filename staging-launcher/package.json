@@ -1,0 +1,52 @@
+{
+  "name": "sonacove-staging-launcher",
+  "productName": "Sonacove Staging Launcher",
+  "version": "1.0.0",
+  "main": "main.js",
+  "description": "Launcher for Sonacove Meets staging/PR builds",
+  "author": "Alfaz Studio",
+  "license": "Apache-2.0",
+  "build": {
+    "appId": "com.sonacove.staging-launcher",
+    "productName": "Sonacove Staging Launcher",
+    "publish": {
+      "provider": "generic",
+      "url": "https://github.com/alfaz-studio/sonacove-electron/releases/download/staging-launcher"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
+  },
+  "devDependencies": {
+    "electron": "40.3.0",
+    "electron-builder": "26.0.12"
+  }
+}

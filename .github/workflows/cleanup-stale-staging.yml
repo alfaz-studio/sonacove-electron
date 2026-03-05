@@ -1,0 +1,41 @@
+name: Cleanup Stale Staging Releases
+
+on:
+  schedule:
+    # Run daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Remove staging releases for closed PRs
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          echo "Scanning for stale staging releases..."
+
+          # List all releases and filter for staging ones
+          gh release list --repo "$REPO" --limit 100 --json tagName,isPrerelease \
+            --jq '.[] | select(.isPrerelease) | select(.tagName | startswith("staging-pr-")) | .tagName' \
+          | while read -r TAG; do
+            PR_NUM=$(echo "$TAG" | sed 's/staging-pr-//')
+
+            # Check if the PR is still open
+            STATE=$(gh pr view "$PR_NUM" --repo "$REPO" --json state --jq '.state' 2>/dev/null || echo "UNKNOWN")
+
+            if [ "$STATE" != "OPEN" ]; then
+              echo "Removing $TAG (PR #$PR_NUM state: $STATE)"
+              gh release delete "$TAG" --repo "$REPO" --yes 2>/dev/null || true
+              gh api "repos/$REPO/git/refs/tags/$TAG" --method DELETE 2>/dev/null || true
+            else
+              echo "Keeping $TAG (PR #$PR_NUM is still open)"
+            fi
+          done
+
+          echo "Cleanup complete."

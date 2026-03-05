@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://avatars.githubusercontent.com; style-src 'self' 'unsafe-inline';">
+    <title>Sonacove Staging Launcher</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header id="app-header">
+        <div class="header-left">
+            <div class="header-brand">
+                <h1>Sonacove Staging</h1>
+                <span class="header-subtitle">PR Build Selector</span>
+            </div>
+            <span id="status-badge" class="badge">Loading...</span>
+        </div>
+        <div class="header-right">
+            <button id="btn-refresh" class="icon-btn" title="Refresh">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                </svg>
+            </button>
+            <button id="btn-settings" class="icon-btn" title="Settings">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                    <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.892 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Settings Modal -->
+    <div id="settings-overlay" class="modal-overlay hidden">
+        <div id="settings-panel" class="modal-panel">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button id="btn-close-settings" class="modal-close" title="Close">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- API Section -->
+                <div class="settings-section">
+                    <div class="section-icon">
+                        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M4.72 3.22a.75.75 0 0 1 1.06 0l3.47 3.47a.75.75 0 0 1 0 1.06L5.78 11.22a.75.75 0 0 1-1.06-1.06L7.94 8 4.72 4.78a.75.75 0 0 1 0-1.06zm5 0a.75.75 0 0 1 1.06 0l3.47 3.47a.75.75 0 0 1 0 1.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L12.94 8 9.72 4.78a.75.75 0 0 1 0-1.06z"/>
+                        </svg>
+                    </div>
+                    <div class="section-content">
+                        <h3>GitHub API</h3>
+                        <p class="section-desc">Authenticate for higher rate limits (60 &rarr; 5,000 req/hr).</p>
+                        <div class="input-group">
+                            <label for="github-token">Personal Access Token</label>
+                            <div class="input-wrapper">
+                                <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx">
+                                <a href="#" class="ext-link input-link" data-url="https://github.com/settings/tokens">Get token</a>
+                            </div>
+                            <p class="input-hint">No scopes needed for public repos.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cache Section -->
+                <div class="settings-section">
+                    <div class="section-icon">
+                        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zM2.5 7a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zM2.5 10.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11zM2.5 14a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1h-11z"/>
+                        </svg>
+                    </div>
+                    <div class="section-content">
+                        <h3>Cache</h3>
+                        <p class="section-desc">Downloaded builds are stored locally for instant re-launch.</p>
+                        <div class="cache-card">
+                            <div class="cache-stat">
+                                <span class="cache-value" id="cache-size">Calculating...</span>
+                            </div>
+                            <button id="btn-clear-cache" class="btn btn-danger btn-sm">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:4px;vertical-align:-2px">
+                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H5.5l.5-.5h4l.5.5h2.5a1 1 0 0 1 1 1v1z"/>
+                                </svg>
+                                Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button id="btn-check-update" class="btn btn-secondary">Check for Updates</button>
+                <button id="btn-save-settings" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PR List -->
+    <main id="pr-list">
+        <div id="pr-list-loading" class="loading">
+            <div class="spinner"></div>
+            <p class="loading-text">Fetching staging builds...</p>
+        </div>
+        <div id="pr-list-empty" class="empty-state hidden">
+            <div class="empty-icon">
+                <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M5 3.254V3.25v.005a.75.75 0 1 1 0-.005zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm-8.5 4.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z"/>
+                </svg>
+            </div>
+            <p class="empty-title">No staging builds available</p>
+            <p class="empty-desc">Staging builds are created automatically when a PR is opened.</p>
+        </div>
+        <div id="pr-list-error" class="error-state hidden">
+            <div class="error-icon">
+                <svg width="40" height="40" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                </svg>
+            </div>
+            <p id="error-message"></p>
+            <button id="btn-retry" class="btn btn-primary">Retry</button>
+        </div>
+        <div id="pr-list-items"></div>
+
+        <!-- Closed / Merged PRs (collapsible) -->
+        <div id="closed-section" class="closed-section hidden">
+            <button id="btn-toggle-closed" class="section-toggle">
+                <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z"/>
+                </svg>
+                <span id="closed-count">Closed</span>
+            </button>
+            <div id="closed-list-items" class="closed-list hidden"></div>
+        </div>
+    </main>
+
+    <!-- Status bar -->
+    <footer id="status-bar">
+        <div class="status-item">
+            <span class="status-dot"></span>
+            <span id="rate-limit"></span>
+        </div>
+        <div class="status-item">
+            <span class="status-dot dot-blue"></span>
+            <span id="cache-total"></span>
+        </div>
+        <div class="status-item" id="updater-status-item" style="display:none">
+            <span class="status-dot dot-amber"></span>
+            <span id="updater-status-text"></span>
+        </div>
+        <div class="status-item status-version">
+            <span id="app-version"></span>
+        </div>
+    </footer>
+
+    <script src="index.js"></script>
+</body>
+</html>
