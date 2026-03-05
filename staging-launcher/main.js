@@ -698,6 +698,16 @@ ipcMain.handle('save-settings', (_event, settings) => {
 
 // Per-PR URL overrides
 ipcMain.handle('save-pr-override', (_event, { prNumber, landingUrl, meetUrl }) => {
+    // Validate URLs server-side (the renderer's <input type="url"> catches most
+    // issues, but this prevents invalid strings from reaching config.js where
+    // new URL() would throw and crash the launched app).
+    if (landingUrl) {
+        new URL(landingUrl);
+    }
+    if (meetUrl) {
+        new URL(meetUrl);
+    }
+
     const settings = loadSettings();
 
     if (!settings.prOverrides) {
