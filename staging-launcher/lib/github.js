@@ -58,6 +58,9 @@ function githubApi(apiPath, token) {
  */
 async function fetchStagingPRs(token, { owner, repo, cacheDir }) {
     // 1. Get all pre-releases matching staging-pr-*
+    // NOTE: per_page=50 means only the 50 most recent results are returned
+    // per endpoint.  If the project ever exceeds this, implement Link-header
+    // pagination or bump the limit (max 100).
     const { data: releases, rateLimit } = await githubApi(
         `/repos/${owner}/${repo}/releases?per_page=50`,
         token
