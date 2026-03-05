@@ -222,8 +222,11 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
         // Launch the inner binary directly so env vars are forwarded.
         // `open -a` doesn't pass environment variables to the child process.
         const macOSDir = path.join(appPath, 'Contents', 'MacOS');
+        // Electron's main binary has no extension; helper executables and
+        // libraries (crash reporter, etc.) do.  Prefer the extensionless entry
+        // so we don't accidentally launch a helper if one is ever added.
         const binaries = fs.readdirSync(macOSDir);
-        const binary = binaries[0]; // There's typically one executable
+        const binary = binaries.find(b => !b.includes('.')) ?? binaries[0];
 
         if (!binary) {
             throw new Error('No executable found in .app/Contents/MacOS/');
