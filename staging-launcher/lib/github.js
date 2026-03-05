@@ -147,15 +147,18 @@ async function fetchStagingPRs(token, { owner, repo, cacheDir }) {
         const pr = prMap.get(prNum);
         const headSha = pr && pr.head ? pr.head.sha : null;
 
-        // Determine which assets are available for this platform
-        const platform = process.platform === 'darwin' ? 'mac' : 'win';
+        // Determine which assets are available for this platform.
+        // Linux staging builds are not currently produced — hasAsset will be
+        // false and the download button will be disabled in the UI.
         const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
         let assetName;
 
-        if (platform === 'mac') {
+        if (process.platform === 'darwin') {
             assetName = `sonacove-staging-mac-${arch}.zip`;
-        } else {
+        } else if (process.platform === 'win32') {
             assetName = 'sonacove-staging-win-x64.zip';
+        } else {
+            assetName = `sonacove-staging-linux-${arch}.zip`;
         }
 
         const asset = release.assets.find(a => a.name === assetName);
