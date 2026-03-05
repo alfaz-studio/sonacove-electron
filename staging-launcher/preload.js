@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Track per-channel listeners so we can swap them without the blunt
+// removeAllListeners (which would strip Electron-internal listeners).
+let downloadProgressHandler = null;
+let updaterStatusHandler = null;
+
 contextBridge.exposeInMainWorld('stagingAPI', {
     getStagingPRs: token => ipcRenderer.invoke('get-staging-prs', token),
     downloadBuild: opts => ipcRenderer.invoke('download-build', opts),
@@ -14,11 +19,17 @@ contextBridge.exposeInMainWorld('stagingAPI', {
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     onDownloadProgress: callback => {
-        ipcRenderer.removeAllListeners('download-progress');
-        ipcRenderer.on('download-progress', (_event, data) => callback(data));
+        if (downloadProgressHandler) {
+            ipcRenderer.removeListener('download-progress', downloadProgressHandler);
+        }
+        downloadProgressHandler = (_event, data) => callback(data);
+        ipcRenderer.on('download-progress', downloadProgressHandler);
     },
     onUpdaterStatus: callback => {
-        ipcRenderer.removeAllListeners('updater-status');
-        ipcRenderer.on('updater-status', (_event, data) => callback(data));
+        if (updaterStatusHandler) {
+            ipcRenderer.removeListener('updater-status', updaterStatusHandler);
+        }
+        updaterStatusHandler = (_event, data) => callback(data);
+        ipcRenderer.on('updater-status', updaterStatusHandler);
     }
 });
