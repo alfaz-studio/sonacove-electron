@@ -351,6 +351,8 @@ function copyDirReal(srcDir, destDir) {
     }
 }
 
+// ⚠ The URL strings and hostnames below must stay in sync with
+// app/features/sonacove/config.js (staging block).
 function patchMainJs(mainJsPath, overrides) {
     let mainJs = fs.readFileSync(mainJsPath, 'utf-8');
 
