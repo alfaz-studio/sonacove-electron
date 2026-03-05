@@ -399,16 +399,31 @@ function patchMainJs(mainJsPath, overrides) {
         }
     }
 
+    // Helper — apply a regex replacement and warn if it didn't match.
+    // Fragile patterns that depend on webpack/terser output should be
+    // surfaced when they silently no-op so failures are caught in testing.
+    function tryReplace(src, pattern, replacement, label) {
+        const result = src.replace(pattern, replacement);
+
+        if (result === src) {
+            console.warn(`[patcher] ${label} — pattern did not match:`, pattern.toString());
+        }
+
+        return result;
+    }
+
     // Shrink the staging banner from a full-width bottom bar to a small
     // bottom-right pill.  The compiled CSS contains literal \n (backslash-n)
     // for newlines, so we use \\n to match those, then \s* for indentation.
-    mainJs = mainJs.replace(
+    mainJs = tryReplace(mainJs,
         /bottom: 0; left: 0; right: 0;\\n\s*height: 28px;\\n\s*background: #d97706;/,
-        'bottom:8px;right:8px;padding:2px 8px;border-radius:4px;pointer-events:none;opacity:.8;background:rgba(217,119,6,0.7);'
+        'bottom:8px;right:8px;padding:2px 8px;border-radius:4px;pointer-events:none;opacity:.8;background:rgba(217,119,6,0.7);',
+        'banner layout'
     );
-    mainJs = mainJs.replace(
+    mainJs = tryReplace(mainJs,
         /font-size: 12px;\\n\s*font-weight: 600;\\n\s*z-index: 2147483647;/,
-        'font-size:10px;font-weight:600;z-index:2147483647;'
+        'font-size:10px;font-weight:600;z-index:2147483647;',
+        'banner font'
     );
 
     // Fix the will-navigate handler's URL construction bug present in builds
@@ -419,15 +434,17 @@ function patchMainJs(mainJsPath, overrides) {
     //
     // Compiled template-literal form:
     //   `${X.currentConfig.meetRoot}${Y.pathname}${Y.search}`
-    mainJs = mainJs.replace(
+    mainJs = tryReplace(mainJs,
         /\.currentConfig\.meetRoot\}\$\{(\w+)\.pathname\}\$\{(\w+)\.search\}/g,
-        '.currentConfig.meetRoot}${$1.pathname.replace(/^\\/meet/,"")}${$2.search}'
+        '.currentConfig.meetRoot}${$1.pathname.replace(/^\\/meet/,"")}${$2.search}',
+        'will-navigate template literal'
     );
     // Compiled string-concatenation form (terser may convert template literals):
     //   X.currentConfig.meetRoot+Y.pathname+Y.search
-    mainJs = mainJs.replace(
+    mainJs = tryReplace(mainJs,
         /\.currentConfig\.meetRoot\+(\w+)\.pathname\+(\w+)\.search/g,
-        '.currentConfig.meetRoot+$1.pathname.replace(/^\\/meet/,"")+$2.search'
+        '.currentConfig.meetRoot+$1.pathname.replace(/^\\/meet/,"")+$2.search',
+        'will-navigate concatenation'
     );
 
     fs.writeFileSync(mainJsPath, mainJs);
