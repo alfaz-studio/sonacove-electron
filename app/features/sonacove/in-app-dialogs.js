@@ -65,6 +65,8 @@ document.body.appendChild(t);
 var _tm=setTimeout(function(){_dism();},15000);
 function _dism(){
 clearTimeout(_tm);
+t.style.animation='none';
+void t.offsetHeight;
 t.style.transition='transform 0.3s ease,opacity 0.3s ease';
 t.style.transform='translateX(120%)';t.style.opacity='0';
 setTimeout(function(){t.remove();},300);
@@ -174,4 +176,131 @@ function showDeeplinkModal(webContents) {
     });
 }
 
-module.exports = { showUpdateToast, showLeaveModal, showDeeplinkModal };
+/**
+ * Shows a slide-in info toast with a title, message, and OK button.
+ * Used for simple informational messages (e.g. "No updates available").
+ *
+ * @param {Electron.WebContents} webContents - The target web contents.
+ * @param {Object} opts - Toast configuration.
+ * @param {string} opts.title - Toast heading text.
+ * @param {string} opts.message - Toast body text.
+ * @param {'info'|'error'} [opts.type='info'] - Toast type (affects icon).
+ */
+function showInfoToast(webContents, opts) {
+    const esc = str => String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const title = esc(opts.title);
+    const message = esc(opts.message);
+    const isError = opts.type === 'error';
+    const iconColor = isError ? '#e74c3c' : '#F4511E';
+    const iconBg = isError ? 'rgba(231,76,60,0.1)' : 'rgba(244,81,30,0.1)';
+    const iconSvg = isError
+        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+
+    const js = `(function(){
+var old=document.getElementById('sonacove-info-toast');if(old)old.remove();
+${injectStylesJS()}
+var t=document.createElement('div');
+t.id='sonacove-info-toast';
+t.style.cssText='position:fixed;top:48px;right:16px;z-index:999999;width:320px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:16px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#2d2d3a;box-shadow:0 4px 24px rgba(0,0,0,0.12);animation:snc-slide-in 0.35s ease forwards;overflow:hidden;';
+t.innerHTML=''
++'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
++'<div style="width:36px;height:36px;border-radius:8px;background:${iconBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
++'${iconSvg}'
++'</div>'
++'<div style="flex:1;min-width:0;">'
++'<div style="font-weight:600;font-size:14px;margin-bottom:2px;color:#2d2d3a;">${title}</div>'
++'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">${message}</div>'
++'</div></div>'
++'<div style="display:flex;gap:8px;justify-content:flex-end;">'
++'<button id="snc-info-ok" class="snc-btn" style="background:#F4511E;color:#fff;">OK</button>'
++'</div>';
+document.body.appendChild(t);
+function _dism(){
+t.style.animation='none';
+void t.offsetHeight;
+t.style.transition='transform 0.3s ease,opacity 0.3s ease';
+t.style.transform='translateX(120%)';t.style.opacity='0';
+setTimeout(function(){t.remove();},300);
+}
+document.getElementById('snc-info-ok').onclick=_dism;
+})();`;
+
+    try {
+        webContents.executeJavaScript(js);
+    } catch (err) {
+        console.warn('Failed to show info toast:', err.message);
+    }
+}
+
+/**
+ * Shows a slide-in About panel with app name, version, and system info.
+ *
+ * @param {Electron.WebContents} webContents - The target web contents.
+ * @param {Object} info - App information.
+ * @param {string} info.appName - Application name.
+ * @param {string} info.appVersion - Application version.
+ * @param {string} info.electronVersion - Electron version.
+ * @param {string} info.chromeVersion - Chrome version.
+ * @param {string} info.nodeVersion - Node.js version.
+ * @param {string} info.platform - Platform string (e.g. "win32 x64").
+ */
+function showAboutPanel(webContents, info) {
+    const esc = str => String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const appName = esc(info.appName);
+    const appVersion = esc(info.appVersion);
+    const electronVersion = esc(info.electronVersion);
+    const chromeVersion = esc(info.chromeVersion);
+    const nodeVersion = esc(info.nodeVersion);
+    const platform = esc(info.platform);
+
+    const js = `(function(){
+var old=document.getElementById('sonacove-about-panel');if(old)old.remove();
+${injectStylesJS()}
+var t=document.createElement('div');
+t.id='sonacove-about-panel';
+t.style.cssText='position:fixed;top:48px;right:16px;z-index:999999;width:320px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:24px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#2d2d3a;box-shadow:0 4px 24px rgba(0,0,0,0.12);animation:snc-slide-in 0.35s ease forwards;overflow:hidden;';
+t.innerHTML=''
++'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#F4511E,#ff8a65);"></div>'
++'<div style="text-align:center;margin-bottom:18px;padding-top:4px;">'
++'<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#F4511E,#ff7043);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(244,81,30,0.3);">'
++'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
++'</div>'
++'<div style="font-weight:700;font-size:17px;color:#2d2d3a;margin-bottom:3px;">${appName}</div>'
++'<div style="font-size:13px;color:#8a8a9a;">Version ${appVersion}</div>'
++'</div>'
++'<div style="background:#f8f8fa;border:1px solid #f0f0f2;border-radius:10px;padding:12px 14px;margin-bottom:18px;">'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>Electron</span><span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>Chrome</span><span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>Node.js</span><span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;"><span>Platform</span><span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
++'</div>'
++'<div style="display:flex;align-items:center;justify-content:space-between;">'
++'<span style="font-size:11px;color:#b0b0b8;">&copy; ' + new Date().getFullYear() + ' Alfaz Studio</span>'
++'<button id="snc-about-ok" class="snc-btn" style="background:#F4511E;color:#fff;">OK</button>'
++'</div>';
+document.body.appendChild(t);
+function _dism(){
+t.style.animation='none';
+void t.offsetHeight;
+t.style.transition='transform 0.3s ease,opacity 0.3s ease';
+t.style.transform='translateX(120%)';t.style.opacity='0';
+setTimeout(function(){t.remove();},300);
+}
+document.getElementById('snc-about-ok').onclick=_dism;
+})();`;
+
+    try {
+        webContents.executeJavaScript(js);
+    } catch (err) {
+        console.warn('Failed to show about panel:', err.message);
+    }
+}
+
+module.exports = {
+    showUpdateToast,
+    showLeaveModal,
+    showDeeplinkModal,
+    showInfoToast,
+    showAboutPanel
+};

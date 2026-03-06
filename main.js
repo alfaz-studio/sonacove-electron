@@ -13,7 +13,6 @@ const {
     app,
     ipcMain,
     desktopCapturer,
-    dialog,
     shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
@@ -27,7 +26,9 @@ const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
-const { showUpdateToast, showLeaveModal } = require('./app/features/sonacove/in-app-dialogs');
+const {
+    showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
+} = require('./app/features/sonacove/in-app-dialogs');
 const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/sonacove/paths');
 
 // Track the time the app process started for session duration calculation.
@@ -144,21 +145,19 @@ const appProtocolSurplus = `${config.default.appProtocolPrefix}://`;
 let pendingStartupDeepLink = null;
 
 /**
- * Shows a native About dialog with version and environment info.
+ * Shows an in-app About panel with version and environment info.
  */
 function showAboutDialog() {
-    dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: `About ${app.name}`,
-        message: app.name,
-        detail: [
-            `Version: ${app.getVersion()}`,
-            `Electron: ${process.versions.electron}`,
-            `Chrome: ${process.versions.chrome}`,
-            `Node: ${process.versions.node}`,
-            `Platform: ${process.platform} ${process.arch}`
-        ].join('\n'),
-        buttons: [ 'OK' ]
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+    showAboutPanel(mainWindow.webContents, {
+        appName: app.name,
+        appVersion: app.getVersion(),
+        electronVersion: process.versions.electron,
+        chromeVersion: process.versions.chrome,
+        nodeVersion: process.versions.node,
+        platform: `${process.platform} ${process.arch}`
     });
 }
 
@@ -166,12 +165,16 @@ function showAboutDialog() {
  * Triggers a manual update check and reports the result to the user.
  */
 function checkForUpdatesManually() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    const wc = mainWindow.webContents;
+
     if (isStaging) {
-        dialog.showMessageBox(mainWindow, {
-            type: 'info',
+        showInfoToast(wc, {
             title: 'Staging Build',
-            message: 'Staging builds do not receive auto-updates.',
-            buttons: [ 'OK' ]
+            message: 'Staging builds do not receive auto-updates.'
         });
 
         return;
@@ -180,11 +183,9 @@ function checkForUpdatesManually() {
     autoUpdater.checkForUpdates()
         .then(result => {
             if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
-                dialog.showMessageBox(mainWindow, {
-                    type: 'info',
+                showInfoToast(wc, {
                     title: 'No Updates Available',
-                    message: `You're on the latest version (${app.getVersion()}).`,
-                    buttons: [ 'OK' ]
+                    message: `You're on the latest version (${app.getVersion()}).`
                 });
             }
 
@@ -193,12 +194,10 @@ function checkForUpdatesManually() {
         })
         .catch(err => {
             console.error('Manual update check failed:', err);
-            dialog.showMessageBox(mainWindow, {
-                type: 'error',
+            showInfoToast(wc, {
                 title: 'Update Check Failed',
                 message: 'Could not check for updates. Please try again later.',
-                detail: err.message,
-                buttons: [ 'OK' ]
+                type: 'error'
             });
         });
 
@@ -301,63 +300,34 @@ function setApplicationMenu() {
 // gone. We inject a slim custom title bar into each loaded page so the user
 // still has About / Check for Updates without pressing Alt.
 
-const TITLEBAR_CSS = `
-#sonacove-titlebar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 32px;
-    background: #1a1a2e;
-    -webkit-app-region: drag;
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
-    z-index: 2147483647;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 12px;
-    color: #c0c0c0;
-    user-select: none;
-    box-sizing: border-box;
-}
-#sonacove-titlebar .stb-icon {
-    width: 20px;
-    height: 20px;
-    margin-right: 8px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}
-#sonacove-titlebar .stb-title {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-#sonacove-titlebar .stb-menu {
-    display: flex;
-    gap: 2px;
-    -webkit-app-region: no-drag;
-    margin-right: 140px; /* space for native window-controls overlay */
-}
-#sonacove-titlebar .stb-btn {
-    background: transparent;
-    border: none;
-    color: #a0a0a0;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: inherit;
-    line-height: 1;
-}
-#sonacove-titlebar .stb-btn:hover {
-    background: rgba(255,255,255,0.1);
-    color: #ffffff;
-}
-html { box-sizing: border-box !important; padding-top: 32px !important; }
-`.trim();
+const TITLEBAR_CSS = ''
+    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1a1a2e;'
+    + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
+    + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
+    + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
+    + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
+    + 'background-repeat:no-repeat;background-position:center;}'
+    + '#sonacove-titlebar .stb-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;margin-right:140px;}'
+    + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
+    + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
+    + 'transition:background 0.15s ease,color 0.15s ease;}'
+    + '#sonacove-titlebar .stb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}'
+    + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
+    + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
 
 const getTitlebarJS = (iconBase64 = '') => `
 (function() {
+    // Inject styles idempotently to prevent flash on re-navigation.
+    var sid = 'sonacove-titlebar-styles';
+    if (!document.getElementById(sid)) {
+        var s = document.createElement('style');
+        s.id = sid;
+        s.textContent = '${TITLEBAR_CSS}';
+        document.head.appendChild(s);
+    }
+
+    // Guard against duplicate injection.
     if (document.getElementById('sonacove-titlebar')) return;
 
     var bar = document.createElement('div');
@@ -370,9 +340,9 @@ const getTitlebarJS = (iconBase64 = '') => `
         iconHtml +
         '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
         '<div class="stb-menu">' +
-            '<button class="stb-btn" id="stb-about">About</button>' +
-            '<button class="stb-btn" id="stb-updates">Check for Updates</button>' +
-            '<button class="stb-btn" id="stb-help">Help</button>' +
+            '<button class="stb-btn" id="stb-about" title="View app version and system info">About</button>' +
+            '<button class="stb-btn" id="stb-updates" title="Check for new versions">Check for Updates</button>' +
+            '<button class="stb-btn" id="stb-help" title="Open Sonacove documentation">Help</button>' +
         '</div>';
     document.body.prepend(bar);
 
@@ -415,7 +385,6 @@ function injectWindowsTitleBar() {
         console.warn('Failed to load title bar icon:', e);
     }
 
-    mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
     mainWindow.webContents.executeJavaScript(getTitlebarJS(iconBase64)).catch(() => {});
 }
 
@@ -676,7 +645,7 @@ function createJitsiMeetWindow() {
         }
     });
 
-    setupSonacoveIPC(ipcMain, mainWindow, {
+    setupSonacoveIPC(ipcMain, {
         showAboutDialog,
         checkForUpdatesManually,
         capture
