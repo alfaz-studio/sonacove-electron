@@ -10,6 +10,93 @@
  * IPC responses use window.sonacoveElectronAPI.ipc.send() from the preload.
  */
 
+// ── Design Tokens ───────────────────────────────────────────────────────
+
+const ACCENT = '#F4511E';
+const ACCENT_HOVER = '#ff7043';
+const ACCENT_BG = 'rgba(244,81,30,0.1)';
+const ERROR_COLOR = '#e74c3c';
+const ERROR_BG = 'rgba(231,76,60,0.1)';
+
+const TOAST_CSS = 'position:fixed;top:48px;right:16px;z-index:999999;width:320px;'
+    + 'background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:16px;'
+    + 'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;'
+    + 'color:#2d2d3a;box-shadow:0 4px 24px rgba(0,0,0,0.12);'
+    + 'animation:snc-slide-in 0.35s ease forwards;overflow:hidden;';
+
+// ── SVG Icon Paths ──────────────────────────────────────────────────────
+
+const SVG_INFO = '<circle cx="12" cy="12" r="10"/>'
+    + '<line x1="12" y1="16" x2="12" y2="12"/>'
+    + '<line x1="12" y1="8" x2="12.01" y2="8"/>';
+
+const SVG_WARNING = '<circle cx="12" cy="12" r="10"/>'
+    + '<line x1="12" y1="8" x2="12" y2="12"/>'
+    + '<line x1="12" y1="16" x2="12.01" y2="16"/>';
+
+const SVG_DOWNLOAD = '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
+    + '<polyline points="7 10 12 15 17 10"/>'
+    + '<line x1="12" y1="15" x2="12" y2="3"/>';
+
+// ── Shared Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Escapes a string for safe embedding in single-quoted JS template literals.
+ *
+ * @param {string} str - The input string.
+ * @returns {string} The escaped string.
+ */
+function esc(str) {
+    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
+ * Builds an SVG icon string.
+ *
+ * @param {number} size - Width/height in px.
+ * @param {string} color - Stroke color.
+ * @param {string} paths - Inner SVG elements.
+ * @returns {string} Complete SVG markup.
+ */
+function svgIcon(size, color, paths) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" `
+        + `stroke="${color}" stroke-width="2" stroke-linecap="round" `
+        + `stroke-linejoin="round">${paths}</svg>`;
+}
+
+/**
+ * Returns JS code for a toast slide-out dismiss animation.
+ * Uses forced reflow (void offsetHeight) to ensure the transition fires
+ * after clearing the slide-in animation.
+ *
+ * @param {string} varName - The JS variable referencing the toast element.
+ * @returns {string} JS code block.
+ */
+function slideOutJS(varName) {
+    return `${varName}.style.animation='none';`
+        + `void ${varName}.offsetHeight;`
+        + `${varName}.style.transition='transform 0.3s ease,opacity 0.3s ease';`
+        + `${varName}.style.transform='translateX(120%)';${varName}.style.opacity='0';`
+        + `setTimeout(function(){${varName}.remove();},300);`;
+}
+
+/**
+ * Safely injects JavaScript into web contents with error handling.
+ *
+ * @param {Electron.WebContents} webContents - The target web contents.
+ * @param {string} js - The JavaScript code to execute.
+ * @param {string} label - A label for the warning message on failure.
+ */
+function safeInject(webContents, js, label) {
+    try {
+        webContents.executeJavaScript(js);
+    } catch (err) {
+        console.warn(`Failed to show ${label}:`, err.message);
+    }
+}
+
+// ── Shared CSS ──────────────────────────────────────────────────────────
+
 const SHARED_STYLES = ''
     + '@keyframes snc-slide-in{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}'
     + '@keyframes snc-progress{from{width:100%}to{width:0%}}'
@@ -32,6 +119,8 @@ function injectStylesJS() {
         + `document.head.appendChild(_s);}`;
 }
 
+// ── Toast: Update Ready ─────────────────────────────────────────────────
+
 /**
  * Shows a slide-in toast notification for a downloaded app update.
  *
@@ -39,18 +128,19 @@ function injectStylesJS() {
  * @param {string} version - The new version number.
  */
 function showUpdateToast(webContents, version) {
-    const v = String(version).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const v = esc(version);
+    const icon = svgIcon(18, ACCENT, SVG_DOWNLOAD);
 
     const js = `(function(){
 var old=document.getElementById('sonacove-update-toast');if(old)old.remove();
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-update-toast';
-t.style.cssText='position:fixed;top:48px;right:16px;z-index:999999;width:320px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:16px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#2d2d3a;box-shadow:0 4px 24px rgba(0,0,0,0.12);animation:snc-slide-in 0.35s ease forwards;overflow:hidden;';
+t.style.cssText='${TOAST_CSS}';
 t.innerHTML=''
 +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
-+'<div style="width:36px;height:36px;border-radius:8px;background:rgba(244,81,30,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
-+'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F4511E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
++'<div style="width:36px;height:36px;border-radius:8px;background:${ACCENT_BG};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
++'${icon}'
 +'</div>'
 +'<div style="flex:1;min-width:0;">'
 +'<div style="font-weight:600;font-size:14px;margin-bottom:2px;color:#2d2d3a;">Update Ready</div>'
@@ -58,18 +148,14 @@ t.innerHTML=''
 +'</div></div>'
 +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
 +'<button id="snc-toast-later" class="snc-btn" style="background:#fff;border:1px solid #e0e0e0;color:#5a5a6a;">Later</button>'
-+'<button id="snc-toast-install" class="snc-btn" style="background:#F4511E;color:#fff;">Install Now</button>'
++'<button id="snc-toast-install" class="snc-btn" style="background:${ACCENT};color:#fff;">Install Now</button>'
 +'</div>'
 +'<div style="position:absolute;bottom:0;left:0;height:3px;background:rgba(244,81,30,0.35);animation:snc-progress 15s linear forwards;border-radius:0 0 0 12px;"></div>';
 document.body.appendChild(t);
 var _tm=setTimeout(function(){_dism();},15000);
 function _dism(){
 clearTimeout(_tm);
-t.style.animation='none';
-void t.offsetHeight;
-t.style.transition='transform 0.3s ease,opacity 0.3s ease';
-t.style.transform='translateX(120%)';t.style.opacity='0';
-setTimeout(function(){t.remove();},300);
+${slideOutJS('t')}
 try{window.sonacoveElectronAPI.ipc.send('update-toast-action',{action:'dismiss'});}catch(e){}
 }
 document.getElementById('snc-toast-install').onclick=function(){
@@ -79,12 +165,10 @@ try{window.sonacoveElectronAPI.ipc.send('update-toast-action',{action:'install'}
 document.getElementById('snc-toast-later').onclick=_dism;
 })();`;
 
-    try {
-        webContents.executeJavaScript(js);
-    } catch (err) {
-        console.warn('Failed to show update toast:', err.message);
-    }
+    safeInject(webContents, js, 'update toast');
 }
+
+// ── Modal: Generic ──────────────────────────────────────────────────────
 
 /**
  * Shows a centered modal overlay.
@@ -100,13 +184,13 @@ document.getElementById('snc-toast-later').onclick=_dism;
  * @param {string} opts.ipcChannel - IPC channel for the response.
  */
 function _showModal(webContents, opts) {
-    const esc = str => String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    const { id, confirmColor } = opts;
+    const { id } = opts;
     const title = esc(opts.title);
     const message = esc(opts.message);
     const confirmLabel = esc(opts.confirmLabel);
     const cancelLabel = esc(opts.cancelLabel);
     const channel = esc(opts.ipcChannel);
+    const confirmColor = opts.confirmColor;
 
     const js = `(function(){
 var old=document.getElementById('${id}');if(old)old.remove();
@@ -135,11 +219,7 @@ function _onKey(e){if(e.key==='Escape'){document.removeEventListener('keydown',_
 document.addEventListener('keydown',_onKey);
 })();`;
 
-    try {
-        webContents.executeJavaScript(js);
-    } catch (err) {
-        console.warn(`Failed to show modal ${id}:`, err.message);
-    }
+    safeInject(webContents, js, `modal ${id}`);
 }
 
 /**
@@ -153,7 +233,7 @@ function showLeaveModal(webContents) {
         title: 'Leave Meeting?',
         message: 'You are currently in a meeting. Are you sure you want to leave?',
         confirmLabel: 'Leave',
-        confirmColor: '#e74c3c',
+        confirmColor: ERROR_COLOR,
         cancelLabel: 'Stay',
         ipcChannel: 'leave-modal-action'
     });
@@ -170,11 +250,13 @@ function showDeeplinkModal(webContents) {
         title: 'Meeting in Progress',
         message: 'You are already in a meeting. Do you want to leave and join a new one?',
         confirmLabel: 'Leave Meeting',
-        confirmColor: '#e74c3c',
+        confirmColor: ERROR_COLOR,
         cancelLabel: 'Stay',
         ipcChannel: 'deeplink-modal-action'
     });
 }
+
+// ── Toast: Info ─────────────────────────────────────────────────────────
 
 /**
  * Shows a slide-in info toast with a title, message, and OK button.
@@ -187,51 +269,42 @@ function showDeeplinkModal(webContents) {
  * @param {'info'|'error'} [opts.type='info'] - Toast type (affects icon).
  */
 function showInfoToast(webContents, opts) {
-    const esc = str => String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const title = esc(opts.title);
     const message = esc(opts.message);
     const isError = opts.type === 'error';
-    const iconColor = isError ? '#e74c3c' : '#F4511E';
-    const iconBg = isError ? 'rgba(231,76,60,0.1)' : 'rgba(244,81,30,0.1)';
-    const iconSvg = isError
-        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
-        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    const iconColor = isError ? ERROR_COLOR : ACCENT;
+    const iconBg = isError ? ERROR_BG : ACCENT_BG;
+    const icon = svgIcon(18, iconColor, isError ? SVG_WARNING : SVG_INFO);
 
     const js = `(function(){
 var old=document.getElementById('sonacove-info-toast');if(old)old.remove();
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-info-toast';
-t.style.cssText='position:fixed;top:48px;right:16px;z-index:999999;width:320px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:16px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#2d2d3a;box-shadow:0 4px 24px rgba(0,0,0,0.12);animation:snc-slide-in 0.35s ease forwards;overflow:hidden;';
+t.style.cssText='${TOAST_CSS}';
 t.innerHTML=''
 +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
 +'<div style="width:36px;height:36px;border-radius:8px;background:${iconBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
-+'${iconSvg}'
++'${icon}'
 +'</div>'
 +'<div style="flex:1;min-width:0;">'
 +'<div style="font-weight:600;font-size:14px;margin-bottom:2px;color:#2d2d3a;">${title}</div>'
 +'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">${message}</div>'
 +'</div></div>'
 +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-+'<button id="snc-info-ok" class="snc-btn" style="background:#F4511E;color:#fff;">OK</button>'
++'<button id="snc-info-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">OK</button>'
 +'</div>';
 document.body.appendChild(t);
 function _dism(){
-t.style.animation='none';
-void t.offsetHeight;
-t.style.transition='transform 0.3s ease,opacity 0.3s ease';
-t.style.transform='translateX(120%)';t.style.opacity='0';
-setTimeout(function(){t.remove();},300);
+${slideOutJS('t')}
 }
 document.getElementById('snc-info-ok').onclick=_dism;
 })();`;
 
-    try {
-        webContents.executeJavaScript(js);
-    } catch (err) {
-        console.warn('Failed to show info toast:', err.message);
-    }
+    safeInject(webContents, js, 'info toast');
 }
+
+// ── Toast: About Panel ──────────────────────────────────────────────────
 
 /**
  * Shows a slide-in About panel with app name, version, and system info.
@@ -246,25 +319,25 @@ document.getElementById('snc-info-ok').onclick=_dism;
  * @param {string} info.platform - Platform string (e.g. "win32 x64").
  */
 function showAboutPanel(webContents, info) {
-    const esc = str => String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const appName = esc(info.appName);
     const appVersion = esc(info.appVersion);
     const electronVersion = esc(info.electronVersion);
     const chromeVersion = esc(info.chromeVersion);
     const nodeVersion = esc(info.nodeVersion);
     const platform = esc(info.platform);
+    const icon = svgIcon(24, '#fff', SVG_INFO);
 
     const js = `(function(){
 var old=document.getElementById('sonacove-about-panel');if(old)old.remove();
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-about-panel';
-t.style.cssText='position:fixed;top:48px;right:16px;z-index:999999;width:320px;background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:24px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#2d2d3a;box-shadow:0 4px 24px rgba(0,0,0,0.12);animation:snc-slide-in 0.35s ease forwards;overflow:hidden;';
+t.style.cssText='${TOAST_CSS}padding:24px;';
 t.innerHTML=''
-+'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#F4511E,#ff8a65);"></div>'
++'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,${ACCENT},${ACCENT_HOVER});"></div>'
 +'<div style="text-align:center;margin-bottom:18px;padding-top:4px;">'
-+'<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#F4511E,#ff7043);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(244,81,30,0.3);">'
-+'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
++'<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,${ACCENT},${ACCENT_HOVER});margin:0 auto 12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(244,81,30,0.3);">'
++'${icon}'
 +'</div>'
 +'<div style="font-weight:700;font-size:17px;color:#2d2d3a;margin-bottom:3px;">${appName}</div>'
 +'<div style="font-size:13px;color:#8a8a9a;">Version ${appVersion}</div>'
@@ -277,25 +350,19 @@ t.innerHTML=''
 +'</div>'
 +'<div style="display:flex;align-items:center;justify-content:space-between;">'
 +'<span style="font-size:11px;color:#b0b0b8;">&copy; ' + new Date().getFullYear() + ' Alfaz Studio</span>'
-+'<button id="snc-about-ok" class="snc-btn" style="background:#F4511E;color:#fff;">OK</button>'
++'<button id="snc-about-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">OK</button>'
 +'</div>';
 document.body.appendChild(t);
 function _dism(){
-t.style.animation='none';
-void t.offsetHeight;
-t.style.transition='transform 0.3s ease,opacity 0.3s ease';
-t.style.transform='translateX(120%)';t.style.opacity='0';
-setTimeout(function(){t.remove();},300);
+${slideOutJS('t')}
 }
 document.getElementById('snc-about-ok').onclick=_dism;
 })();`;
 
-    try {
-        webContents.executeJavaScript(js);
-    } catch (err) {
-        console.warn('Failed to show about panel:', err.message);
-    }
+    safeInject(webContents, js, 'about panel');
 }
+
+// ── Exports ─────────────────────────────────────────────────────────────
 
 module.exports = {
     showUpdateToast,

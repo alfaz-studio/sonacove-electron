@@ -114,8 +114,6 @@ function navigateDeepLink(deepLink) {
         }
 
         return false;
-
-
     } catch (error) {
         console.error('Error parsing deep link:', error);
 

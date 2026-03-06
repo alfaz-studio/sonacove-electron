@@ -474,7 +474,6 @@ function createJitsiMeetWindow() {
         return { action: 'deny' };
     };
 
-
     if (!process.mas && !isStaging) {
         // Setup Logger
         autoUpdater.logger = require('electron-log');
@@ -497,7 +496,7 @@ function createJitsiMeetWindow() {
             });
         });
 
-        autoUpdater.on('update-not-available', info => {
+        autoUpdater.on('update-not-available', () => {
             console.log('❌ Update not available.');
         });
 
