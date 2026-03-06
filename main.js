@@ -27,6 +27,7 @@ const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/sonacove/paths');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -138,49 +139,6 @@ let webrtcInternalsWindow = null;
  */
 const appProtocolSurplus = `${config.default.appProtocolPrefix}://`;
 let pendingStartupDeepLink = null;
-
-/**
- * Resolves the absolute path to the application icon based on the current platform
- *
- * @param {string} [format] - Optional format override (e.g., 'png').
- * @returns {string} The absolute path to the icon file (.ico for Windows, .png for others).
- */
-const getIconPath = format => {
-    const ext = format || (process.platform === 'win32' ? 'ico' : 'png');
-    const name = `icon.${ext}`;
-
-    // 1. Try Development Root (Where you run npm start)
-    const devPath = path.join(process.cwd(), 'resources', name);
-
-    if (fs.existsSync(devPath)) {
-        return devPath;
-    }
-
-    // 2. Try Relative to main.js (Moving up from build folder)
-    const relativePath = path.resolve(__dirname, '..', 'resources', name);
-
-    if (fs.existsSync(relativePath)) {
-        return relativePath;
-    }
-
-    // 3. Try Production Path (Packaged app)
-    if (process.resourcesPath) {
-        const prodPath = path.join(process.resourcesPath, name);
-
-        if (fs.existsSync(prodPath)) {
-            return prodPath;
-        }
-    }
-
-    // 4. Ultimate Fallback: try app.getAppPath() but strip 'build' if present
-    let appPath = app.getAppPath();
-
-    if (appPath.endsWith('build')) {
-        appPath = path.resolve(appPath, '..');
-    }
-
-    return path.join(appPath, 'resources', name);
-};
 
 /**
  * Shows a native About dialog with version and environment info.
@@ -456,17 +414,6 @@ function injectWindowsTitleBar() {
 
     mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
     mainWindow.webContents.executeJavaScript(getTitlebarJS(iconBase64)).catch(() => {});
-}
-
-/**
- * Returns the path to the local splash screen HTML file.
- *
- * @returns {string} Absolute path to splash.html.
- */
-function getSplashPath() {
-    return isDev
-        ? path.join(process.cwd(), 'app', 'splash.html')
-        : path.join(app.getAppPath(), 'build', 'splash.html');
 }
 
 /**
@@ -892,6 +839,29 @@ function createJitsiMeetWindow() {
         });
     }
 
+    // Show a branded error page instead of Chromium's default when the
+    // remote URL fails to load (offline, DNS failure, server down, etc.).
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        // Only handle main-frame failures; ignore sub-frames and aborted loads
+        // (ERR_ABORTED fires when navigation is cancelled by a new one).
+        if (!isMainFrame || errorCode === -3) {
+            return;
+        }
+
+        console.warn(`Page load failed: ${errorDescription} (${errorCode}) — ${validatedURL}`);
+
+        mainWindow.loadFile(getErrorPath(), {
+            query: `code=${encodeURIComponent(errorCode)}&desc=${encodeURIComponent(errorDescription)}`
+        });
+    });
+
+    // Allow the error page to trigger a reload of the remote dashboard.
+    ipcMain.on('retry-load', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+        }
+    });
+
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
@@ -899,6 +869,7 @@ function createJitsiMeetWindow() {
         // Close the annotation overlay if it is open
         closeOverlay();
 
+        ipcMain.removeAllListeners('retry-load');
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {

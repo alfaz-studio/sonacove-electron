@@ -27,7 +27,8 @@ const whitelistedIpcChannels = [
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',
-    'posthog-capture'
+    'posthog-capture',
+    'retry-load'
 ];
 
 ipcRenderer.setMaxListeners(20);
