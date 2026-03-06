@@ -15,7 +15,8 @@ module.exports = {
     plugins: [
         new CopyPlugin({
             patterns: [
-                { from: 'app/splash.html', to: 'splash.html' }
+                { from: 'app/splash.html', to: 'splash.html' },
+                { from: 'app/error.html', to: 'error.html' }
             ]
         })
     ],
