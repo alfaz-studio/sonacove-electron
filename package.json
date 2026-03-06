@@ -126,6 +126,7 @@
     "babel-eslint": "10.0.3",
     "babel-loader": "^8.2.3",
     "concurrently": "5.1.0",
+    "copy-webpack-plugin": "^14.0.0",
     "css-loader": "^6.7.1",
     "electron": "40.3.0",
     "electron-builder": "26.0.12",

@@ -459,6 +459,17 @@ function injectWindowsTitleBar() {
 }
 
 /**
+ * Returns the path to the local splash screen HTML file.
+ *
+ * @returns {string} Absolute path to splash.html.
+ */
+function getSplashPath() {
+    return isDev
+        ? path.join(process.cwd(), 'app', 'splash.html')
+        : path.join(app.getAppPath(), 'build', 'splash.html');
+}
+
+/**
  * Opens new window with index.html(Jitsi Meet is loaded in iframe there).
  */
 function createJitsiMeetWindow() {
@@ -489,6 +500,7 @@ function createJitsiMeetWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false,
+        backgroundColor: '#1a1a2e',
 
         // On Windows, hide the native menu bar row and show native window
         // controls as an overlay. A custom in-page title bar is injected via
@@ -715,7 +727,10 @@ function createJitsiMeetWindow() {
     });
 
     windowState.manage(mainWindow);
-    mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+
+    // Show a branded splash screen first, then navigate to the remote URL.
+    // The backgroundColor matches the splash so the transition feels seamless.
+    mainWindow.loadFile(getSplashPath());
 
     if (isDev) {
         mainWindow.webContents.session.clearCache();
@@ -888,6 +903,9 @@ function createJitsiMeetWindow() {
     });
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
+
+        // Splash is now visible — load the remote dashboard.
+        mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
 
         // Try pending startup deeplink if we have one
         if (pendingStartupDeepLink) {
