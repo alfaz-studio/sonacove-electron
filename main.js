@@ -27,6 +27,7 @@ const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+const { showUpdateToast, showLeaveModal } = require('./app/features/sonacove/in-app-dialogs');
 const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/sonacove/paths');
 
 // Track the time the app process started for session duration calculation.
@@ -48,7 +49,9 @@ const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink,
-    processDeepLinkOnStartup
+    processDeepLinkOnStartup,
+    completePendingDeepLink,
+    cancelPendingDeepLink
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
@@ -529,22 +532,24 @@ function createJitsiMeetWindow() {
             console.log('❌ Update not available.');
         });
 
+        let pendingUpdateVersion = null;
+
         autoUpdater.on('update-downloaded', info => {
             capture('update_downloaded', { new_version: info.version });
+            pendingUpdateVersion = info.version;
 
-            dialog.showMessageBox(mainWindow, {
-                type: 'info',
-                title: 'Update Ready',
-                message: `Version ${info.version} has been downloaded. Quit and install now?`,
-                buttons: [ 'Yes', 'Later' ]
-            }).then(result => {
-                if (result.response === 0) {
-                    capture('update_install_clicked', { new_version: info.version });
-                    autoUpdater.quitAndInstall(false, true);
-                } else {
-                    capture('update_deferred', { new_version: info.version });
-                }
-            });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                showUpdateToast(mainWindow.webContents, info.version);
+            }
+        });
+
+        ipcMain.on('update-toast-action', (event, data) => {
+            if (data && data.action === 'install') {
+                capture('update_install_clicked', { new_version: pendingUpdateVersion });
+                autoUpdater.quitAndInstall(false, true);
+            } else {
+                capture('update_deferred', { new_version: pendingUpdateVersion });
+            }
         });
 
         autoUpdater.on('error', err => {
@@ -570,21 +575,25 @@ function createJitsiMeetWindow() {
         }
     }
 
-    // Prevent Close during Meeting
-    mainWindow.webContents.on('will-prevent-unload', event => {
-        const choice = dialog.showMessageBoxSync(mainWindow, {
-            type: 'question',
-            buttons: [ 'Leave', 'Stay' ],
-            title: 'Leave Meeting?',
-            message: 'You are currently in a meeting. Are you sure you want to quit?',
-            defaultId: 0,
-            cancelId: 1
-        });
+    // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
+    // Not calling event.preventDefault() keeps the page open (prevents unload).
+    // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
+    mainWindow.webContents.on('will-prevent-unload', () => {
+        showLeaveModal(mainWindow.webContents);
+    });
 
-        const leave = choice === 0;
+    ipcMain.on('leave-modal-action', (event, data) => {
+        if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.destroy();
+        }
+    });
 
-        if (leave) {
-            event.preventDefault();
+    // Handle deep link modal responses.
+    ipcMain.on('deeplink-modal-action', (event, data) => {
+        if (data && data.action === 'confirm') {
+            completePendingDeepLink();
+        } else {
+            cancelPendingDeepLink();
         }
     });
 
@@ -870,6 +879,9 @@ function createJitsiMeetWindow() {
         closeOverlay();
 
         ipcMain.removeAllListeners('retry-load');
+        ipcMain.removeAllListeners('update-toast-action');
+        ipcMain.removeAllListeners('leave-modal-action');
+        ipcMain.removeAllListeners('deeplink-modal-action');
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {
