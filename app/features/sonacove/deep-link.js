@@ -1,10 +1,12 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
 const sonacoveConfig = require('./config');
+const { showDeeplinkModal } = require('./in-app-dialogs');
 const { closeOverlay } = require('./overlay-window');
 
 let pendingStartupDeepLink = null;
+let pendingDeepLinkUrl = null;
 
 /**
  * Finds the main visible application window to receive deep link events.
@@ -95,20 +97,10 @@ function navigateDeepLink(deepLink) {
                 const currentUrl = new URL(win.webContents.getURL());
 
                 if (currentUrl.pathname.startsWith('/meet')) {
-                    const choice = dialog.showMessageBoxSync(win, {
-                        type: 'question',
-                        buttons: [ 'Leave Meeting', 'Stay' ],
-                        title: 'Meeting in Progress',
-                        message: 'You are already in a meeting. Do you want to leave and join a new one?',
-                        defaultId: 1,
-                        cancelId: 1
-                    });
+                    pendingDeepLinkUrl = targetUrl;
+                    showDeeplinkModal(win.webContents);
 
-                    if (choice !== 0) {
-                        return false;
-                    }
-
-                    closeOverlay(false, 'deep-link-navigation');
+                    return false; // navigation pending user decision
                 }
             } catch (e) { /* ignore URL parse errors */ }
 
@@ -131,8 +123,43 @@ function navigateDeepLink(deepLink) {
     }
 }
 
+/**
+ * Completes a pending deep link navigation after user confirms leaving a meeting.
+ *
+ * @returns {boolean} Whether navigation was performed.
+ */
+function completePendingDeepLink() {
+    const win = getMainWindow();
+
+    if (pendingDeepLinkUrl && win) {
+        const url = pendingDeepLinkUrl;
+
+        pendingDeepLinkUrl = null;
+        closeOverlay(false, 'deep-link-navigation');
+        win.loadURL(url);
+        if (win.isMinimized()) {
+            win.restore();
+        }
+        win.focus();
+
+        return true;
+    }
+    pendingDeepLinkUrl = null;
+
+    return false;
+}
+
+/**
+ * Cancels a pending deep link navigation.
+ */
+function cancelPendingDeepLink() {
+    pendingDeepLinkUrl = null;
+}
+
 module.exports = {
     registerProtocol,
     processDeepLinkOnStartup,
-    navigateDeepLink
+    navigateDeepLink,
+    completePendingDeepLink,
+    cancelPendingDeepLink
 };
