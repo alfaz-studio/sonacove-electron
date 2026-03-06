@@ -50,7 +50,7 @@ const {
     processDeepLinkOnStartup
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
-const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
+const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
@@ -392,7 +392,7 @@ const TITLEBAR_CSS = `
     background: rgba(255,255,255,0.1);
     color: #ffffff;
 }
-html { box-sizing: border-box !important; padding-top: 32px !important; }
+body { margin-top: 32px !important; }
 `.trim();
 
 const getTitlebarJS = (iconBase64 = '') => `
