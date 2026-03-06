@@ -2,11 +2,8 @@ const path = require('path');
 
 module.exports = {
     target: 'electron-main',
-    entry: {
-        main: './main.js',
-        preload: './app/preload/preload.js',
-        'overlay-preload': './app/preload/overlay-preload.js'
-    },
+    entry: { main: './main.js',
+        preload: './app/preload/preload.js' },
     output: {
         path: path.resolve('./build'),
         filename: '[name].js'

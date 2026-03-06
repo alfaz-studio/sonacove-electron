@@ -20,17 +20,15 @@ const whitelistedIpcChannels = [
     'annotation-status',
     'toggle-click-through-request',
     'cleanup-whiteboards-for-viewers',
-    'notify-overlay-closed',
     'open-external',
     'pip-visibility-change',
     'pip-exited',
     'show-about-dialog',
     'check-for-updates',
-    'open-help-docs',
-    'posthog-capture'
+    'open-help-docs'
 ];
 
-ipcRenderer.setMaxListeners(20);
+ipcRenderer.setMaxListeners(0);
 
 /**
  * Open an external URL.
@@ -133,11 +131,8 @@ window.sonacoveElectronAPI = {
                 const sourceId = window._lastScreenshareSourceId;
                 const isWindow = sourceId ? sourceId.startsWith('window:') : false;
 
+                console.log(`DEBUG: PRELOAD: Augmenting toggle-annotation. SourceId: ${sourceId}, isWindowSharing: ${isWindow}`);
                 args[0].isWindowSharing = isWindow;
-            }
-
-            if (channel === 'screenshare-stop') {
-                window._lastScreenshareSourceId = null;
             }
 
             ipcRenderer.send(channel, ...args);
@@ -156,8 +151,11 @@ window.JitsiMeetElectron = {
      * @param {Object} options.thumbnailSize - Thumbnail dimensions.
      */
     obtainDesktopStreams: (callback, errorCallback, options = {}) => {
+        console.log('🖥️ Renderer: Requesting desktop sources...', options);
+
         ipcRenderer.invoke('jitsi-screen-sharing-get-sources', options)
             .then(sources => {
+                console.log(`✅ Renderer: Received ${sources.length} sources`);
                 callback(sources);
             })
             .catch(error => {
@@ -182,6 +180,7 @@ window.addEventListener('DOMContentLoaded', () => {
     window.APP.API.requestDesktopSources = options => new Promise((resolve, reject) => {
         window.JitsiMeetElectron.obtainDesktopStreams(
                 sources => {
+                    console.log('✅ APP.API: Desktop sources obtained:', sources.length);
                     resolve({ sources });
                 },
                 error => {
@@ -192,4 +191,5 @@ window.addEventListener('DOMContentLoaded', () => {
         );
     });
 
+    console.log('✅ APP.API.requestDesktopSources registered');
 });
