@@ -436,9 +436,7 @@ function createJitsiMeetWindow() {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
             nodeIntegration: false,
-            preload: isDev
-                ? path.resolve(basePath, 'build', 'preload.js')
-                : path.resolve(basePath, 'build', 'preload.js'),
+            preload: path.resolve(basePath, 'build', 'preload.js'),
             sandbox: false,
             webSecurity: false
         }

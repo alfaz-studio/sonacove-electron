@@ -87,7 +87,7 @@ jobs:
           APP=$(ls -d /Volumes/StagingLauncher/*.app | head -1)
           echo "App: $APP"
           codesign --verify --deep --strict "$APP"
-          spctl --assess --type execute --verbose "$APP" || true
+          spctl --assess --type execute --verbose "$APP"
           hdiutil detach -quiet /Volumes/StagingLauncher
 
       - name: List build output
