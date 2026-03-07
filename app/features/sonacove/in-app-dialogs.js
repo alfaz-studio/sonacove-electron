@@ -88,11 +88,8 @@ function slideOutJS(varName) {
  * @param {string} label - A label for the warning message on failure.
  */
 function safeInject(webContents, js, label) {
-    try {
-        webContents.executeJavaScript(js);
-    } catch (err) {
-        console.warn(`Failed to show ${label}:`, err.message);
-    }
+    webContents.executeJavaScript(js)
+        .catch(err => console.warn(`Failed to show ${label}:`, err.message));
 }
 
 // ── Shared CSS ──────────────────────────────────────────────────────────

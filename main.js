@@ -780,9 +780,17 @@ function createJitsiMeetWindow() {
     }
 
     // Inject the custom in-page title bar on Windows after each page load.
-    if (process.platform !== 'darwin') {
-        mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
-    }
+if (process.platform !== 'darwin') {
+    mainWindow.webContents.on('did-finish-load', () => {
+        injectWindowsTitleBar();
+        
+        // TEMP: test update toast
+        setTimeout(() => {
+            const { showUpdateToast } = require('./app/features/sonacove/in-app-dialogs');
+            showUpdateToast(mainWindow.webContents, '9.9.9');
+        }, 3000);
+    });
+}
 
     // Inject a visible staging banner so testers know they're on a PR build.
     if (isStaging) {
