@@ -16,7 +16,9 @@ let navigatingDeepLink = false;
 function getMainWindow() {
     const windows = BrowserWindow.getAllWindows();
 
-    return windows.find(w => !w.isDestroyed() && w.isVisible());
+    // Filter out small windows (PiP, overlays) that could otherwise match.
+    return windows.find(w =>
+        !w.isDestroyed() && w.isVisible() && w.getBounds().width >= 600);
 }
 
 /**

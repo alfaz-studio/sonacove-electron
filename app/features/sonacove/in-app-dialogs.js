@@ -140,7 +140,7 @@ var old=document.getElementById('sonacove-update-toast');if(old)old.remove();
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-update-toast';
-t.style.cssText='${TOAST_CSS}';
+t.style.cssText=${JSON.stringify(TOAST_CSS)};
 t.innerHTML=''
 +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
 +'<div style="width:36px;height:36px;border-radius:8px;background:${ACCENT_BG};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
@@ -285,7 +285,7 @@ var old=document.getElementById('sonacove-info-toast');if(old)old.remove();
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-info-toast';
-t.style.cssText='${TOAST_CSS}';
+t.style.cssText=${JSON.stringify(TOAST_CSS)};
 t.innerHTML=''
 +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
 +'<div style="width:36px;height:36px;border-radius:8px;background:${iconBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
@@ -336,7 +336,7 @@ var old=document.getElementById('sonacove-about-panel');if(old)old.remove();
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-about-panel';
-t.style.cssText='${TOAST_CSS}padding:24px;';
+t.style.cssText=${JSON.stringify(TOAST_CSS + 'padding:24px;')};
 t.innerHTML=''
 +'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,${ACCENT},${ACCENT_HOVER});"></div>'
 +'<div style="text-align:center;margin-bottom:18px;padding-top:4px;">'
