@@ -105,9 +105,6 @@ if (!app.commandLine.hasSwitch('enable-features')) {
     app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
 }
 
-autoUpdater.logger = require('electron-log');
-autoUpdater.logger.transports.file.level = 'info';
-
 // Enable context menu so things like copy and paste work in input fields.
 contextMenu({
     showLookUpSelection: false,
@@ -322,7 +319,7 @@ const getTitlebarJS = (iconBase64 = '') => `
     if (!document.getElementById(sid)) {
         var s = document.createElement('style');
         s.id = sid;
-        s.textContent = '${TITLEBAR_CSS}';
+        s.textContent = ${JSON.stringify(TITLEBAR_CSS)};
         document.head.appendChild(s);
     }
 
