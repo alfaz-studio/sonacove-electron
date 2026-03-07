@@ -845,7 +845,7 @@ function createJitsiMeetWindow() {
         console.warn(`Page load failed: ${errorDescription} (${errorCode}) — ${validatedURL}`);
 
         mainWindow.loadFile(getErrorPath(), {
-            query: `code=${encodeURIComponent(errorCode)}&desc=${encodeURIComponent(errorDescription)}`
+            query: { code: String(errorCode), desc: errorDescription }
         });
     });
 
@@ -871,6 +871,7 @@ function createJitsiMeetWindow() {
         ipcMain.removeAllListeners('update-toast-action');
         ipcMain.removeAllListeners('leave-modal-action');
         ipcMain.removeAllListeners('deeplink-modal-action');
+        ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {

@@ -87,7 +87,7 @@ function navigateDeepLink(deepLink) {
             try {
                 const currentUrl = new URL(win.webContents.getURL());
 
-                if (currentUrl.pathname.startsWith('/meet')) {
+                if (currentUrl.pathname === '/meet' || currentUrl.pathname.startsWith('/meet/')) {
                     pendingDeepLinkUrl = targetUrl;
                     showDeeplinkModal(win.webContents);
 
