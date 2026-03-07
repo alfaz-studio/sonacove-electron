@@ -41,13 +41,20 @@ const SVG_DOWNLOAD = '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
 // ── Shared Helpers ──────────────────────────────────────────────────────
 
 /**
- * Escapes a string for safe embedding in single-quoted JS template literals.
+ * Escapes a string for safe embedding in innerHTML within JS template literals.
+ * Handles both HTML entities and JS string delimiters.
  *
  * @param {string} str - The input string.
  * @returns {string} The escaped string.
  */
 function esc(str) {
-    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'");
 }
 
 /**
