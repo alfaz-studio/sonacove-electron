@@ -553,6 +553,7 @@ function createJitsiMeetWindow() {
     });
 
     ipcMain.on('leave-modal-action', (event, data) => {
+        if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.destroy();
         }
@@ -560,6 +561,7 @@ function createJitsiMeetWindow() {
 
     // Handle deep link modal responses.
     ipcMain.on('deeplink-modal-action', (event, data) => {
+        if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm') {
             completePendingDeepLink();
         } else {
@@ -570,6 +572,7 @@ function createJitsiMeetWindow() {
     // Handle update toast responses (placed here with other IPC handlers
     // rather than inside the updater block for consistent cleanup).
     ipcMain.on('update-toast-action', (event, data) => {
+        if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'install') {
             capture('update_install_clicked', { new_version: pendingUpdateVersion });
             autoUpdater.quitAndInstall(false, true);
@@ -859,7 +862,8 @@ function createJitsiMeetWindow() {
     });
 
     // Allow the error page to trigger a reload of the remote dashboard.
-    ipcMain.on('retry-load', () => {
+    ipcMain.on('retry-load', (event) => {
+        if (event.sender !== mainWindow?.webContents) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
         }
