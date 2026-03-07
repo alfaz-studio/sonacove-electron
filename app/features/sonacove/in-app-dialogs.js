@@ -119,7 +119,7 @@ function injectStylesJS() {
     return `var _sid='sonacove-dialog-styles';`
         + `if(!document.getElementById(_sid)){`
         + `var _s=document.createElement('style');_s.id=_sid;`
-        + `_s.textContent='${SHARED_STYLES}';`
+        + `_s.textContent=${JSON.stringify(SHARED_STYLES)};`
         + `document.head.appendChild(_s);}`;
 }
 

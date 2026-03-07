@@ -803,7 +803,7 @@ function createJitsiMeetWindow() {
                     if (document.getElementById('sonacove-staging-banner')) return;
                     var banner = document.createElement('div');
                     banner.id = 'sonacove-staging-banner';
-                    banner.textContent = 'STAGING BUILD — ${app.getVersion()}';
+                    banner.textContent = 'STAGING BUILD \u2014 ' + ${JSON.stringify(app.getVersion())};
                     document.body.appendChild(banner);
                 })();
             `).catch(() => {});
@@ -840,6 +840,10 @@ function createJitsiMeetWindow() {
         // Close the annotation overlay if it is open
         closeOverlay();
 
+        // Safe to use removeAllListeners here because each channel has exactly
+        // one listener registered during this window's lifecycle. If additional
+        // listeners are ever added elsewhere, switch to storing handler refs and
+        // calling ipcMain.removeListener() instead.
         ipcMain.removeAllListeners('retry-load');
         ipcMain.removeAllListeners('update-toast-action');
         ipcMain.removeAllListeners('leave-modal-action');
