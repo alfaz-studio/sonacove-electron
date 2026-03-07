@@ -192,13 +192,13 @@ document.getElementById('snc-toast-later').onclick=_dism;
  * @param {string} opts.ipcChannel - IPC channel for the response.
  */
 function _showModal(webContents, opts) {
-    const { id } = opts;
+    const id = esc(opts.id);
     const title = esc(opts.title);
     const message = esc(opts.message);
     const confirmLabel = esc(opts.confirmLabel);
     const cancelLabel = esc(opts.cancelLabel);
     const channel = esc(opts.ipcChannel);
-    const confirmColor = opts.confirmColor;
+    const confirmColor = esc(opts.confirmColor);
 
     const js = `(function(){
 var old=document.getElementById('${id}');if(old)old.remove();

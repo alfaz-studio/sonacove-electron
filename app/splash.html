@@ -20,10 +20,7 @@
     align-items: center;
     justify-content: center;
     height: 100%;
-    opacity: 1;
-    transition: opacity 0.3s ease-out;
   }
-  .container.fade-out { opacity: 0; }
   .icon {
     width: 96px; height: 96px;
     margin-bottom: 24px;
@@ -52,6 +49,8 @@
 </head>
 <body>
 <div class="container" id="root">
+  <!-- Icon path assumes resources/ is inside the ASAR (default electron-builder behavior).
+       If asar.unpack ever moves resources/ outside, this will silently fail (onerror hides it). -->
   <div class="icon"><img src="../resources/icon.png" alt="Sonacove" onerror="this.style.display='none'"></div>
   <div class="spinner"></div>
 </div>

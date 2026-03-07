@@ -78,6 +78,8 @@
 </head>
 <body>
 <div class="container">
+  <!-- Icon path assumes resources/ is inside the ASAR (default electron-builder behavior).
+       If asar.unpack ever moves resources/ outside, this will silently fail (onerror hides it). -->
   <div class="icon"><img src="../resources/icon.png" alt="Sonacove" onerror="this.style.display='none'"></div>
   <h1 id="heading">Unable to connect</h1>
   <p class="subtitle" id="subtitle">Something went wrong while loading Sonacove. Please try again.</p>

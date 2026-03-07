@@ -474,6 +474,8 @@ function createJitsiMeetWindow() {
         return { action: 'deny' };
     };
 
+    let pendingUpdateVersion = null;
+
     if (!process.mas && !isStaging) {
         // Setup Logger
         autoUpdater.logger = require('electron-log');
@@ -500,23 +502,12 @@ function createJitsiMeetWindow() {
             console.log('❌ Update not available.');
         });
 
-        let pendingUpdateVersion = null;
-
         autoUpdater.on('update-downloaded', info => {
             capture('update_downloaded', { new_version: info.version });
             pendingUpdateVersion = info.version;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
                 showUpdateToast(mainWindow.webContents, info.version);
-            }
-        });
-
-        ipcMain.on('update-toast-action', (event, data) => {
-            if (data && data.action === 'install') {
-                capture('update_install_clicked', { new_version: pendingUpdateVersion });
-                autoUpdater.quitAndInstall(false, true);
-            } else {
-                capture('update_deferred', { new_version: pendingUpdateVersion });
             }
         });
 
@@ -570,6 +561,17 @@ function createJitsiMeetWindow() {
             completePendingDeepLink();
         } else {
             cancelPendingDeepLink();
+        }
+    });
+
+    // Handle update toast responses (placed here with other IPC handlers
+    // rather than inside the updater block for consistent cleanup).
+    ipcMain.on('update-toast-action', (event, data) => {
+        if (data && data.action === 'install') {
+            capture('update_install_clicked', { new_version: pendingUpdateVersion });
+            autoUpdater.quitAndInstall(false, true);
+        } else {
+            capture('update_deferred', { new_version: pendingUpdateVersion });
         }
     });
 
