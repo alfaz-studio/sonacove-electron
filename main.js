@@ -177,6 +177,11 @@ function checkForUpdatesManually() {
         return;
     }
 
+    showInfoToast(wc, {
+        title: 'Checking for Updates\u2026',
+        message: 'Looking for a newer version.'
+    });
+
     autoUpdater.checkForUpdates()
         .then(result => {
             if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
@@ -784,7 +789,14 @@ function createJitsiMeetWindow() {
 
     // Inject the custom in-page title bar on Windows after each page load.
     if (process.platform !== 'darwin') {
-        mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
+        mainWindow.webContents.on('did-finish-load', () => {
+            // Skip local pages (splash, error) — title bar is only for the remote dashboard.
+            const url = mainWindow.webContents.getURL();
+
+            if (!url.startsWith('file://')) {
+                injectWindowsTitleBar();
+            }
+        });
     }
 
     // Inject a visible staging banner so testers know they're on a PR build.

@@ -42,7 +42,11 @@ const SVG_DOWNLOAD = '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
 
 /**
  * Escapes a string for safe embedding in innerHTML within JS template literals.
- * Handles both HTML entities and JS string delimiters.
+ *
+ * HTML entities (&, <, >, ") are escaped first because values end up
+ * in innerHTML.  The \\ and \' escapes are required because the escaped
+ * value is placed inside '…'-delimited string literals in the
+ * generated JS — do not remove them.
  *
  * @param {string} str - The input string.
  * @returns {string} The escaped string.
@@ -212,6 +216,7 @@ m.innerHTML=''
 +'</div></div>';
 document.body.appendChild(m);
 function _cl(a){
+document.removeEventListener('keydown',_onKey);
 m.style.transition='opacity 0.2s ease';m.style.opacity='0';
 setTimeout(function(){m.remove();},200);
 try{window.sonacoveElectronAPI.ipc.send('${channel}',{action:a});}catch(e){}
@@ -219,7 +224,7 @@ try{window.sonacoveElectronAPI.ipc.send('${channel}',{action:a});}catch(e){}
 document.getElementById('${id}-confirm').onclick=function(){_cl('confirm');};
 document.getElementById('${id}-cancel').onclick=function(){_cl('cancel');};
 m.onclick=function(e){if(e.target===m)_cl('cancel');};
-function _onKey(e){if(e.key==='Escape'){document.removeEventListener('keydown',_onKey);_cl('cancel');}}
+function _onKey(e){if(e.key==='Escape'){_cl('cancel');}}
 document.addEventListener('keydown',_onKey);
 })();`;
 

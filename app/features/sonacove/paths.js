@@ -9,6 +9,11 @@ const isDev = require('electron-is-dev');
  * Returns the project root, stripping the trailing 'build' directory
  * from app.getAppPath() if present (production builds).
  *
+ * Note: In standard ASAR builds, app.getAppPath() returns the .asar
+ * path (e.g. .../app.asar), so the endsWith('build') check is a no-op.
+ * getPagePath() handles this correctly by appending 'build/filename'
+ * to the ASAR path. The guard exists for non-ASAR packaging configs.
+ *
  * @returns {string} Absolute path to the project root.
  */
 function getProjectRoot() {
