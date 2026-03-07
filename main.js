@@ -372,22 +372,25 @@ const getTitlebarJS = (iconBase64 = '') => `
 /**
  * Injects the custom title bar into the currently loaded page (Windows only).
  */
+// Cache the icon base64 at startup rather than re-reading from disk on every navigation.
+let _cachedIconBase64 = null;
+function getIconBase64() {
+    if (_cachedIconBase64 !== null) return _cachedIconBase64;
+    try {
+        const iconPath = getIconPath('png');
+        _cachedIconBase64 = fs.existsSync(iconPath) ? fs.readFileSync(iconPath).toString('base64') : '';
+    } catch (e) {
+        _cachedIconBase64 = '';
+    }
+    return _cachedIconBase64;
+}
+
 function injectWindowsTitleBar() {
     if (!mainWindow || mainWindow.isDestroyed()) {
         return;
     }
 
-    let iconBase64 = '';
-    try {
-        const iconPath = getIconPath('png');
-        if (fs.existsSync(iconPath)) {
-            iconBase64 = fs.readFileSync(iconPath).toString('base64');
-        }
-    } catch (e) {
-        console.warn('Failed to load title bar icon:', e);
-    }
-
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(iconBase64)).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64())).catch(() => {});
 }
 
 /**
@@ -839,6 +842,12 @@ function createJitsiMeetWindow() {
         // Only handle main-frame failures; ignore sub-frames and aborted loads
         // (ERR_ABORTED fires when navigation is cancelled by a new one).
         if (!isMainFrame || errorCode === -3) {
+            return;
+        }
+
+        // Don't show the error page if a local file itself failed to load —
+        // this prevents an infinite loop if error.html is missing or corrupt.
+        if (validatedURL && validatedURL.startsWith('file://')) {
             return;
         }
 
