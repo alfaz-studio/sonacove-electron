@@ -5,7 +5,6 @@ const sonacoveConfig = require('./config');
 const { showDeeplinkModal } = require('./in-app-dialogs');
 const { closeOverlay } = require('./overlay-window');
 
-let pendingStartupDeepLink = null;
 let pendingDeepLinkUrl = null;
 
 /**
@@ -31,21 +30,6 @@ function registerProtocol() {
         }
     } else {
         app.setAsDefaultProtocolClient('sonacove');
-    }
-}
-
-/**
- * Processes any deep link arguments provided during application startup.
- *
- * @returns {void}
- */
-function processDeepLinkOnStartup() {
-    if (process.platform === 'win32' || process.platform === 'linux') {
-        const url = process.argv.find(arg => arg.startsWith('sonacove://'));
-
-        if (url) {
-            pendingStartupDeepLink = url;
-        }
     }
 }
 
@@ -156,7 +140,6 @@ function cancelPendingDeepLink() {
 
 module.exports = {
     registerProtocol,
-    processDeepLinkOnStartup,
     navigateDeepLink,
     completePendingDeepLink,
     cancelPendingDeepLink

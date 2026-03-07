@@ -50,7 +50,6 @@ const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink,
-    processDeepLinkOnStartup,
     completePendingDeepLink,
     cancelPendingDeepLink
 } = require('./app/features/sonacove/deep-link');
@@ -988,11 +987,6 @@ app.on('ready', () => {
 
     setupChildWindowIcon();
     createJitsiMeetWindow();
-
-    // Process deeplinks AFTER window creation
-    setTimeout(() => {
-        processDeepLinkOnStartup();
-    }, 500);
 });
 
 if (isDev) {
