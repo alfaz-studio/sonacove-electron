@@ -51,7 +51,8 @@ const {
     registerProtocol,
     navigateDeepLink,
     completePendingDeepLink,
-    cancelPendingDeepLink
+    cancelPendingDeepLink,
+    consumeDeepLinkNavigation
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay-window');
@@ -540,7 +541,15 @@ function createJitsiMeetWindow() {
     // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
     // Not calling event.preventDefault() keeps the page open (prevents unload).
     // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
-    mainWindow.webContents.on('will-prevent-unload', () => {
+    mainWindow.webContents.on('will-prevent-unload', (event) => {
+        // If a deep link navigation is in progress the user already confirmed
+        // via the deep link dialog — skip the leave-meeting modal and allow
+        // the navigation to proceed.
+        if (consumeDeepLinkNavigation()) {
+            event.preventDefault();
+
+            return;
+        }
         showLeaveModal(mainWindow.webContents);
     });
 
