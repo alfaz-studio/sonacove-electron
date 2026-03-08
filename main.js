@@ -1,5 +1,7 @@
 /* global __dirname */
 
+/* test change */
+
 const {
     initPopupsConfigurationMain,
     getPopupTarget,
