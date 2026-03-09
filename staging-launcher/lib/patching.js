@@ -200,7 +200,18 @@ function patchMainJs(mainJsPath, overrides) {
  * @param {{ landingUrl?: string, meetUrl?: string }} overrides
  */
 async function patchBuildUrls(extractDir, overrides) {
-    const resourcesDir = path.join(extractDir, 'resources');
+    // On macOS, builds are .app bundles — resources live inside
+    // Contents/Resources/ rather than a top-level resources/ folder.
+    let resourcesDir = path.join(extractDir, 'resources');
+
+    if (process.platform === 'darwin') {
+        const entries = fs.readdirSync(extractDir);
+        const appBundle = entries.find(e => e.endsWith('.app'));
+
+        if (appBundle) {
+            resourcesDir = path.join(extractDir, appBundle, 'Contents', 'Resources');
+        }
+    }
     const asarPath = path.join(resourcesDir, 'app.asar');
     const asarBackup = path.join(resourcesDir, 'app-backup.asar');
     const asarUnpacked = path.join(resourcesDir, 'app.asar.unpacked');
