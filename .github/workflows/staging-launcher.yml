@@ -114,7 +114,7 @@ jobs:
               const fs = require('fs');
               let y = fs.readFileSync('$yml','utf8');
               // Replace spaces with dots in filename references (.exe / .dmg lines)
-              y = y.replace(/^(\s*(?:url|path):\s*)(.+)/gm, (_, prefix, rest) =>
+              y = y.replace(/^(\s*-?\s*(?:url|path):\s*)(.+)/gm, (_, prefix, rest) =>
                 prefix + rest.replace(/ /g, '.'));
               fs.writeFileSync('$yml', y);
             "
