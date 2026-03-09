@@ -106,14 +106,16 @@ jobs:
             fi
           done
 
-          # Patch latest.yml and latest-mac.yml — only replace the product
-          # name portion to avoid breaking YAML structure.
+          # Patch latest.yml and latest-mac.yml — replace ALL spaces in
+          # filenames so the manifest matches the renamed files on disk.
           for yml in latest.yml latest-mac.yml; do
             [ -f "$yml" ] || continue
             node -e "
               const fs = require('fs');
               let y = fs.readFileSync('$yml','utf8');
-              y = y.replace(/Sonacove Staging Launcher/g, 'Sonacove.Staging.Launcher');
+              // Replace spaces with dots in filename references (.exe / .dmg lines)
+              y = y.replace(/^(\s*(?:url|path):\s*)(.+)/gm, (_, prefix, rest) =>
+                prefix + rest.replace(/ /g, '.'));
               fs.writeFileSync('$yml', y);
             "
             echo "Patched $yml:"
@@ -142,13 +144,19 @@ jobs:
 
           Updated automatically when \`staging-launcher/\` changes on main."
 
-          # Delete old versioned assets (filenames include the version number,
-          # so --clobber alone won't remove previous versions).
+          # Delete old versioned assets for THIS PLATFORM only.
+          # Each platform cleans its own installer type to avoid a race
+          # condition where the slower job deletes the faster job's upload.
           echo "Cleaning old assets..."
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PATTERN="*.exe"
+          else
+            PATTERN="*.dmg"
+          fi
           gh release view "${TAG}" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | while read -r asset; do
             case "$asset" in
-              *.exe|*.dmg) echo "Deleting old asset: $asset"
-                           gh release delete-asset "${TAG}" "$asset" --repo "${{ github.repository }}" -y ;;
+              $PATTERN) echo "Deleting old asset: $asset"
+                        gh release delete-asset "${TAG}" "$asset" --repo "${{ github.repository }}" -y ;;
             esac
           done
 
