@@ -29,6 +29,23 @@ function toggleOverlay(mainWindow, data) {
     if (annotationWindow) {
         if (!annotationWindow.isDestroyed()) {
             annotationWindow.destroy();
+        } else {
+            // Window already destroyed externally — 'closed' won't fire, clean up manually
+            try {
+                globalShortcut.unregister('Alt+X');
+            } catch {
+                // Already unregistered
+            }
+            restoreMainWindow();
+            const mw = getMainWindow();
+
+            if (mw && !mw.isDestroyed()) {
+                mw.webContents.send('notify-overlay-closed', {
+                    reason: 'overlay-closed',
+                    timestamp: Date.now()
+                });
+                mw.focus();
+            }
         }
         annotationWindow = null;
 
@@ -163,11 +180,15 @@ function toggleOverlay(mainWindow, data) {
         cleanup(reason, notify);
     });
 
-    globalShortcut.register('Alt+X', () => {
+    const registered = globalShortcut.register('Alt+X', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
             annotationWindow.webContents.send('toggle-click-through-request');
         }
     });
+
+    if (!registered) {
+        console.warn('⚠️ Failed to register Alt+X shortcut (already in use by another app)');
+    }
 
     annotationWindow.webContents.on('did-finish-load', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
