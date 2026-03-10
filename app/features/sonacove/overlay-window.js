@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 let annotationWindow = null;
+let pendingCloseReason = null;
 
 /**
  * Finds the main Sonacove application window.
@@ -145,47 +146,8 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
-    globalShortcut.register('Alt+X', () => {
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.webContents.send('toggle-click-through-request');
-        }
-    });
-
-    annotationWindow.webContents.on('did-finish-load', () => {
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.show();
-            annotationWindow.focus();
-        }
-    });
-
-    annotationWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-        console.error(`❌ Annotation overlay failed to load: ${errorDescription} (${errorCode})`);
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.destroy();
-        }
-        annotationWindow = null;
-        cleanup('load-failed');
-    });
-
-    annotationWindow.webContents.on('render-process-gone', (_event, details) => {
-        console.error('❌ Annotation overlay renderer crashed:', details.reason);
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.destroy();
-        }
-        annotationWindow = null;
-        cleanup('crashed');
-    });
-
-    annotationWindow.on('unresponsive', () => {
-        console.error('❌ Annotation overlay became unresponsive');
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.destroy();
-        }
-        annotationWindow = null;
-        cleanup('unresponsive');
-    });
-
-    // Cleanup
+    // Cleanup — defined before event handlers that reference it.
+    // Only called from the 'closed' event so it runs exactly once per window lifecycle.
     const cleanup = (reason = 'overlay-closed') => {
         try {
             globalShortcut.unregister('Alt+X');
@@ -206,9 +168,52 @@ function toggleOverlay(mainWindow, data) {
         }
     };
 
+    globalShortcut.register('Alt+X', () => {
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.webContents.send('toggle-click-through-request');
+        }
+    });
+
+    annotationWindow.webContents.on('did-finish-load', () => {
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.show();
+            annotationWindow.focus();
+        }
+    });
+
+    // errorCode -3 (ERR_ABORTED) fires on normal navigation cancellations — ignore it.
+    annotationWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+        if (errorCode === -3) {
+            return;
+        }
+        console.error(`❌ Annotation overlay failed to load: ${errorDescription} (${errorCode})`);
+        pendingCloseReason = 'load-failed';
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    });
+
+    annotationWindow.webContents.on('render-process-gone', (_event, details) => {
+        console.error('❌ Annotation overlay renderer crashed:', details.reason);
+        pendingCloseReason = 'crashed';
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    });
+
+    annotationWindow.on('unresponsive', () => {
+        console.error('❌ Annotation overlay became unresponsive');
+        pendingCloseReason = 'unresponsive';
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    });
+
+    // Single cleanup path: destroy() fires 'closed', which runs cleanup exactly once.
     annotationWindow.on('closed', () => {
         annotationWindow = null;
-        cleanup();
+        cleanup(pendingCloseReason || 'overlay-closed');
+        pendingCloseReason = null;
     });
 }
 
@@ -222,21 +227,12 @@ function toggleOverlay(mainWindow, data) {
 function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
-        
-        annotationWindow.destroy();
-        annotationWindow = null;
 
-        restoreMainWindow();
-
-        if (notifyOthers) {
-            const mw = getMainWindow();
-
-            if (mw && !mw.isDestroyed()) {
-                mw.webContents.send('notify-overlay-closed', {
-                    reason,
-                    timestamp: Date.now()
-                });
-            }
+        // Set reason so the 'closed' event passes it to cleanup().
+        // destroy() fires 'closed' which handles cleanup + notification.
+        pendingCloseReason = reason;
+        if (!annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
         }
     }
 }
