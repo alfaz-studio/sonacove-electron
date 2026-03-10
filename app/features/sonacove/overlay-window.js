@@ -31,6 +31,9 @@ function toggleOverlay(mainWindow, data) {
             annotationWindow.destroy();
         } else {
             // Window already destroyed externally — 'closed' won't fire, clean up manually
+            annotationWindow = null;
+            pendingCloseReason = null;
+            pendingNotify = true;
             try {
                 globalShortcut.unregister('Alt+X');
             } catch {
@@ -47,7 +50,6 @@ function toggleOverlay(mainWindow, data) {
                 mw.focus();
             }
         }
-        annotationWindow = null;
 
         return;
     }
