@@ -13,6 +13,7 @@ const {
     app,
     ipcMain,
     desktopCapturer,
+    screen,
     shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
@@ -616,34 +617,6 @@ function createJitsiMeetWindow() {
         }
     });
 
-    // Full-screen screenshot (for annotation overlay)
-    ipcMain.handle('capture-screenshot', async () => {
-        try {
-            const { screen } = require('electron');
-            const primaryDisplay = screen.getPrimaryDisplay();
-            const { width, height } = primaryDisplay.size;
-            const scaleFactor = primaryDisplay.scaleFactor;
-
-            const sources = await desktopCapturer.getSources({
-                types: [ 'screen' ],
-                thumbnailSize: {
-                    width: Math.round(width * scaleFactor),
-                    height: Math.round(height * scaleFactor)
-                }
-            });
-
-            if (sources.length === 0) {
-                return null;
-            }
-
-            return sources[0].thumbnail.toDataURL('image/png');
-        } catch (error) {
-            console.error('❌ Main: Error capturing screenshot:', error);
-
-            return null;
-        }
-    });
-
     // Navigation Router (Dashboard -> Meeting)
     mainWindow.webContents.on('will-navigate', (event, url) => {
         const parsedUrl = new URL(url);
@@ -1014,6 +987,34 @@ if (!gotInstanceLock) {
     app.quit();
     process.exit(0);
 }
+
+// Full-screen screenshot (for annotation overlay).
+// Registered at module scope so it survives window re-creation (e.g. macOS activate).
+ipcMain.handle('capture-screenshot', async () => {
+    try {
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width, height } = primaryDisplay.size;
+        const scaleFactor = primaryDisplay.scaleFactor;
+
+        const sources = await desktopCapturer.getSources({
+            types: [ 'screen' ],
+            thumbnailSize: {
+                width: Math.round(width * scaleFactor),
+                height: Math.round(height * scaleFactor)
+            }
+        });
+
+        if (sources.length === 0) {
+            return null;
+        }
+
+        return sources[0].thumbnail.toDataURL('image/png');
+    } catch (error) {
+        console.error('❌ Main: Error capturing screenshot:', error);
+
+        return null;
+    }
+});
 
 /**
  * Run the application.
