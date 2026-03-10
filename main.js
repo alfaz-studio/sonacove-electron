@@ -1008,7 +1008,11 @@ ipcMain.handle('capture-screenshot', async () => {
             return null;
         }
 
-        return sources[0].thumbnail.toDataURL('image/png');
+        // Match the primary display by display_id (sources[0] isn't guaranteed to be primary on multi-monitor).
+        const primaryId = String(primaryDisplay.id);
+        const source = sources.find(s => s.display_id === primaryId) || sources[0];
+
+        return source.thumbnail.toDataURL('image/png');
     } catch (error) {
         console.error('❌ Main: Error capturing screenshot:', error);
 
