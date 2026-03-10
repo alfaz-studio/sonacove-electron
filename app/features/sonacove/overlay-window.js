@@ -64,6 +64,8 @@ function toggleOverlay(mainWindow, data) {
     } else {
         console.error('❌ CRITICAL: Could not find preload.js! Overlay will be broken.');
         console.error('Searched in:', possiblePaths);
+
+        return;
     }
 
     const windowOptions = {
@@ -96,7 +98,14 @@ function toggleOverlay(mainWindow, data) {
         windowOptions.type = 'utility';
     }
 
-    annotationWindow = new BrowserWindow(windowOptions);
+    try {
+        annotationWindow = new BrowserWindow(windowOptions);
+    } catch (err) {
+        console.error('❌ Failed to create annotation overlay window:', err);
+        annotationWindow = null;
+
+        return;
+    }
 
     if (isMac) {
         app.dock.show();
@@ -124,7 +133,17 @@ function toggleOverlay(mainWindow, data) {
     joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
 
     console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
-    annotationWindow.loadURL(joinUrl.toString());
+    try {
+        annotationWindow.loadURL(joinUrl.toString());
+    } catch (err) {
+        console.error('❌ Failed to load annotation overlay URL:', err);
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+        annotationWindow = null;
+
+        return;
+    }
 
     globalShortcut.register('Alt+X', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
@@ -139,8 +158,41 @@ function toggleOverlay(mainWindow, data) {
         }
     });
 
+    annotationWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+        console.error(`❌ Annotation overlay failed to load: ${errorDescription} (${errorCode})`);
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+        annotationWindow = null;
+        cleanup('load-failed');
+    });
+
+    annotationWindow.webContents.on('render-process-gone', (_event, details) => {
+        console.error('❌ Annotation overlay renderer crashed:', details.reason);
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+        annotationWindow = null;
+        cleanup('crashed');
+    });
+
+    annotationWindow.on('unresponsive', () => {
+        console.error('❌ Annotation overlay became unresponsive');
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+        annotationWindow = null;
+        cleanup('unresponsive');
+    });
+
     // Cleanup
     const cleanup = (reason = 'overlay-closed') => {
+        try {
+            globalShortcut.unregister('Alt+X');
+        } catch {
+            // Alt+X shortcut already unregistered
+        }
+
         const mw = getMainWindow();
 
         restoreMainWindow();
