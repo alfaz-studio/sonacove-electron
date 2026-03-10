@@ -262,6 +262,28 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
         pendingNotify = notifyOthers;
         if (!annotationWindow.isDestroyed()) {
             annotationWindow.destroy();
+        } else {
+            // Already destroyed externally — 'closed' won't fire, clean up manually
+            annotationWindow = null;
+            pendingCloseReason = null;
+            pendingNotify = true;
+            try {
+                globalShortcut.unregister('Alt+X');
+            } catch {
+                // Already unregistered
+            }
+            restoreMainWindow();
+            if (notifyOthers) {
+                const mw = getMainWindow();
+
+                if (mw && !mw.isDestroyed()) {
+                    mw.webContents.send('notify-overlay-closed', {
+                        reason,
+                        timestamp: Date.now()
+                    });
+                    mw.focus();
+                }
+            }
         }
     }
 }
