@@ -4,6 +4,7 @@ const path = require('path');
 
 let annotationWindow = null;
 let pendingCloseReason = null;
+let pendingNotify = true;
 
 /**
  * Finds the main Sonacove application window.
@@ -126,47 +127,41 @@ function toggleOverlay(mainWindow, data) {
             height });
     }
 
-    const joinUrl = new URL(roomUrl);
-
-    joinUrl.searchParams.set('standalone', 'true');
-    joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
-    joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
-    joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
-
-    console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
-    try {
-        annotationWindow.loadURL(joinUrl.toString());
-    } catch (err) {
-        console.error('❌ Failed to load annotation overlay URL:', err);
-        if (annotationWindow && !annotationWindow.isDestroyed()) {
-            annotationWindow.destroy();
-        }
-        annotationWindow = null;
-
-        return;
-    }
-
-    // Cleanup — defined before event handlers that reference it.
+    // Cleanup — registered before loadURL so that every destroy path
+    // (including synchronous loadURL failures) goes through the same route.
     // Only called from the 'closed' event so it runs exactly once per window lifecycle.
-    const cleanup = (reason = 'overlay-closed') => {
+    const cleanup = (reason = 'overlay-closed', notify = true) => {
         try {
             globalShortcut.unregister('Alt+X');
         } catch {
             // Alt+X shortcut already unregistered
         }
 
-        const mw = getMainWindow();
-
         restoreMainWindow();
 
-        if (mw && !mw.isDestroyed()) {
-            mw.webContents.send('notify-overlay-closed', {
-                reason,
-                timestamp: Date.now()
-            });
-            mw.focus();
+        if (notify) {
+            const mw = getMainWindow();
+
+            if (mw && !mw.isDestroyed()) {
+                mw.webContents.send('notify-overlay-closed', {
+                    reason,
+                    timestamp: Date.now()
+                });
+                mw.focus();
+            }
         }
     };
+
+    // Single cleanup path: destroy() fires 'closed', which runs cleanup exactly once.
+    annotationWindow.on('closed', () => {
+        const reason = pendingCloseReason || 'overlay-closed';
+        const notify = pendingNotify;
+
+        annotationWindow = null;
+        pendingCloseReason = null;
+        pendingNotify = true;
+        cleanup(reason, notify);
+    });
 
     globalShortcut.register('Alt+X', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
@@ -209,12 +204,24 @@ function toggleOverlay(mainWindow, data) {
         }
     });
 
-    // Single cleanup path: destroy() fires 'closed', which runs cleanup exactly once.
-    annotationWindow.on('closed', () => {
-        annotationWindow = null;
-        cleanup(pendingCloseReason || 'overlay-closed');
-        pendingCloseReason = null;
-    });
+    // Build URL and load — all handlers are registered above, so even a
+    // synchronous throw from loadURL is cleaned up by the 'closed' handler.
+    const joinUrl = new URL(roomUrl);
+
+    joinUrl.searchParams.set('standalone', 'true');
+    joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
+    joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
+    joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
+
+    console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
+    try {
+        annotationWindow.loadURL(joinUrl.toString());
+    } catch (err) {
+        console.error('❌ Failed to load annotation overlay URL:', err);
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    }
 }
 
 /**
@@ -228,9 +235,10 @@ function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
 
-        // Set reason so the 'closed' event passes it to cleanup().
-        // destroy() fires 'closed' which handles cleanup + notification.
+        // Set reason and notify flag so the 'closed' event passes them to cleanup().
+        // destroy() fires 'closed' which handles cleanup + conditional notification.
         pendingCloseReason = reason;
+        pendingNotify = notifyOthers;
         if (!annotationWindow.isDestroyed()) {
             annotationWindow.destroy();
         }
