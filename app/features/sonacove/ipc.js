@@ -15,8 +15,11 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     // Toggle Annotation Overlay
     ipcMain.on('toggle-annotation', (event, data) => {
-        // Ensure we pass the current main window instance
-        toggleOverlay(mainWindow, data);
+        try {
+            toggleOverlay(mainWindow, data);
+        } catch (err) {
+            console.error('❌ Failed to toggle annotation overlay:', err);
+        }
     });
 
     // Open External Links (Proxy for renderer)
@@ -28,18 +31,21 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     ipcMain.on('show-overlay', () => {
         const overlay = getOverlayWindow();
 
-        if (overlay) {
+        if (overlay && !overlay.isDestroyed()) {
             overlay.show();
         }
     });
 
     // Click-through logic
     ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
-        console.log(`🖱️ Setting Mouse Ignore: ${ignore}`);
-        const win = BrowserWindow.fromWebContents(event.sender);
+        try {
+            const win = BrowserWindow.fromWebContents(event.sender);
 
-        if (win) {
-            win.setIgnoreMouseEvents(ignore, { forward: true });
+            if (win && !win.isDestroyed()) {
+                win.setIgnoreMouseEvents(ignore, { forward: true });
+            }
+        } catch (err) {
+            console.error('❌ Failed to set ignore mouse events:', err);
         }
     });
 

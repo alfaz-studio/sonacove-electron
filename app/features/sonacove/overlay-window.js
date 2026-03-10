@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 let annotationWindow = null;
+let pendingCloseReason = null;
+let pendingNotify = true;
 
 /**
  * Finds the main Sonacove application window.
@@ -27,8 +29,27 @@ function toggleOverlay(mainWindow, data) {
     if (annotationWindow) {
         if (!annotationWindow.isDestroyed()) {
             annotationWindow.destroy();
+        } else {
+            // Window already destroyed externally — 'closed' won't fire, clean up manually
+            annotationWindow = null;
+            pendingCloseReason = null;
+            pendingNotify = true;
+            try {
+                globalShortcut.unregister('Alt+X');
+            } catch {
+                // Already unregistered
+            }
+            restoreMainWindow();
+            const mw = getMainWindow();
+
+            if (mw && !mw.isDestroyed()) {
+                mw.webContents.send('notify-overlay-closed', {
+                    reason: 'overlay-closed',
+                    timestamp: Date.now()
+                });
+                mw.focus();
+            }
         }
-        annotationWindow = null;
 
         return;
     }
@@ -64,6 +85,8 @@ function toggleOverlay(mainWindow, data) {
     } else {
         console.error('❌ CRITICAL: Could not find preload.js! Overlay will be broken.');
         console.error('Searched in:', possiblePaths);
+
+        return;
     }
 
     const windowOptions = {
@@ -96,7 +119,14 @@ function toggleOverlay(mainWindow, data) {
         windowOptions.type = 'utility';
     }
 
-    annotationWindow = new BrowserWindow(windowOptions);
+    try {
+        annotationWindow = new BrowserWindow(windowOptions);
+    } catch (err) {
+        console.error('❌ Failed to create annotation overlay window:', err);
+        annotationWindow = null;
+
+        return;
+    }
 
     if (isMac) {
         app.dock.show();
@@ -116,21 +146,51 @@ function toggleOverlay(mainWindow, data) {
             height });
     }
 
-    const joinUrl = new URL(roomUrl);
+    // Cleanup — registered before loadURL so that every destroy path
+    // (including synchronous loadURL failures) goes through the same route.
+    // Only called from the 'closed' event so it runs exactly once per window lifecycle.
+    const cleanup = (reason = 'overlay-closed', notify = true) => {
+        try {
+            globalShortcut.unregister('Alt+X');
+        } catch {
+            // Alt+X shortcut already unregistered
+        }
 
-    joinUrl.searchParams.set('standalone', 'true');
-    joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
-    joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
-    joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
+        restoreMainWindow();
 
-    console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
-    annotationWindow.loadURL(joinUrl.toString());
+        if (notify) {
+            const mw = getMainWindow();
 
-    globalShortcut.register('Alt+X', () => {
+            if (mw && !mw.isDestroyed()) {
+                mw.webContents.send('notify-overlay-closed', {
+                    reason,
+                    timestamp: Date.now()
+                });
+                mw.focus();
+            }
+        }
+    };
+
+    // Single cleanup path: destroy() fires 'closed', which runs cleanup exactly once.
+    annotationWindow.on('closed', () => {
+        const reason = pendingCloseReason || 'overlay-closed';
+        const notify = pendingNotify;
+
+        annotationWindow = null;
+        pendingCloseReason = null;
+        pendingNotify = true;
+        cleanup(reason, notify);
+    });
+
+    const registered = globalShortcut.register('Alt+X', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
             annotationWindow.webContents.send('toggle-click-through-request');
         }
     });
+
+    if (!registered) {
+        console.warn('⚠️ Failed to register Alt+X shortcut (already in use by another app)');
+    }
 
     annotationWindow.webContents.on('did-finish-load', () => {
         if (annotationWindow && !annotationWindow.isDestroyed()) {
@@ -139,25 +199,52 @@ function toggleOverlay(mainWindow, data) {
         }
     });
 
-    // Cleanup
-    const cleanup = (reason = 'overlay-closed') => {
-        const mw = getMainWindow();
-
-        restoreMainWindow();
-
-        if (mw && !mw.isDestroyed()) {
-            mw.webContents.send('notify-overlay-closed', {
-                reason,
-                timestamp: Date.now()
-            });
-            mw.focus();
+    // errorCode -3 (ERR_ABORTED) fires on normal navigation cancellations — ignore it.
+    annotationWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+        if (errorCode === -3) {
+            return;
         }
-    };
-
-    annotationWindow.on('closed', () => {
-        annotationWindow = null;
-        cleanup();
+        console.error(`❌ Annotation overlay failed to load: ${errorDescription} (${errorCode})`);
+        pendingCloseReason = 'load-failed';
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
     });
+
+    annotationWindow.webContents.on('render-process-gone', (_event, details) => {
+        console.error('❌ Annotation overlay renderer crashed:', details.reason);
+        pendingCloseReason = 'crashed';
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    });
+
+    annotationWindow.on('unresponsive', () => {
+        console.error('❌ Annotation overlay became unresponsive');
+        pendingCloseReason = 'unresponsive';
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    });
+
+    // Build URL and load — all handlers are registered above, so even a
+    // synchronous throw from loadURL is cleaned up by the 'closed' handler.
+    const joinUrl = new URL(roomUrl);
+
+    joinUrl.searchParams.set('standalone', 'true');
+    joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
+    joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
+    joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
+
+    console.log(`🖌️ Opening Standalone Whiteboard: ${joinUrl.toString()}`);
+    try {
+        annotationWindow.loadURL(joinUrl.toString());
+    } catch (err) {
+        console.error('❌ Failed to load annotation overlay URL:', err);
+        if (annotationWindow && !annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        }
+    }
 }
 
 /**
@@ -170,20 +257,34 @@ function toggleOverlay(mainWindow, data) {
 function closeOverlay(notifyOthers = false, reason = 'manual') {
     if (annotationWindow) {
         console.log(`🧹 Closing annotation overlay. Reason: ${reason}`);
-        
-        annotationWindow.destroy();
-        annotationWindow = null;
 
-        restoreMainWindow();
+        // Set reason and notify flag so the 'closed' event passes them to cleanup().
+        // destroy() fires 'closed' which handles cleanup + conditional notification.
+        pendingCloseReason = reason;
+        pendingNotify = notifyOthers;
+        if (!annotationWindow.isDestroyed()) {
+            annotationWindow.destroy();
+        } else {
+            // Already destroyed externally — 'closed' won't fire, clean up manually
+            annotationWindow = null;
+            pendingCloseReason = null;
+            pendingNotify = true;
+            try {
+                globalShortcut.unregister('Alt+X');
+            } catch {
+                // Already unregistered
+            }
+            restoreMainWindow();
+            if (notifyOthers) {
+                const mw = getMainWindow();
 
-        if (notifyOthers) {
-            const mw = getMainWindow();
-
-            if (mw && !mw.isDestroyed()) {
-                mw.webContents.send('notify-overlay-closed', {
-                    reason,
-                    timestamp: Date.now()
-                });
+                if (mw && !mw.isDestroyed()) {
+                    mw.webContents.send('notify-overlay-closed', {
+                        reason,
+                        timestamp: Date.now()
+                    });
+                    mw.focus();
+                }
             }
         }
     }
