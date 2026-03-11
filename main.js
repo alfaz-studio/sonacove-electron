@@ -13,6 +13,7 @@ const {
     app,
     ipcMain,
     desktopCapturer,
+    screen,
     shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
@@ -986,6 +987,38 @@ if (!gotInstanceLock) {
     app.quit();
     process.exit(0);
 }
+
+// Full-screen screenshot (for annotation overlay).
+// Registered at module scope so it survives window re-creation (e.g. macOS activate).
+ipcMain.handle('capture-screenshot', async () => {
+    try {
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width, height } = primaryDisplay.size;
+        const scaleFactor = primaryDisplay.scaleFactor;
+
+        const sources = await desktopCapturer.getSources({
+            types: [ 'screen' ],
+            thumbnailSize: {
+                width: Math.round(width * scaleFactor),
+                height: Math.round(height * scaleFactor)
+            }
+        });
+
+        if (sources.length === 0) {
+            return null;
+        }
+
+        // Match the primary display by display_id (sources[0] isn't guaranteed to be primary on multi-monitor).
+        const primaryId = String(primaryDisplay.id);
+        const source = sources.find(s => s.display_id === primaryId) || sources[0];
+
+        return source.thumbnail.toDataURL('image/png');
+    } catch (error) {
+        console.error('❌ Main: Error capturing screenshot:', error);
+
+        return null;
+    }
+});
 
 /**
  * Run the application.
