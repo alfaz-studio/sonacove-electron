@@ -1026,12 +1026,15 @@ ipcMain.handle('save-screenshot', async (_event, base64Data, filename) => {
         if (typeof base64Data !== 'string' || !base64Data) {
             throw new Error('Invalid base64Data');
         }
+        if (typeof filename !== 'string' || !filename) {
+            throw new Error('Invalid filename');
+        }
 
         // Sanitize filename: strip directory components and enforce .png extension
         const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
 
-        if (!safeName.endsWith('.png')) {
-            throw new Error('Invalid filename: must end with .png');
+        if (!safeName || safeName === '.png' || !safeName.endsWith('.png')) {
+            throw new Error('Invalid filename: must be a non-empty name ending with .png');
         }
 
         const dir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
