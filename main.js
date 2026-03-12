@@ -1020,6 +1020,26 @@ ipcMain.handle('capture-screenshot', async () => {
     }
 });
 
+// Save a screenshot directly to the user's Pictures/Sonacove Screenshots folder.
+ipcMain.handle('save-screenshot', async (_event, base64Data, filename) => {
+    try {
+        const dir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
+
+        fs.mkdirSync(dir, { recursive: true });
+
+        const filePath = path.join(dir, filename);
+        const base64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+
+        fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
+
+        return filePath;
+    } catch (error) {
+        console.error('❌ Main: Error saving screenshot:', error);
+
+        return null;
+    }
+});
+
 /**
  * Run the application.
  */

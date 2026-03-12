@@ -101,6 +101,7 @@ window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
     captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
+    saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {
