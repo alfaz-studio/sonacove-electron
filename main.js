@@ -1023,14 +1023,25 @@ ipcMain.handle('capture-screenshot', async () => {
 // Save a screenshot directly to the user's Pictures/Sonacove Screenshots folder.
 ipcMain.handle('save-screenshot', async (_event, base64Data, filename) => {
     try {
+        if (typeof base64Data !== 'string' || !base64Data) {
+            throw new Error('Invalid base64Data');
+        }
+
+        // Sanitize filename: strip directory components and enforce .png extension
+        const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+
+        if (!safeName.endsWith('.png')) {
+            throw new Error('Invalid filename: must end with .png');
+        }
+
         const dir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
 
-        fs.mkdirSync(dir, { recursive: true });
+        await fs.promises.mkdir(dir, { recursive: true });
 
-        const filePath = path.join(dir, filename);
+        const filePath = path.join(dir, safeName);
         const base64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
 
-        fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
+        await fs.promises.writeFile(filePath, Buffer.from(base64, 'base64'));
 
         return filePath;
     } catch (error) {
