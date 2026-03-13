@@ -192,6 +192,48 @@ function patchMainJs(mainJsPath, overrides) {
     fs.writeFileSync(mainJsPath, mainJs);
 }
 
+// ── Path resolution helpers ─────────────────────────────────────────────────
+
+/**
+ * Search recursively for app.asar to derive the correct resources directory.
+ * Handles unexpected extraction structures (extra nesting, renamed dirs, etc.)
+ * by returning the *directory* containing app.asar.
+ * @param {string} dir  Starting directory
+ * @param {number} [maxDepth=5]  Maximum recursion depth
+ * @returns {string|null}  Path to the directory containing app.asar, or null
+ */
+function findResourcesDir(dir, maxDepth = 5) {
+    if (maxDepth <= 0) {
+        return null;
+    }
+
+    let entries;
+
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return null;
+    }
+
+    // Check if app.asar is directly in this directory
+    if (entries.some(e => e.name === 'app.asar')) {
+        return dir;
+    }
+
+    // Recurse into subdirectories
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            const found = findResourcesDir(path.join(dir, entry.name), maxDepth - 1);
+
+            if (found) {
+                return found;
+            }
+        }
+    }
+
+    return null;
+}
+
 // ── Orchestrator ────────────────────────────────────────────────────────────
 
 /**
@@ -213,6 +255,19 @@ async function patchBuildUrls(extractDir, overrides) {
 
         if (appBundle) {
             resourcesDir = path.join(extractDir, appBundle, 'Contents', 'Resources');
+        }
+
+        // Fallback: if the expected resourcesDir doesn't contain app.asar,
+        // search recursively.  ditto/unzip may produce unexpected nesting
+        // depending on how the zip was created and which macOS version extracts it.
+        if (!fs.existsSync(path.join(resourcesDir, 'app.asar'))
+            && !fs.existsSync(path.join(resourcesDir, 'app-backup.asar'))) {
+            const fallback = findResourcesDir(extractDir);
+
+            if (fallback) {
+                console.log('[patcher] fallback resourcesDir:', fallback);
+                resourcesDir = fallback;
+            }
         }
     }
     const asarPath = path.join(resourcesDir, 'app.asar');
@@ -330,4 +385,4 @@ function buildLaunchEnv(prNumber, loadSettings) {
     return env;
 }
 
-module.exports = { copyFromAsar, copyDirReal, patchMainJs, patchBuildUrls, buildLaunchEnv };
+module.exports = { copyFromAsar, copyDirReal, findResourcesDir, patchMainJs, patchBuildUrls, buildLaunchEnv };

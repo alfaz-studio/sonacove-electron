@@ -186,6 +186,20 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const prNum = validPR(prNumber);
     const extractDir = path.join(cacheDir, `pr-${prNum}`, 'app');
 
+    // On macOS, strip the quarantine attribute BEFORE patching.  ditto/unzip
+    // sets com.apple.quarantine on extracted files, and macOS can prevent
+    // reading inside a quarantined .app bundle — causing patchBuildUrls()
+    // to fail with "No app.asar backup found" because fs.existsSync()
+    // returns false for files inside the quarantined bundle.
+    if (process.platform === 'darwin') {
+        const entries = fs.readdirSync(extractDir);
+        const appBundle = entries.find(e => e.endsWith('.app'));
+
+        if (appBundle) {
+            await execFileAsync('xattr', [ '-cr', path.join(extractDir, appBundle) ]);
+        }
+    }
+
     // Apply URL overrides by patching the build's main.js inside the asar.
     // If no overrides are set, this restores the original asar.
     const settings = loadSettings();
@@ -206,7 +220,7 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
     if (process.platform === 'darwin') {
-        // Find the .app bundle
+        // Find the .app bundle (already stripped quarantine above)
         const entries = fs.readdirSync(extractDir);
         const appBundle = entries.find(e => e.endsWith('.app'));
 
@@ -215,9 +229,6 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
         }
 
         const appPath = path.join(extractDir, appBundle);
-
-        // Strip quarantine attribute so macOS doesn't block unsigned app
-        await execFileAsync('xattr', [ '-cr', appPath ]);
 
         // Launch the inner binary directly so env vars are forwarded.
         // `open -a` doesn't pass environment variables to the child process.
