@@ -1031,10 +1031,15 @@ ipcMain.handle('save-screenshot', async (_event, base64Data, filename) => {
         }
 
         // Sanitize filename: strip directory components and enforce .png extension
-        const safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+        let safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
 
         if (!safeName || safeName === '.png' || !safeName.endsWith('.png')) {
             throw new Error('Invalid filename: must be a non-empty name ending with .png');
+        }
+
+        // Enforce filesystem filename length limit (255 bytes on most OSes)
+        if (safeName.length > 251) {
+            safeName = safeName.slice(0, 251) + '.png';
         }
 
         const dir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
@@ -1043,8 +1048,15 @@ ipcMain.handle('save-screenshot', async (_event, base64Data, filename) => {
 
         const filePath = path.join(dir, safeName);
         const base64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64, 'base64');
 
-        await fs.promises.writeFile(filePath, Buffer.from(base64, 'base64'));
+        // Validate PNG magic bytes (89 50 4E 47) to catch malformed base64 early
+        if (buffer.length < 8 || buffer[0] !== 0x89 || buffer[1] !== 0x50
+            || buffer[2] !== 0x4E || buffer[3] !== 0x47) {
+            throw new Error('Invalid image data: not a valid PNG');
+        }
+
+        await fs.promises.writeFile(filePath, buffer);
 
         return filePath;
     } catch (error) {
