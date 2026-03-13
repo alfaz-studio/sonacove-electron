@@ -186,18 +186,25 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const prNum = validPR(prNumber);
     const extractDir = path.join(cacheDir, `pr-${prNum}`, 'app');
 
-    // On macOS, strip the quarantine attribute BEFORE patching.  ditto/unzip
-    // sets com.apple.quarantine on extracted files, and macOS can prevent
-    // reading inside a quarantined .app bundle — causing patchBuildUrls()
-    // to fail with "No app.asar backup found" because fs.existsSync()
-    // returns false for files inside the quarantined bundle.
+    // On macOS, find the .app bundle once — used for quarantine stripping,
+    // patching, and launching.
+    let macAppBundle = null;
+
     if (process.platform === 'darwin') {
         const entries = fs.readdirSync(extractDir);
-        const appBundle = entries.find(e => e.endsWith('.app'));
 
-        if (appBundle) {
-            await execFileAsync('xattr', [ '-cr', path.join(extractDir, appBundle) ]);
+        macAppBundle = entries.find(e => e.endsWith('.app'));
+
+        if (!macAppBundle) {
+            throw new Error('No .app bundle found in extracted build');
         }
+
+        // Strip the quarantine attribute BEFORE patching.  ditto/unzip sets
+        // com.apple.quarantine on extracted files, and macOS can prevent
+        // reading inside a quarantined .app bundle — causing patchBuildUrls()
+        // to fail with "No app.asar backup found" because fs.existsSync()
+        // returns false for files inside the quarantined bundle.
+        await execFileAsync('xattr', [ '-cr', path.join(extractDir, macAppBundle) ]);
     }
 
     // Apply URL overrides by patching the build's main.js inside the asar.
@@ -220,15 +227,7 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
     if (process.platform === 'darwin') {
-        // Find the .app bundle (already stripped quarantine above)
-        const entries = fs.readdirSync(extractDir);
-        const appBundle = entries.find(e => e.endsWith('.app'));
-
-        if (!appBundle) {
-            throw new Error('No .app bundle found in extracted build');
-        }
-
-        const appPath = path.join(extractDir, appBundle);
+        const appPath = path.join(extractDir, macAppBundle);
 
         // Launch the inner binary directly so env vars are forwarded.
         // `open -a` doesn't pass environment variables to the child process.
