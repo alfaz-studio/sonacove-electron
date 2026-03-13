@@ -186,6 +186,27 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const prNum = validPR(prNumber);
     const extractDir = path.join(cacheDir, `pr-${prNum}`, 'app');
 
+    // On macOS, find the .app bundle once — used for quarantine stripping,
+    // patching, and launching.
+    let macAppBundle = null;
+
+    if (process.platform === 'darwin') {
+        const entries = fs.readdirSync(extractDir);
+
+        macAppBundle = entries.find(e => e.endsWith('.app'));
+
+        if (!macAppBundle) {
+            throw new Error('No .app bundle found in extracted build');
+        }
+
+        // Strip the quarantine attribute BEFORE patching.  ditto/unzip sets
+        // com.apple.quarantine on extracted files, and macOS can prevent
+        // reading inside a quarantined .app bundle — causing patchBuildUrls()
+        // to fail with "No app.asar backup found" because fs.existsSync()
+        // returns false for files inside the quarantined bundle.
+        await execFileAsync('xattr', [ '-cr', path.join(extractDir, macAppBundle) ]);
+    }
+
     // Apply URL overrides by patching the build's main.js inside the asar.
     // If no overrides are set, this restores the original asar.
     const settings = loadSettings();
@@ -206,18 +227,7 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
     if (process.platform === 'darwin') {
-        // Find the .app bundle
-        const entries = fs.readdirSync(extractDir);
-        const appBundle = entries.find(e => e.endsWith('.app'));
-
-        if (!appBundle) {
-            throw new Error('No .app bundle found in extracted build');
-        }
-
-        const appPath = path.join(extractDir, appBundle);
-
-        // Strip quarantine attribute so macOS doesn't block unsigned app
-        await execFileAsync('xattr', [ '-cr', appPath ]);
+        const appPath = path.join(extractDir, macAppBundle);
 
         // Launch the inner binary directly so env vars are forwarded.
         // `open -a` doesn't pass environment variables to the child process.
