@@ -208,6 +208,9 @@ async function patchBuildUrls(extractDir, overrides) {
         const entries = fs.readdirSync(extractDir);
         const appBundle = entries.find(e => e.endsWith('.app'));
 
+        console.log('[patcher] extractDir entries:', entries);
+        console.log('[patcher] detected .app bundle:', appBundle || '(none)');
+
         if (appBundle) {
             resourcesDir = path.join(extractDir, appBundle, 'Contents', 'Resources');
         }
@@ -219,6 +222,16 @@ async function patchBuildUrls(extractDir, overrides) {
     const appDir = path.join(resourcesDir, 'app');
 
     const hasOverrides = !!(overrides.landingUrl || overrides.meetUrl);
+
+    if (process.platform === 'darwin') {
+        console.log('[patcher] resourcesDir:', resourcesDir);
+        console.log('[patcher] resourcesDir exists:', fs.existsSync(resourcesDir));
+        if (fs.existsSync(resourcesDir)) {
+            console.log('[patcher] resourcesDir entries:', fs.readdirSync(resourcesDir));
+        }
+        console.log('[patcher] app.asar exists:', fs.existsSync(asarPath));
+        console.log('[patcher] app/ dir exists:', fs.existsSync(appDir));
+    }
 
     if (!hasOverrides) {
         // Restore original asar if it was backed up
@@ -254,7 +267,19 @@ async function patchBuildUrls(extractDir, overrides) {
     }
 
     if (!fs.existsSync(asarBackup)) {
-        throw new Error('No app.asar backup found — cannot apply URL overrides');
+        const diag = {
+            resourcesDir,
+            asarPath,
+            appDir,
+            resourcesDirExists: fs.existsSync(resourcesDir),
+            resourcesDirEntries: fs.existsSync(resourcesDir) ? fs.readdirSync(resourcesDir) : [],
+            extractDirEntries: fs.readdirSync(extractDir)
+        };
+
+        throw new Error(
+            'No app.asar backup found — cannot apply URL overrides\n'
+            + JSON.stringify(diag, null, 2)
+        );
     }
 
     // 2. Clean up any previous extraction
