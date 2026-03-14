@@ -1,8 +1,9 @@
 // ── State ────────────────────────────────────────────────────────────────────
 let prs = [];
+let mainBuild = null; // { buildId, title, sha, commitMessage, ... }
 let token = null;
-let downloading = {}; // { prNumber: progress% }
-let launching = {};   // { prNumber: true }
+let downloading = {}; // { prNumber|buildId: progress% }
+let launching = {};   // { prNumber|buildId: true }
 let closedExpanded = false;
 let repoBaseUrl = 'https://github.com/alfaz-studio/sonacove-electron'; // fallback
 
@@ -23,6 +24,8 @@ const closedSection = document.getElementById('closed-section');
 const closedListItems = document.getElementById('closed-list-items');
 const closedCountEl = document.getElementById('closed-count');
 const toggleClosedBtn = document.getElementById('btn-toggle-closed');
+const mainBuildSection = document.getElementById('main-build-section');
+const mainBuildCard = document.getElementById('main-build-card');
 
 // ── Init ────────────────────────────────────────────────────────────────────
 async function init() {
@@ -46,7 +49,11 @@ async function init() {
     // Listen for download progress
     window.stagingAPI.onDownloadProgress(({ prNumber, progress }) => {
         downloading[prNumber] = progress;
-        renderPRCard(prNumber);
+        if (prNumber === 'main') {
+            renderMainBuild();
+        } else {
+            renderPRCard(prNumber);
+        }
     });
 
     await refreshPRs();
@@ -63,12 +70,16 @@ async function refreshPRs() {
     refreshBtn.classList.add('spinning');
 
     try {
-        showLoading(prs.length === 0);
+        showLoading(prs.length === 0 && !mainBuild);
         hideError();
 
-        const result = await window.stagingAPI.getStagingPRs(token);
+        const [ result, mainResult ] = await Promise.all([
+            window.stagingAPI.getStagingPRs(token),
+            window.stagingAPI.getMainBuild(token)
+        ]);
 
         prs = result.prs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        mainBuild = mainResult.build;
 
         if (result.rateLimit) {
             rateLimitEl.textContent =
@@ -76,10 +87,12 @@ async function refreshPRs() {
         }
 
         const openCount = prs.filter(p => p.state === 'open').length;
+        const totalCount = openCount + (mainBuild ? 1 : 0);
 
-        statusBadge.textContent = `${openCount} build${openCount !== 1 ? 's' : ''}`;
+        statusBadge.textContent = `${totalCount} build${totalCount !== 1 ? 's' : ''}`;
         statusBadge.className = 'badge online';
 
+        renderMainBuild();
         renderList();
     } catch (err) {
         showError(err.message);
@@ -126,6 +139,261 @@ function renderList() {
         toggleClosedBtn.classList.toggle('expanded', closedExpanded);
     } else {
         closedSection.classList.add('hidden');
+    }
+}
+
+// ── Main Build ──────────────────────────────────────────────────────────────
+function renderMainBuild() {
+    if (!mainBuild) {
+        mainBuildSection.classList.add('hidden');
+
+        return;
+    }
+
+    mainBuildSection.classList.remove('hidden');
+    mainBuildCard.innerHTML = buildMainCardHTML(mainBuild);
+    attachMainCardListeners();
+}
+
+function buildMainCardHTML(build) {
+    const isDownloading = downloading[build.buildId] !== undefined;
+    const isLaunching = launching[build.buildId];
+    const progress = downloading[build.buildId] || 0;
+
+    let accentClass = 'accent-default';
+    let statusHTML;
+    let actionsHTML;
+
+    if (!build.hasAsset) {
+        accentClass = 'accent-danger';
+        statusHTML = '<span class="status-tag no-asset">No build for this platform</span>';
+        actionsHTML = '';
+    } else if (isDownloading) {
+        accentClass = 'accent-active';
+        statusHTML = '<span class="status-tag not-cached">Downloading...</span>';
+        actionsHTML = `
+            <div class="progress-bar"><div class="progress-bar-fill" style="width: ${progress}%"></div></div>
+            <span class="progress-text">${progress}%</span>`;
+    } else if (isLaunching) {
+        accentClass = 'accent-success';
+        statusHTML = '<span class="status-tag cached">Cached</span>';
+        actionsHTML = `
+            <button class="btn btn-primary btn-action" disabled>Launching...</button>`;
+    } else if (build.updateAvailable) {
+        accentClass = 'accent-warning';
+        statusHTML = '<span class="status-tag update">Update Available</span>';
+        actionsHTML = `
+            <button class="btn btn-primary btn-action" data-main-action="update">Update & Launch</button>
+            <button class="btn btn-secondary btn-action" data-main-action="launch">Launch Cached</button>
+            <button class="delete-cache-btn btn-action" data-main-action="delete">Clear cache</button>`;
+    } else if (build.cached) {
+        accentClass = 'accent-success';
+        statusHTML = '<span class="status-tag cached">Cached</span>';
+        actionsHTML = `
+            <button class="btn btn-primary btn-action" data-main-action="launch">Launch</button>
+            <button class="delete-cache-btn btn-action" data-main-action="delete">Clear cache</button>`;
+    } else {
+        statusHTML = '<span class="status-tag not-cached">Not Downloaded</span>';
+        actionsHTML = `
+            <button class="btn btn-primary btn-action" data-main-action="download">Download & Launch</button>`;
+    }
+
+    const timeAgo = formatTimeAgo(build.updatedAt);
+    const sizeStr = build.assetSize ? formatBytes(build.assetSize) : '';
+
+    const commitHTML = build.commitMessage
+        ? `<div class="pr-commit">
+               <svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                   <path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/>
+               </svg>
+               <a class="ext-link commit-link" href="#" data-url="${repoBaseUrl}/commit/${escapeHtml(build.sha)}">${escapeHtml(build.sha.substring(0, 7))}</a>
+               <span class="commit-msg">${escapeHtml(build.commitMessage)}</span>
+           </div>`
+        : '';
+
+    // Per-build URL override toggle + config panel
+    const hasOverride = !!(prOverrides.main
+        && (prOverrides.main.landingUrl || prOverrides.main.meetUrl));
+    const override = prOverrides.main || {};
+
+    if (build.hasAsset && !isDownloading && !isLaunching && actionsHTML) {
+        actionsHTML += `
+            <button class="url-config-toggle${hasOverride ? ' has-override' : ''}" data-main-action="toggle-urls" title="${hasOverride ? 'Custom URLs active' : 'Custom preview URLs'}">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
+                    <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
+                </svg>
+            </button>`;
+    }
+
+    const urlConfigHTML = build.hasAsset ? `
+        <div class="pr-url-config hidden" id="pr-url-config-main">
+            <div class="url-field">
+                <label>Landing URL</label>
+                <input type="url" class="url-input" id="landing-main"
+                       value="${escapeHtml(override.landingUrl || '')}"
+                       placeholder="https://sonacove.catfurr.workers.dev/dashboard">
+            </div>
+            <div class="url-field">
+                <label>Meet Root URL</label>
+                <input type="url" class="url-input" id="meet-main"
+                       value="${escapeHtml(override.meetUrl || '')}"
+                       placeholder="https://sona-app.catfurr.workers.dev/meet">
+            </div>
+            <div class="url-config-actions">
+                <button class="btn btn-sm btn-primary" data-main-action="save-urls">Save URLs</button>
+                ${hasOverride ? '<button class="btn btn-sm btn-secondary" data-main-action="clear-urls">Reset</button>' : ''}
+            </div>
+        </div>` : '';
+
+    return `
+        <div class="pr-card ${accentClass}" id="main-build-inner-card">
+            <div class="pr-card-header">
+                <div class="pr-avatar pr-avatar-fallback main-avatar">M</div>
+                <div class="pr-info">
+                    <div class="pr-title-row">
+                        <a class="ext-link pr-link" href="#" data-url="${repoBaseUrl}">main</a>
+                        <span class="pr-title">${escapeHtml(build.title)}</span>
+                    </div>
+                    <div class="pr-meta">
+                        <span>Latest from main</span>
+                        <span class="meta-sep">&middot;</span>
+                        <span>${timeAgo}</span>
+                        ${sizeStr ? `<span class="meta-sep">&middot;</span><span>${sizeStr}</span>` : ''}
+                    </div>
+                    ${commitHTML}
+                </div>
+                <div class="pr-status">${statusHTML}</div>
+            </div>
+            <div class="pr-card-actions">${actionsHTML}</div>
+            ${urlConfigHTML}
+        </div>`;
+}
+
+function attachMainCardListeners() {
+    const card = document.getElementById('main-build-inner-card');
+
+    if (!card) {
+        return;
+    }
+
+    for (const btn of card.querySelectorAll('[data-main-action]')) {
+        btn.addEventListener('click', () => handleMainAction(btn.dataset.mainAction));
+    }
+}
+
+async function handleMainAction(action) {
+    if (!mainBuild) {
+        return;
+    }
+
+    const buildId = 'main';
+
+    switch (action) {
+    case 'download':
+    case 'update':
+        downloading[buildId] = 0;
+        renderMainBuild();
+
+        try {
+            await window.stagingAPI.downloadBuild({
+                buildId,
+                assetUrl: mainBuild.assetUrl,
+                sha: mainBuild.sha,
+                token
+            });
+        } catch (err) {
+            delete downloading[buildId];
+            renderMainBuild();
+            alert(`Download failed: ${err.message}`);
+            break;
+        }
+
+        delete downloading[buildId];
+        mainBuild.cached = true;
+        mainBuild.updateAvailable = false;
+        renderMainBuild();
+        await refreshCacheInfo();
+
+        launching[buildId] = true;
+        renderMainBuild();
+
+        try {
+            await window.stagingAPI.launchBuild({ buildId });
+            await new Promise(r => setTimeout(r, 3000));
+        } catch (err) {
+            alert(`Launch failed: ${err.message}`);
+        }
+
+        delete launching[buildId];
+        renderMainBuild();
+        break;
+
+    case 'launch':
+        launching[buildId] = true;
+        renderMainBuild();
+
+        try {
+            await window.stagingAPI.launchBuild({ buildId });
+            await new Promise(r => setTimeout(r, 3000));
+        } catch (err) {
+            alert(`Launch failed: ${err.message}`);
+        }
+
+        delete launching[buildId] ;
+        renderMainBuild();
+        break;
+
+    case 'delete': {
+        const result = await window.stagingAPI.clearCache({ buildId });
+
+        if (result && !result.success) {
+            alert(result.error || 'Failed to clear cache.');
+            break;
+        }
+
+        mainBuild.cached = false;
+        mainBuild.updateAvailable = false;
+        renderMainBuild();
+        await refreshCacheInfo();
+        break;
+    }
+
+    case 'toggle-urls': {
+        const configPanel = document.getElementById('pr-url-config-main');
+
+        if (configPanel) {
+            configPanel.classList.toggle('hidden');
+        }
+        break;
+    }
+
+    case 'save-urls': {
+        const landingInput = document.getElementById('landing-main');
+        const meetInput = document.getElementById('meet-main');
+        const landingUrl = landingInput ? landingInput.value.trim() : '';
+        const meetUrl = meetInput ? meetInput.value.trim() : '';
+
+        if (landingUrl || meetUrl) {
+            prOverrides.main = { landingUrl: landingUrl || null, meetUrl: meetUrl || null };
+        } else {
+            delete prOverrides.main;
+        }
+
+        await window.stagingAPI.savePROverride({
+            buildId: 'main',
+            landingUrl: landingUrl || null,
+            meetUrl: meetUrl || null
+        });
+        renderMainBuild();
+        break;
+    }
+
+    case 'clear-urls':
+        delete prOverrides.main;
+        await window.stagingAPI.savePROverride({ buildId: 'main', landingUrl: null, meetUrl: null });
+        renderMainBuild();
+        break;
     }
 }
 

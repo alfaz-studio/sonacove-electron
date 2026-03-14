@@ -1,8 +1,8 @@
 const { ipcMain, shell } = require('electron');
 const { GITHUB_OWNER, GITHUB_REPO, CACHE_DIR, loadSettings, saveSettings } = require('./config');
-const { fetchStagingPRs } = require('./github');
+const { fetchStagingPRs, fetchMainBuild } = require('./github');
 const { downloadBuild, launchBuild, clearCache, getCacheInfo } = require('./builds');
-const { validPR } = require('./fs-utils');
+const { validPR, validBuildId } = require('./fs-utils');
 
 /**
  * Register all IPC handlers.
@@ -12,6 +12,11 @@ function registerIpcHandlers({ getMainWindow }) {
     // Fetch list of staging PR builds
     ipcMain.handle('get-staging-prs', (_event, token) =>
         fetchStagingPRs(token, { owner: GITHUB_OWNER, repo: GITHUB_REPO, cacheDir: CACHE_DIR })
+    );
+
+    // Fetch the latest main-branch staging build
+    ipcMain.handle('get-main-build', (_event, token) =>
+        fetchMainBuild(token, { owner: GITHUB_OWNER, repo: GITHUB_REPO, cacheDir: CACHE_DIR })
     );
 
     // Download a build
@@ -42,9 +47,9 @@ function registerIpcHandlers({ getMainWindow }) {
         return { success: true };
     });
 
-    // Per-PR URL overrides
-    ipcMain.handle('save-pr-override', (_event, { prNumber, landingUrl, meetUrl }) => {
-        const prNum = validPR(prNumber);
+    // Per-build URL overrides
+    ipcMain.handle('save-pr-override', (_event, { prNumber, buildId, landingUrl, meetUrl }) => {
+        const key = buildId ? validBuildId(buildId) : validPR(prNumber);
 
         // Validate URLs server-side (the renderer's <input type="url"> catches most
         // issues, but this prevents invalid strings from reaching config.js where
@@ -63,9 +68,9 @@ function registerIpcHandlers({ getMainWindow }) {
         }
 
         if (landingUrl || meetUrl) {
-            settings.prOverrides[prNum] = { landingUrl, meetUrl };
+            settings.prOverrides[key] = { landingUrl, meetUrl };
         } else {
-            delete settings.prOverrides[prNum];
+            delete settings.prOverrides[key];
         }
 
         saveSettings(settings);

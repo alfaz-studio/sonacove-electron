@@ -441,6 +441,34 @@ body {
     padding-top: 8px;
 }
 
+/* ── Main Build Section ──────────────────────────────────────────────────── */
+.main-build-section {
+    margin-bottom: 16px;
+}
+
+.main-build-section .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.main-build-section .pr-card {
+    border-left: 2px solid var(--text-secondary);
+}
+
+.main-build-section .pr-card.accent-success { border-left-color: var(--success); }
+.main-build-section .pr-card.accent-warning { border-left-color: var(--warning); }
+.main-build-section .pr-card.accent-danger  { border-left-color: var(--danger); }
+.main-build-section .pr-card.accent-active  { border-left-color: var(--text-secondary); }
+
+.main-avatar {
+    background: rgba(139, 139, 139, 0.15) !important;
+    color: var(--text-secondary) !important;
+}
+
 /* ── Main / PR List ──────────────────────────────────────────────────────── */
 main {
     flex: 1;

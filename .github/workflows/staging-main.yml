@@ -1,0 +1,172 @@
+name: Staging Main Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'staging-launcher/**'
+      - '*.md'
+
+
+jobs:
+  create-staging-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create or update staging-main release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="staging-main"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA:0:7}"
+          TITLE="Staging: main (${SHORT_SHA})"
+
+          # Create or update the tag
+          gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
+            --method PATCH \
+            --field sha="${SHA}" 2>/dev/null || \
+          gh api "repos/${{ github.repository }}/git/refs" \
+            --method POST \
+            --field ref="refs/tags/${TAG}" \
+            --field sha="${SHA}"
+
+          # Create release if it doesn't exist, or update its title
+          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+            gh release edit "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --notes "Staging build from main branch (commit ${SHORT_SHA})"
+          else
+            gh release create "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --notes "Staging build from main branch (commit ${SHORT_SHA})" \
+              --prerelease
+          fi
+
+  build-staging:
+    needs: create-staging-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Patch app identity for staging build
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+
+            pkg.name = 'sonacove-staging';
+            pkg.build.appId = 'com.sonacove.staging';
+            pkg.build.productName = 'Sonacove Staging';
+            pkg.productName = 'Sonacove Staging';
+
+            if (pkg.build.protocols && pkg.build.protocols[0]) {
+              pkg.build.protocols[0].schemes = ['sonacove-staging'];
+            }
+
+            delete pkg.build.afterPack;
+            delete pkg.build.afterAllArtifactBuild;
+
+            pkg.build.win.target = 'dir';
+            pkg.build.win.signAndEditExecutable = true;
+            delete pkg.build.nsis;
+            delete pkg.build.win.artifactName;
+
+            pkg.build.mac.target = [
+              { target: 'dir', arch: ['x64'] },
+              { target: 'dir', arch: ['arm64'] }
+            ];
+            delete pkg.build.mac.hardenedRuntime;
+            delete pkg.build.mac.entitlements;
+            delete pkg.build.mac.artifactName;
+
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Patched package.json for staging build (main)');
+          "
+
+      - name: Build (webpack)
+        run: npm run build
+
+      - name: Package portable build
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            npx electron-builder --mac --x64 --arm64 --publish=never
+          else
+            npx electron-builder --dir --publish=never
+          fi
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Zip portable build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\win-unpacked\*" -DestinationPath "dist\sonacove-staging-win-x64.zip"
+          Write-Host "Created: dist\sonacove-staging-win-x64.zip"
+          Write-Host "Size: $((Get-Item 'dist\sonacove-staging-win-x64.zip').Length / 1MB) MB"
+
+      - name: Zip portable build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -e
+
+          X64_DIR=""
+          if [ -d "dist/mac-x64" ]; then
+            X64_DIR="dist/mac-x64"
+          elif [ -d "dist/mac" ]; then
+            X64_DIR="dist/mac"
+          fi
+          if [ -n "$X64_DIR" ]; then
+            cd "$X64_DIR"
+            zip -r ../sonacove-staging-mac-x64.zip "Sonacove Staging.app"
+            cd ../..
+            echo "Created: dist/sonacove-staging-mac-x64.zip (from $X64_DIR)"
+          fi
+
+          if [ -d "dist/mac-arm64" ]; then
+            cd dist/mac-arm64
+            zip -r ../sonacove-staging-mac-arm64.zip "Sonacove Staging.app"
+            cd ../..
+            echo "Created: dist/sonacove-staging-mac-arm64.zip"
+          fi
+
+          missing=0
+          [ -f "dist/sonacove-staging-mac-x64.zip" ]   || { echo "::error::x64 zip not produced"; missing=1; }
+          [ -f "dist/sonacove-staging-mac-arm64.zip" ] || { echo "::error::arm64 zip not produced"; missing=1; }
+          [ "$missing" -eq 1 ] && exit 1
+          ls -lh dist/sonacove-staging-*.zip
+
+      - name: Upload to staging-main release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="staging-main"
+
+          for f in dist/sonacove-staging-*.zip; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+            fi
+          done

@@ -18,6 +18,20 @@ function validPR(prNumber) {
 }
 
 /**
+ * Validate a build identifier and return the cache subdirectory name.
+ * Accepts a positive integer (PR number → "pr-N") or the literal "main".
+ * @param {string|number} buildId
+ * @returns {string} Cache subdirectory name
+ */
+function validBuildId(buildId) {
+    if (buildId === 'main') {
+        return 'main';
+    }
+
+    return `pr-${validPR(buildId)}`;
+}
+
+/**
  * Cross-platform recursive directory removal.
  * Uses `rd /s /q` on Windows — Node's fs.rmSync consistently hits EPERM
  * on cache directories even with maxRetries and original-fs.
@@ -94,4 +108,4 @@ function getDirSize(dirPath) {
     return size;
 }
 
-module.exports = { validPR, rmDir, execFileAsync, extractZip, getDirSize };
+module.exports = { validPR, validBuildId, rmDir, execFileAsync, extractZip, getDirSize };
