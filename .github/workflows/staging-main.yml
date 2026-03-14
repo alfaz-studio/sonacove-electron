@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - 'staging-launcher/**'
       - '*.md'
+  workflow_dispatch:
 
 
 jobs:
