@@ -27,7 +27,7 @@ jobs:
 
       - name: Install launcher dependencies
         working-directory: staging-launcher
-        run: npm ci
+        run: npm install
 
       - name: Set version
         working-directory: staging-launcher
