@@ -107,15 +107,25 @@ function renderList() {
     const openPRs = prs.filter(pr => pr.state === 'open');
     const closedPRs = prs.filter(pr => pr.state === 'closed');
 
+    const prListLabel = document.getElementById('pr-list-label');
+
     if (openPRs.length === 0 && closedPRs.length === 0) {
         listItems.innerHTML = '';
         closedSection.classList.add('hidden');
+        prListLabel.classList.add('hidden');
         listEmpty.classList.remove('hidden');
 
         return;
     }
 
     listEmpty.classList.add('hidden');
+
+    // Show/hide PR builds label
+    if (openPRs.length > 0) {
+        prListLabel.classList.remove('hidden');
+    } else {
+        prListLabel.classList.add('hidden');
+    }
 
     // Render open PRs
     listItems.innerHTML = openPRs.map(pr => buildPRCardHTML(pr)).join('');
@@ -249,15 +259,17 @@ function buildMainCardHTML(build) {
     return `
         <div class="pr-card ${accentClass}" id="main-build-inner-card">
             <div class="pr-card-header">
-                <div class="pr-avatar pr-avatar-fallback main-avatar">M</div>
+                <div class="pr-avatar pr-avatar-fallback main-avatar">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M5 3.254V3.25v.005a.75.75 0 1 1 0-.005zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm-8.5 4.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z"/>
+                    </svg>
+                </div>
                 <div class="pr-info">
                     <div class="pr-title-row">
-                        <a class="ext-link pr-link" href="#" data-url="${repoBaseUrl}">main</a>
+                        <a class="ext-link pr-link" href="#" data-url="${repoBaseUrl}/tree/main">main</a>
                         <span class="pr-title">${escapeHtml(build.title)}</span>
                     </div>
                     <div class="pr-meta">
-                        <span>Latest from main</span>
-                        <span class="meta-sep">&middot;</span>
                         <span>${timeAgo}</span>
                         ${sizeStr ? `<span class="meta-sep">&middot;</span><span>${sizeStr}</span>` : ''}
                     </div>
