@@ -225,12 +225,13 @@ async function fetchMainBuild(token, { owner, repo, cacheDir }) {
 
         release = res.data;
         rateLimit = res.rateLimit;
-    } catch {
-        // No staging-main release exists yet
+    } catch (err) {
+        // 404 means the release hasn't been created yet; re-throw other errors
+        if (err.message && !err.message.includes('404')) throw err;
         return { build: null, rateLimit: { remaining: '?', limit: '?' } };
     }
 
-    // Determine platform asset
+    // Determine platform asset (CI only builds for Windows and macOS)
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
     let assetName;
 
@@ -239,7 +240,8 @@ async function fetchMainBuild(token, { owner, repo, cacheDir }) {
     } else if (process.platform === 'win32') {
         assetName = 'sonacove-staging-win-x64.zip';
     } else {
-        assetName = `sonacove-staging-linux-${arch}.zip`;
+        // No Linux builds are produced by CI
+        return { build: null, rateLimit };
     }
 
     const asset = release.assets.find(a => a.name === assetName);

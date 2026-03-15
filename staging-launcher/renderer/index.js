@@ -242,13 +242,13 @@ function buildMainCardHTML(build) {
                 <label>Landing URL</label>
                 <input type="url" class="url-input" id="landing-main"
                        value="${escapeHtml(override.landingUrl || '')}"
-                       placeholder="https://sonacove.catfurr.workers.dev/dashboard">
+                       placeholder="https://example.com/dashboard">
             </div>
             <div class="url-field">
                 <label>Meet Root URL</label>
                 <input type="url" class="url-input" id="meet-main"
                        value="${escapeHtml(override.meetUrl || '')}"
-                       placeholder="https://sona-app.catfurr.workers.dev/meet">
+                       placeholder="https://example.com/meet">
             </div>
             <div class="url-config-actions">
                 <button class="btn btn-sm btn-primary" data-main-action="save-urls">Save URLs</button>
@@ -303,43 +303,15 @@ async function handleMainAction(action) {
 
     switch (action) {
     case 'download':
-    case 'update':
-        downloading[buildId] = 0;
-        renderMainBuild();
+    case 'update': {
+        const ok = await downloadAndLaunch(buildId, mainBuild.assetUrl, mainBuild.sha, renderMainBuild);
 
-        try {
-            await window.stagingAPI.downloadBuild({
-                buildId,
-                assetUrl: mainBuild.assetUrl,
-                sha: mainBuild.sha,
-                token
-            });
-        } catch (err) {
-            delete downloading[buildId];
-            renderMainBuild();
-            alert(`Download failed: ${err.message}`);
-            break;
+        if (ok) {
+            mainBuild.cached = true;
+            mainBuild.updateAvailable = false;
         }
-
-        delete downloading[buildId];
-        mainBuild.cached = true;
-        mainBuild.updateAvailable = false;
-        renderMainBuild();
-        await refreshCacheInfo();
-
-        launching[buildId] = true;
-        renderMainBuild();
-
-        try {
-            await window.stagingAPI.launchBuild({ buildId });
-            await new Promise(r => setTimeout(r, 3000));
-        } catch (err) {
-            alert(`Launch failed: ${err.message}`);
-        }
-
-        delete launching[buildId];
-        renderMainBuild();
         break;
+    }
 
     case 'launch':
         launching[buildId] = true;
@@ -352,7 +324,7 @@ async function handleMainAction(action) {
             alert(`Launch failed: ${err.message}`);
         }
 
-        delete launching[buildId] ;
+        delete launching[buildId];
         renderMainBuild();
         break;
 
@@ -511,13 +483,13 @@ function buildPRCardHTML(pr) {
                 <label>Landing URL</label>
                 <input type="url" class="url-input" id="landing-${pr.prNumber}"
                        value="${escapeHtml(override.landingUrl || '')}"
-                       placeholder="https://sonacove.catfurr.workers.dev/dashboard">
+                       placeholder="https://example.com/dashboard">
             </div>
             <div class="url-field">
                 <label>Meet Root URL</label>
                 <input type="url" class="url-input" id="meet-${pr.prNumber}"
                        value="${escapeHtml(override.meetUrl || '')}"
-                       placeholder="https://sona-app.catfurr.workers.dev/meet">
+                       placeholder="https://example.com/meet">
             </div>
             <div class="url-config-actions">
                 <button class="btn btn-sm btn-primary" data-action="save-urls" data-pr="${pr.prNumber}">Save URLs</button>
@@ -625,6 +597,48 @@ function attachCardListeners(prNumber) {
     }
 }
 
+// ── Shared download + launch ─────────────────────────────────────────────────
+async function downloadAndLaunch(id, assetUrl, sha, render) {
+    downloading[id] = 0;
+    render();
+
+    try {
+        await window.stagingAPI.downloadBuild({
+            ...(id === 'main' ? { buildId: id } : { prNumber: id }),
+            assetUrl,
+            sha,
+            token
+        });
+    } catch (err) {
+        delete downloading[id];
+        render();
+        alert(`Download failed: ${err.message}`);
+
+        return false;
+    }
+
+    delete downloading[id];
+    render();
+    await refreshCacheInfo();
+
+    launching[id] = true;
+    render();
+
+    try {
+        await window.stagingAPI.launchBuild(
+            id === 'main' ? { buildId: id } : { prNumber: id }
+        );
+        await new Promise(r => setTimeout(r, 3000));
+    } catch (err) {
+        alert(`Launch failed: ${err.message}`);
+    }
+
+    delete launching[id];
+    render();
+
+    return true;
+}
+
 // ── Actions ─────────────────────────────────────────────────────────────────
 async function handleAction(action, prNumber) {
     const pr = prs.find(p => p.prNumber === prNumber);
@@ -635,46 +649,17 @@ async function handleAction(action, prNumber) {
 
     switch (action) {
     case 'download':
-    case 'update':
-        downloading[prNumber] = 0;
-        renderPRCard(prNumber);
+    case 'update': {
+        const render = () => renderPRCard(prNumber);
+        const ok = await downloadAndLaunch(prNumber, pr.assetUrl, pr.sha, render);
 
-        try {
-            await window.stagingAPI.downloadBuild({
-                prNumber: pr.prNumber,
-                assetUrl: pr.assetUrl,
-                sha: pr.sha,
-                token
-            });
-        } catch (err) {
-            delete downloading[prNumber];
-            renderPRCard(prNumber);
-            alert(`Download failed: ${err.message}`);
-            break;
+        if (ok) {
+            pr.cached = true;
+            pr.cachedSha = pr.sha;
+            pr.updateAvailable = false;
         }
-
-        // Download succeeded — update state and re-render
-        delete downloading[prNumber];
-        pr.cached = true;
-        pr.cachedSha = pr.sha;
-        pr.updateAvailable = false;
-        renderPRCard(prNumber);
-        await refreshCacheInfo();
-
-        // Auto-launch (errors here shouldn't affect the cached state)
-        launching[prNumber] = true;
-        renderPRCard(prNumber);
-
-        try {
-            await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
-            await new Promise(r => setTimeout(r, 3000));
-        } catch (err) {
-            alert(`Launch failed: ${err.message}`);
-        }
-
-        delete launching[prNumber];
-        renderPRCard(prNumber);
         break;
+    }
 
     case 'launch':
         launching[prNumber] = true;
@@ -682,7 +667,6 @@ async function handleAction(action, prNumber) {
 
         try {
             await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
-            // Keep "Launching..." visible long enough for the app to open
             await new Promise(r => setTimeout(r, 3000));
         } catch (err) {
             alert(`Launch failed: ${err.message}`);
