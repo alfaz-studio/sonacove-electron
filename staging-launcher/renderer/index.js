@@ -75,7 +75,7 @@ async function refreshPRs() {
 
         const [ result, mainResult ] = await Promise.all([
             window.stagingAPI.getStagingPRs(token),
-            window.stagingAPI.getMainBuild(token)
+            window.stagingAPI.getMainBuild(token).catch(() => ({ build: null }))
         ]);
 
         prs = result.prs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -308,6 +308,7 @@ async function handleMainAction(action) {
 
         if (ok) {
             mainBuild.cached = true;
+            mainBuild.cachedSha = mainBuild.sha;
             mainBuild.updateAvailable = false;
         }
         break;
