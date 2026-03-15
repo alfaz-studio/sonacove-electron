@@ -49,7 +49,7 @@ function registerIpcHandlers({ getMainWindow }) {
 
     // Per-build URL overrides
     ipcMain.handle('save-pr-override', (_event, { prNumber, buildId, landingUrl, meetUrl }) => {
-        const key = buildId ? validBuildId(buildId) : validPR(prNumber);
+        const key = buildId || validPR(prNumber);
 
         // Validate URLs server-side (the renderer's <input type="url"> catches most
         // issues, but this prevents invalid strings from reaching config.js where

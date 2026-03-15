@@ -338,6 +338,7 @@ async function handleMainAction(action) {
         }
 
         mainBuild.cached = false;
+        mainBuild.cachedSha = null;
         mainBuild.updateAvailable = false;
         renderMainBuild();
         await refreshCacheInfo();
