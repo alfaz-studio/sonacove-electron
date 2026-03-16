@@ -206,4 +206,95 @@ async function fetchStagingPRs(token, { owner, repo, cacheDir }) {
     return { prs: results, rateLimit };
 }
 
-module.exports = { githubApi, fetchStagingPRs };
+/**
+ * Fetch the latest main-branch staging build from GitHub releases.
+ * @param {string} [token]  GitHub PAT
+ * @param {{ owner: string, repo: string, cacheDir: string }} config
+ * @returns {Promise<{ build: object|null, rateLimit: object }>}
+ */
+async function fetchMainBuild(token, { owner, repo, cacheDir }) {
+    const tag = 'staging-main';
+    let release;
+    let rateLimit;
+
+    try {
+        const res = await githubApi(
+            `/repos/${owner}/${repo}/releases/tags/${tag}`,
+            token
+        );
+
+        release = res.data;
+        rateLimit = res.rateLimit;
+    } catch (err) {
+        // 404 means the release hasn't been created yet; re-throw other errors
+        if (err.message && !err.message.includes('404')) throw err;
+        return { build: null, rateLimit: { remaining: '?', limit: '?' } };
+    }
+
+    // Determine platform asset (CI only builds for Windows and macOS)
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    let assetName;
+
+    if (process.platform === 'darwin') {
+        assetName = `sonacove-staging-mac-${arch}.zip`;
+    } else if (process.platform === 'win32') {
+        assetName = 'sonacove-staging-win-x64.zip';
+    } else {
+        // No Linux builds are produced by CI
+        return { build: null, rateLimit };
+    }
+
+    const asset = release.assets.find(a => a.name === assetName);
+
+    // Check cache status
+    const mainCacheDir = path.join(cacheDir, 'main');
+    const metaPath = path.join(mainCacheDir, 'meta.json');
+    let cached = false;
+    let cachedSha = null;
+
+    if (fs.existsSync(metaPath)) {
+        try {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+
+            cached = true;
+            cachedSha = meta.sha;
+        } catch {
+            // Corrupt meta, treat as not cached
+        }
+    }
+
+    const sha = release.target_commitish;
+
+    // Fetch commit message for the SHA
+    let commitMessage = null;
+
+    try {
+        const { data } = await githubApi(
+            `/repos/${owner}/${repo}/commits/${sha}`,
+            token
+        );
+
+        commitMessage = data.commit.message.split('\n')[0];
+    } catch {
+        // Optional
+    }
+
+    return {
+        build: {
+            buildId: 'main',
+            title: 'Main Branch',
+            sha,
+            commitMessage,
+            updatedAt: release.published_at || release.created_at,
+            assetName,
+            assetUrl: asset ? asset.url : null,
+            assetSize: asset ? asset.size : 0,
+            hasAsset: !!asset,
+            cached,
+            updateAvailable: cached && cachedSha !== sha
+        },
+        rateLimit
+    };
+}
+
+module.exports = { githubApi, fetchStagingPRs, fetchMainBuild };
