@@ -7,6 +7,7 @@ let updaterStatusHandler = null;
 
 contextBridge.exposeInMainWorld('stagingAPI', {
     getStagingPRs: token => ipcRenderer.invoke('get-staging-prs', token),
+    getMainBuild: token => ipcRenderer.invoke('get-main-build', token),
     downloadBuild: opts => ipcRenderer.invoke('download-build', opts),
     launchBuild: opts => ipcRenderer.invoke('launch-build', opts),
     clearCache: opts => ipcRenderer.invoke('clear-cache', opts),

@@ -13,7 +13,7 @@ const {
     app,
     ipcMain,
     desktopCapturer,
-    dialog,
+    screen,
     shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
@@ -27,6 +27,10 @@ const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+const {
+    showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
+} = require('./app/features/sonacove/in-app-dialogs');
+const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/sonacove/paths');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -46,8 +50,7 @@ const config = require('./app/features/config');
 const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
-    navigateDeepLink,
-    processDeepLinkOnStartup
+    navigateDeepLink
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
@@ -93,16 +96,19 @@ if (isDev) {
     app.commandLine.appendSwitch('allow-insecure-localhost');
 }
 
-// Enable Opus RED field trial.
-app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-Audio-Red-For-Opus/Enabled/');
+// Enable WebRTC field trials:
+// - Opus RED: redundant audio encoding for packet loss resilience
+// - FlexFEC-03: forward error correction for video in P2P calls
+//   (advertise in SDP + enable sending; receive is on by default)
+app.commandLine.appendSwitch('force-fieldtrials',
+    'WebRTC-Audio-Red-For-Opus/Enabled/'
+    + 'WebRTC-FlexFEC-03-Advertised/Enabled/'
+    + 'WebRTC-FlexFEC-03/Enabled/');
 
 // Wayland: Enable optional PipeWire support.
 if (!app.commandLine.hasSwitch('enable-features')) {
     app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
 }
-
-autoUpdater.logger = require('electron-log');
-autoUpdater.logger.transports.file.level = 'info';
 
 // Enable context menu so things like copy and paste work in input fields.
 contextMenu({
@@ -140,64 +146,19 @@ const appProtocolSurplus = `${config.default.appProtocolPrefix}://`;
 let pendingStartupDeepLink = null;
 
 /**
- * Resolves the absolute path to the application icon based on the current platform
- *
- * @param {string} [format] - Optional format override (e.g., 'png').
- * @returns {string} The absolute path to the icon file (.ico for Windows, .png for others).
- */
-const getIconPath = format => {
-    const ext = format || (process.platform === 'win32' ? 'ico' : 'png');
-    const name = `icon.${ext}`;
-
-    // 1. Try Development Root (Where you run npm start)
-    const devPath = path.join(process.cwd(), 'resources', name);
-
-    if (fs.existsSync(devPath)) {
-        return devPath;
-    }
-
-    // 2. Try Relative to main.js (Moving up from build folder)
-    const relativePath = path.resolve(__dirname, '..', 'resources', name);
-
-    if (fs.existsSync(relativePath)) {
-        return relativePath;
-    }
-
-    // 3. Try Production Path (Packaged app)
-    if (process.resourcesPath) {
-        const prodPath = path.join(process.resourcesPath, name);
-
-        if (fs.existsSync(prodPath)) {
-            return prodPath;
-        }
-    }
-
-    // 4. Ultimate Fallback: try app.getAppPath() but strip 'build' if present
-    let appPath = app.getAppPath();
-
-    if (appPath.endsWith('build')) {
-        appPath = path.resolve(appPath, '..');
-    }
-
-    return path.join(appPath, 'resources', name);
-};
-
-/**
- * Shows a native About dialog with version and environment info.
+ * Shows an in-app About panel with version and environment info.
  */
 function showAboutDialog() {
-    dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: `About ${app.name}`,
-        message: app.name,
-        detail: [
-            `Version: ${app.getVersion()}`,
-            `Electron: ${process.versions.electron}`,
-            `Chrome: ${process.versions.chrome}`,
-            `Node: ${process.versions.node}`,
-            `Platform: ${process.platform} ${process.arch}`
-        ].join('\n'),
-        buttons: [ 'OK' ]
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+    showAboutPanel(mainWindow.webContents, {
+        appName: app.name,
+        appVersion: app.getVersion(),
+        electronVersion: process.versions.electron,
+        chromeVersion: process.versions.chrome,
+        nodeVersion: process.versions.node,
+        platform: `${process.platform} ${process.arch}`
     });
 }
 
@@ -205,25 +166,32 @@ function showAboutDialog() {
  * Triggers a manual update check and reports the result to the user.
  */
 function checkForUpdatesManually() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    const wc = mainWindow.webContents;
+
     if (isStaging) {
-        dialog.showMessageBox(mainWindow, {
-            type: 'info',
+        showInfoToast(wc, {
             title: 'Staging Build',
-            message: 'Staging builds do not receive auto-updates.',
-            buttons: [ 'OK' ]
+            message: 'Staging builds do not receive auto-updates.'
         });
 
         return;
     }
 
+    showInfoToast(wc, {
+        title: 'Checking for Updates\u2026',
+        message: 'Looking for a newer version.'
+    });
+
     autoUpdater.checkForUpdates()
         .then(result => {
             if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
-                dialog.showMessageBox(mainWindow, {
-                    type: 'info',
+                showInfoToast(wc, {
                     title: 'No Updates Available',
-                    message: `You're on the latest version (${app.getVersion()}).`,
-                    buttons: [ 'OK' ]
+                    message: `You're on the latest version (${app.getVersion()}).`
                 });
             }
 
@@ -232,12 +200,10 @@ function checkForUpdatesManually() {
         })
         .catch(err => {
             console.error('Manual update check failed:', err);
-            dialog.showMessageBox(mainWindow, {
-                type: 'error',
+            showInfoToast(wc, {
                 title: 'Update Check Failed',
                 message: 'Could not check for updates. Please try again later.',
-                detail: err.message,
-                buttons: [ 'OK' ]
+                type: 'error'
             });
         });
 
@@ -340,63 +306,34 @@ function setApplicationMenu() {
 // gone. We inject a slim custom title bar into each loaded page so the user
 // still has About / Check for Updates without pressing Alt.
 
-const TITLEBAR_CSS = `
-#sonacove-titlebar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 32px;
-    background: #1a1a2e;
-    -webkit-app-region: drag;
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
-    z-index: 2147483647;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 12px;
-    color: #c0c0c0;
-    user-select: none;
-    box-sizing: border-box;
-}
-#sonacove-titlebar .stb-icon {
-    width: 20px;
-    height: 20px;
-    margin-right: 8px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}
-#sonacove-titlebar .stb-title {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-#sonacove-titlebar .stb-menu {
-    display: flex;
-    gap: 2px;
-    -webkit-app-region: no-drag;
-    margin-right: 140px; /* space for native window-controls overlay */
-}
-#sonacove-titlebar .stb-btn {
-    background: transparent;
-    border: none;
-    color: #a0a0a0;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: inherit;
-    line-height: 1;
-}
-#sonacove-titlebar .stb-btn:hover {
-    background: rgba(255,255,255,0.1);
-    color: #ffffff;
-}
-html { box-sizing: border-box !important; padding-top: 32px !important; }
-`.trim();
+const TITLEBAR_CSS = ''
+    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1a1a2e;'
+    + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
+    + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
+    + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
+    + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
+    + 'background-repeat:no-repeat;background-position:center;}'
+    + '#sonacove-titlebar .stb-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;margin-right:140px;}'
+    + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
+    + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
+    + 'transition:background 0.15s ease,color 0.15s ease;}'
+    + '#sonacove-titlebar .stb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}'
+    + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
+    + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
 
 const getTitlebarJS = (iconBase64 = '') => `
 (function() {
+    // Inject styles idempotently to prevent flash on re-navigation.
+    var sid = 'sonacove-titlebar-styles';
+    if (!document.getElementById(sid)) {
+        var s = document.createElement('style');
+        s.id = sid;
+        s.textContent = ${JSON.stringify(TITLEBAR_CSS)};
+        document.head.appendChild(s);
+    }
+
+    // Guard against duplicate injection.
     if (document.getElementById('sonacove-titlebar')) return;
 
     var bar = document.createElement('div');
@@ -409,9 +346,9 @@ const getTitlebarJS = (iconBase64 = '') => `
         iconHtml +
         '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
         '<div class="stb-menu">' +
-            '<button class="stb-btn" id="stb-about">About</button>' +
-            '<button class="stb-btn" id="stb-updates">Check for Updates</button>' +
-            '<button class="stb-btn" id="stb-help">Help</button>' +
+            '<button class="stb-btn" id="stb-about" title="View app version and system info">About</button>' +
+            '<button class="stb-btn" id="stb-updates" title="Check for new versions">Check for Updates</button>' +
+            '<button class="stb-btn" id="stb-help" title="Open Sonacove documentation">Help</button>' +
         '</div>';
     document.body.prepend(bar);
 
@@ -439,23 +376,25 @@ const getTitlebarJS = (iconBase64 = '') => `
 /**
  * Injects the custom title bar into the currently loaded page (Windows only).
  */
+// Cache the icon base64 at startup rather than re-reading from disk on every navigation.
+let _cachedIconBase64 = null;
+function getIconBase64() {
+    if (_cachedIconBase64 !== null) return _cachedIconBase64;
+    try {
+        const iconPath = getIconPath('png');
+        _cachedIconBase64 = fs.existsSync(iconPath) ? fs.readFileSync(iconPath).toString('base64') : '';
+    } catch (e) {
+        _cachedIconBase64 = '';
+    }
+    return _cachedIconBase64;
+}
+
 function injectWindowsTitleBar() {
     if (!mainWindow || mainWindow.isDestroyed()) {
         return;
     }
 
-    let iconBase64 = '';
-    try {
-        const iconPath = getIconPath('png');
-        if (fs.existsSync(iconPath)) {
-            iconBase64 = fs.readFileSync(iconPath).toString('base64');
-        }
-    } catch (e) {
-        console.warn('Failed to load title bar icon:', e);
-    }
-
-    mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(iconBase64)).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64())).catch(() => {});
 }
 
 /**
@@ -489,6 +428,7 @@ function createJitsiMeetWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false,
+        backgroundColor: '#1a1a2e',
 
         // On Windows, hide the native menu bar row and show native window
         // controls as an overlay. A custom in-page title bar is injected via
@@ -506,9 +446,7 @@ function createJitsiMeetWindow() {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
             nodeIntegration: false,
-            preload: isDev
-                ? path.resolve(basePath, 'build', 'preload.js')
-                : path.resolve(basePath, 'build', 'preload.js'),
+            preload: path.resolve(basePath, 'build', 'preload.js'),
             sandbox: false,
             webSecurity: false
         }
@@ -543,6 +481,7 @@ function createJitsiMeetWindow() {
         return { action: 'deny' };
     };
 
+    let pendingUpdateVersion = null;
 
     if (!process.mas && !isStaging) {
         // Setup Logger
@@ -566,26 +505,17 @@ function createJitsiMeetWindow() {
             });
         });
 
-        autoUpdater.on('update-not-available', info => {
+        autoUpdater.on('update-not-available', () => {
             console.log('❌ Update not available.');
         });
 
         autoUpdater.on('update-downloaded', info => {
             capture('update_downloaded', { new_version: info.version });
+            pendingUpdateVersion = info.version;
 
-            dialog.showMessageBox(mainWindow, {
-                type: 'info',
-                title: 'Update Ready',
-                message: `Version ${info.version} has been downloaded. Quit and install now?`,
-                buttons: [ 'Yes', 'Later' ]
-            }).then(result => {
-                if (result.response === 0) {
-                    capture('update_install_clicked', { new_version: info.version });
-                    autoUpdater.quitAndInstall(false, true);
-                } else {
-                    capture('update_deferred', { new_version: info.version });
-                }
-            });
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                showUpdateToast(mainWindow.webContents, info.version);
+            }
         });
 
         autoUpdater.on('error', err => {
@@ -611,21 +541,29 @@ function createJitsiMeetWindow() {
         }
     }
 
-    // Prevent Close during Meeting
-    mainWindow.webContents.on('will-prevent-unload', event => {
-        const choice = dialog.showMessageBoxSync(mainWindow, {
-            type: 'question',
-            buttons: [ 'Leave', 'Stay' ],
-            title: 'Leave Meeting?',
-            message: 'You are currently in a meeting. Are you sure you want to quit?',
-            defaultId: 0,
-            cancelId: 1
-        });
+    // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
+    // Not calling event.preventDefault() keeps the page open (prevents unload).
+    // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
+    mainWindow.webContents.on('will-prevent-unload', () => {
+        showLeaveModal(mainWindow.webContents);
+    });
 
-        const leave = choice === 0;
+    ipcMain.on('leave-modal-action', (event, data) => {
+        if (event.sender !== mainWindow?.webContents) return;
+        if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.destroy();
+        }
+    });
 
-        if (leave) {
-            event.preventDefault();
+    // Handle update toast responses (placed here with other IPC handlers
+    // rather than inside the updater block for consistent cleanup).
+    ipcMain.on('update-toast-action', (event, data) => {
+        if (event.sender !== mainWindow?.webContents) return;
+        if (data && data.action === 'install') {
+            capture('update_install_clicked', { new_version: pendingUpdateVersion });
+            autoUpdater.quitAndInstall(false, true);
+        } else {
+            capture('update_deferred', { new_version: pendingUpdateVersion });
         }
     });
 
@@ -715,7 +653,10 @@ function createJitsiMeetWindow() {
     });
 
     windowState.manage(mainWindow);
-    mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+
+    // Show a branded splash screen first, then navigate to the remote URL.
+    // The backgroundColor matches the splash so the transition feels seamless.
+    mainWindow.loadFile(getSplashPath());
 
     if (isDev) {
         mainWindow.webContents.session.clearCache();
@@ -842,7 +783,14 @@ function createJitsiMeetWindow() {
 
     // Inject the custom in-page title bar on Windows after each page load.
     if (process.platform !== 'darwin') {
-        mainWindow.webContents.on('did-finish-load', injectWindowsTitleBar);
+        mainWindow.webContents.on('did-finish-load', () => {
+            // Skip local pages (splash, error) — title bar is only for the remote dashboard.
+            const url = mainWindow.webContents.getURL();
+
+            if (!url.startsWith('file://')) {
+                injectWindowsTitleBar();
+            }
+        });
     }
 
     // Inject a visible staging banner so testers know they're on a PR build.
@@ -870,12 +818,42 @@ function createJitsiMeetWindow() {
                     if (document.getElementById('sonacove-staging-banner')) return;
                     var banner = document.createElement('div');
                     banner.id = 'sonacove-staging-banner';
-                    banner.textContent = 'STAGING BUILD — ${app.getVersion()}';
+                    banner.textContent = 'STAGING BUILD \u2014 ' + ${JSON.stringify(app.getVersion())};
                     document.body.appendChild(banner);
                 })();
             `).catch(() => {});
         });
     }
+
+    // Show a branded error page instead of Chromium's default when the
+    // remote URL fails to load (offline, DNS failure, server down, etc.).
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        // Only handle main-frame failures; ignore sub-frames and aborted loads
+        // (ERR_ABORTED fires when navigation is cancelled by a new one).
+        if (!isMainFrame || errorCode === -3) {
+            return;
+        }
+
+        // Don't show the error page if a local file itself failed to load —
+        // this prevents an infinite loop if error.html is missing or corrupt.
+        if (validatedURL && validatedURL.startsWith('file://')) {
+            return;
+        }
+
+        console.warn(`Page load failed: ${errorDescription} (${errorCode}) — ${validatedURL}`);
+
+        mainWindow.loadFile(getErrorPath(), {
+            query: { code: String(errorCode), desc: errorDescription }
+        });
+    });
+
+    // Allow the error page to trigger a reload of the remote dashboard.
+    ipcMain.on('retry-load', (event) => {
+        if (event.sender !== mainWindow?.webContents) return;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+        }
+    });
 
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
@@ -884,10 +862,21 @@ function createJitsiMeetWindow() {
         // Close the annotation overlay if it is open
         closeOverlay();
 
+        // Safe to use removeAllListeners here because each channel has exactly
+        // one listener registered during this window's lifecycle. If additional
+        // listeners are ever added elsewhere, switch to storing handler refs and
+        // calling ipcMain.removeListener() instead.
+        ipcMain.removeAllListeners('retry-load');
+        ipcMain.removeAllListeners('update-toast-action');
+        ipcMain.removeAllListeners('leave-modal-action');
+        ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
+
+        // Splash is now visible — load the remote dashboard.
+        mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
 
         // Try pending startup deeplink if we have one
         if (pendingStartupDeepLink) {
@@ -1011,11 +1000,6 @@ app.on('ready', () => {
 
     setupChildWindowIcon();
     createJitsiMeetWindow();
-
-    // Process deeplinks AFTER window creation
-    setTimeout(() => {
-        processDeepLinkOnStartup();
-    }, 500);
 });
 
 if (isDev) {

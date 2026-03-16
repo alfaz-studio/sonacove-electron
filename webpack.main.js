@@ -1,4 +1,5 @@
 const path = require('path');
+const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
     target: 'electron-main',
@@ -14,6 +15,14 @@ module.exports = {
     node: {
         __dirname: true
     },
+    plugins: [
+        new CopyPlugin({
+            patterns: [
+                { from: 'app/splash.html', to: 'splash.html' },
+                { from: 'app/error.html', to: 'error.html' }
+            ]
+        })
+    ],
     externals: [ {
         '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
         'electron-debug': 'require(\'electron-debug\')',

@@ -72,7 +72,55 @@ jobs:
         working-directory: staging-launcher
         run: npx electron-builder --mac --publish never
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify macOS signing and notarization
+        if: matrix.os == 'macos-latest'
+        run: |
+          DMG=$(ls staging-launcher/dist/*.dmg | head -1)
+          echo "Verifying: $DMG"
+          hdiutil attach -quiet -mountpoint /Volumes/StagingLauncher "$DMG"
+          APP=$(ls -d /Volumes/StagingLauncher/*.app | head -1)
+          echo "App: $APP"
+          codesign --verify --deep --strict "$APP"
+          spctl --assess --type execute --verbose "$APP"
+          hdiutil detach -quiet /Volumes/StagingLauncher
+
+      - name: Rename installers (spaces → dots)
+        shell: bash
+        run: |
+          # gh release upload replaces spaces with dots in asset names,
+          # but latest.yml references the original filenames (with spaces).
+          # Rename local files to use dots and patch the yml manifests to match.
+          cd staging-launcher/dist
+          for f in *.exe *.dmg; do
+            [ -f "$f" ] || continue
+            newname="${f// /.}"
+            if [ "$f" != "$newname" ]; then
+              echo "Renaming: '$f' → '$newname'"
+              mv "$f" "$newname"
+            fi
+          done
+
+          # Patch latest.yml and latest-mac.yml — replace ALL spaces in
+          # filenames so the manifest matches the renamed files on disk.
+          for yml in latest.yml latest-mac.yml; do
+            [ -f "$yml" ] || continue
+            node -e "
+              const fs = require('fs');
+              let y = fs.readFileSync('$yml','utf8');
+              // Replace spaces with dots in filename references (.exe / .dmg lines)
+              y = y.replace(/^(\s*-?\s*(?:url|path):\s*)(.+)/gm, (_, prefix, rest) =>
+                prefix + rest.replace(/ /g, '.'));
+              fs.writeFileSync('$yml', y);
+            "
+            echo "Patched $yml:"
+            cat "$yml"
+          done
 
       - name: List build output
         shell: bash
@@ -96,15 +144,31 @@ jobs:
 
           Updated automatically when \`staging-launcher/\` changes on main."
 
-          # Upload platform installers (clobber old ones)
+          # Delete old versioned assets for THIS PLATFORM only.
+          # Each platform cleans its own installer type to avoid a race
+          # condition where the slower job deletes the faster job's upload.
+          echo "Cleaning old assets..."
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PATTERN="*.exe"
+          else
+            PATTERN="*.dmg"
+          fi
+          gh release view "${TAG}" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | while read -r asset; do
+            case "$asset" in
+              $PATTERN) echo "Deleting old asset: $asset"
+                        gh release delete-asset "${TAG}" "$asset" --repo "${{ github.repository }}" -y ;;
+            esac
+          done
+
+          # Upload platform installers
           for f in staging-launcher/dist/*.exe staging-launcher/dist/*.dmg; do
             if [ -f "$f" ]; then
               echo "Uploading: $f"
-              gh release upload "${TAG}" "$f" --clobber --repo "${{ github.repository }}"
+              gh release upload "${TAG}" "$f" --repo "${{ github.repository }}"
             fi
           done
 
-          # Upload electron-updater manifests
+          # Upload electron-updater manifests (clobber to overwrite)
           for f in staging-launcher/dist/latest.yml staging-launcher/dist/latest-mac.yml; do
             if [ -f "$f" ]; then
               echo "Uploading: $f"

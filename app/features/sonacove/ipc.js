@@ -14,10 +14,11 @@ let registeredListeners = {};
  * Registers all Sonacove-specific IPC listeners.
  *
  * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
+ * @param {BrowserWindow} _mainWindow - The main window (unused, kept for call-site compat).
  * @param {Object} [handlers] - Additional handlers (e.g., for About dialog).
  * @returns {void}
  */
-function setupSonacoveIPC(ipcMain, handlers = {}) {
+function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
     // Remove only our own previously registered listeners
     for (const [ channel, listener ] of Object.entries(registeredListeners)) {
         ipcMain.removeListener(channel, listener);
@@ -70,7 +71,11 @@ function setupSonacoveIPC(ipcMain, handlers = {}) {
         // Find main window dynamically to handle refreshes
         const mw = getMainWindow();
 
-        toggleOverlay(mw, config);
+        try {
+            toggleOverlay(mw, config);
+        } catch (err) {
+            console.error('❌ Failed to toggle annotation overlay:', err);
+        }
     });
 
     // Open External Links (only allow http/https to prevent arbitrary scheme execution)
@@ -92,17 +97,21 @@ function setupSonacoveIPC(ipcMain, handlers = {}) {
     register('show-overlay', () => {
         const overlay = getOverlayWindow();
 
-        if (overlay) {
+        if (overlay && !overlay.isDestroyed()) {
             overlay.show();
         }
     });
 
     // Click-through logic
     register('set-ignore-mouse-events', (event, ignore) => {
-        const win = BrowserWindow.fromWebContents(event.sender);
+        try {
+            const win = BrowserWindow.fromWebContents(event.sender);
 
-        if (win) {
-            win.setIgnoreMouseEvents(ignore, { forward: true });
+            if (win && !win.isDestroyed()) {
+                win.setIgnoreMouseEvents(ignore, { forward: true });
+            }
+        } catch (err) {
+            console.error('❌ Failed to set ignore mouse events:', err);
         }
     });
 

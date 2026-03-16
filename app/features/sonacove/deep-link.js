@@ -5,8 +5,6 @@ const sonacoveConfig = require('./config');
 const { getMainWindow } = require('./overlay/helpers');
 const { closeOverlay } = require('./overlay/overlay-window');
 
-let pendingStartupDeepLink = null;
-
 /**
  * Registers the custom protocol scheme for the application.
  *
@@ -23,21 +21,6 @@ function registerProtocol() {
 }
 
 /**
- * Processes any deep link arguments provided during application startup.
- *
- * @returns {void}
- */
-function processDeepLinkOnStartup() {
-    if (process.platform === 'win32' || process.platform === 'linux') {
-        const url = process.argv.find(arg => arg.startsWith('sonacove://'));
-
-        if (url) {
-            pendingStartupDeepLink = url;
-        }
-    }
-}
-
-/**
  * Navigates the application based on the provided deep link.
  * Handles standard navigation (e.g. sonacove://meet/roomname).
  *
@@ -50,9 +33,12 @@ function navigateDeepLink(deepLink) {
 
         try {
             const appHost = new URL(sonacoveConfig.currentConfig.landing).host; // e.g. sonacove.com
+            const meetHost = new URL(sonacoveConfig.currentConfig.meetRoot).host;
 
             if (rawPath.startsWith(appHost)) {
                 rawPath = rawPath.replace(appHost, '');
+            } else if (meetHost !== appHost && rawPath.startsWith(meetHost)) {
+                rawPath = rawPath.replace(meetHost, '');
             }
         } catch (e) { /* ignore URL parsing error */ }
 
@@ -127,6 +113,5 @@ function navigateDeepLink(deepLink) {
 
 module.exports = {
     registerProtocol,
-    processDeepLinkOnStartup,
     navigateDeepLink
 };

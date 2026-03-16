@@ -3,7 +3,7 @@ const fs = require('original-fs');
 const { createWriteStream } = require('original-fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { validPR, rmDir, extractZip, execFileAsync, getDirSize } = require('./fs-utils');
+const { validPR, validBuildId, rmDir, extractZip, execFileAsync, getDirSize } = require('./fs-utils');
 const { patchBuildUrls, buildLaunchEnv } = require('./patching');
 
 // ── Download helpers ────────────────────────────────────────────────────────
@@ -131,15 +131,16 @@ function downloadUrl(url, destPath, onProgress) {
 
 /**
  * Download and extract a staging build.
- * @param {{ prNumber, assetUrl, sha, token, cacheDir, getMainWindow }} opts
+ * @param {{ prNumber?, buildId?, assetUrl, sha, token, cacheDir, getMainWindow }} opts
  */
-async function downloadBuild({ prNumber, assetUrl, sha, token, cacheDir, getMainWindow }) {
+async function downloadBuild({ prNumber, buildId, assetUrl, sha, token, cacheDir, getMainWindow }) {
     if (!assetUrl.startsWith('https://api.github.com/')) {
         throw new Error('Asset URL must be from api.github.com');
     }
 
-    const prNum = validPR(prNumber);
-    const prCacheDir = path.join(cacheDir, `pr-${prNum}`);
+    const cacheSubdir = buildId ? validBuildId(buildId) : `pr-${validPR(prNumber)}`;
+    const progressKey = buildId || prNumber;
+    const prCacheDir = path.join(cacheDir, cacheSubdir);
     const zipPath = path.join(prCacheDir, 'build.zip');
     const extractDir = path.join(prCacheDir, 'app');
 
@@ -159,7 +160,7 @@ async function downloadBuild({ prNumber, assetUrl, sha, token, cacheDir, getMain
 
     await downloadAsset(assetUrl, zipPath, token, progress => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('download-progress', { prNumber, progress });
+            mainWindow.webContents.send('download-progress', { prNumber: progressKey, progress });
         }
     });
 
@@ -180,20 +181,42 @@ async function downloadBuild({ prNumber, assetUrl, sha, token, cacheDir, getMain
 
 /**
  * Launch a cached staging build.
- * @param {{ prNumber, cacheDir, loadSettings }} opts
+ * @param {{ prNumber?, buildId?, cacheDir, loadSettings }} opts
  */
-async function launchBuild({ prNumber, cacheDir, loadSettings }) {
-    const prNum = validPR(prNumber);
-    const extractDir = path.join(cacheDir, `pr-${prNum}`, 'app');
+async function launchBuild({ prNumber, buildId, cacheDir, loadSettings }) {
+    const cacheSubdir = buildId ? validBuildId(buildId) : `pr-${validPR(prNumber)}`;
+    const overrideKey = buildId || prNumber;
+    const extractDir = path.join(cacheDir, cacheSubdir, 'app');
+
+    // On macOS, find the .app bundle once — used for quarantine stripping,
+    // patching, and launching.
+    let macAppBundle = null;
+
+    if (process.platform === 'darwin') {
+        const entries = fs.readdirSync(extractDir);
+
+        macAppBundle = entries.find(e => e.endsWith('.app'));
+
+        if (!macAppBundle) {
+            throw new Error('No .app bundle found in extracted build');
+        }
+
+        // Strip the quarantine attribute BEFORE patching.  ditto/unzip sets
+        // com.apple.quarantine on extracted files, and macOS can prevent
+        // reading inside a quarantined .app bundle — causing patchBuildUrls()
+        // to fail with "No app.asar backup found" because fs.existsSync()
+        // returns false for files inside the quarantined bundle.
+        await execFileAsync('xattr', [ '-cr', path.join(extractDir, macAppBundle) ]);
+    }
 
     // Apply URL overrides by patching the build's main.js inside the asar.
     // If no overrides are set, this restores the original asar.
     const settings = loadSettings();
-    const overrides = (settings.prOverrides || {})[prNum] || {};
+    const overrides = (settings.prOverrides || {})[overrideKey] || {};
 
     await patchBuildUrls(extractDir, overrides);
 
-    const env = buildLaunchEnv(prNum, loadSettings);
+    const env = buildLaunchEnv(overrideKey, loadSettings);
 
     // When URL overrides are active the target may be a local dev server
     // with a self-signed certificate (e.g. Vite --https).  Electron rejects
@@ -206,18 +229,7 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
     const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
     if (process.platform === 'darwin') {
-        // Find the .app bundle
-        const entries = fs.readdirSync(extractDir);
-        const appBundle = entries.find(e => e.endsWith('.app'));
-
-        if (!appBundle) {
-            throw new Error('No .app bundle found in extracted build');
-        }
-
-        const appPath = path.join(extractDir, appBundle);
-
-        // Strip quarantine attribute so macOS doesn't block unsigned app
-        await execFileAsync('xattr', [ '-cr', appPath ]);
+        const appPath = path.join(extractDir, macAppBundle);
 
         // Launch the inner binary directly so env vars are forwarded.
         // `open -a` doesn't pass environment variables to the child process.
@@ -273,12 +285,14 @@ async function launchBuild({ prNumber, cacheDir, loadSettings }) {
  * Clear cache for a specific PR or all cached builds.
  * Uses "rd /s /q" on Windows — Node's fs.rmSync consistently hits EPERM
  * on directories even with maxRetries and original-fs.
- * @param {{ prNumber?, cacheDir }} opts
+ * @param {{ prNumber?, buildId?, cacheDir }} opts
  */
-async function clearCache({ prNumber, cacheDir }) {
+async function clearCache({ prNumber, buildId, cacheDir }) {
     const targets = [];
 
-    if (prNumber) {
+    if (buildId) {
+        targets.push(path.join(cacheDir, validBuildId(buildId)));
+    } else if (prNumber) {
         const prNum = validPR(prNumber);
 
         targets.push(path.join(cacheDir, `pr-${prNum}`));
