@@ -9,7 +9,6 @@ const path = require('path');
  * @returns {void}
  */
 function setupScreenshotIPC(ipcMain) {
-
     // Full-screen screenshot (for annotation overlay).
     ipcMain.handle('capture-screenshot', async () => {
         try {
@@ -96,9 +95,13 @@ function setupScreenshotIPC(ipcMain) {
 
         const screenshotsDir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
 
-        if (!filePath.startsWith(screenshotsDir + path.sep)) return;
+        // Normalize separators for consistent comparison on Windows.
+        const normalizedPath = path.normalize(filePath);
 
-        shell.showItemInFolder(filePath);
+        if (!normalizedPath.startsWith(screenshotsDir + path.sep)) return;
+        if (!fs.existsSync(normalizedPath)) return;
+
+        shell.showItemInFolder(normalizedPath);
     });
 }
 
