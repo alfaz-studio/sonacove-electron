@@ -90,18 +90,30 @@ function setupScreenshotIPC(ipcMain) {
 
     // Reveal a file in the OS file explorer.
     // Only allow paths inside the screenshots directory to prevent arbitrary path disclosure.
+    const screenshotsDir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
+
     ipcMain.on('show-in-folder', (_event, filePath) => {
         if (typeof filePath !== 'string' || !filePath) return;
-
-        const screenshotsDir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
 
         // Normalize separators for consistent comparison on Windows.
         const normalizedPath = path.normalize(filePath);
 
-        if (!normalizedPath.startsWith(screenshotsDir + path.sep)) return;
-        if (!fs.existsSync(normalizedPath)) return;
+        if (!normalizedPath.startsWith(screenshotsDir + path.sep)) {
+            console.warn('⚠️ Main: show-in-folder blocked — path outside screenshots dir:', normalizedPath);
 
-        shell.showItemInFolder(normalizedPath);
+            return;
+        }
+        if (!fs.existsSync(normalizedPath)) {
+            console.warn('⚠️ Main: show-in-folder blocked — file does not exist:', normalizedPath);
+
+            return;
+        }
+
+        try {
+            shell.showItemInFolder(normalizedPath);
+        } catch (error) {
+            console.error('❌ Main: Error revealing file in folder:', error);
+        }
     });
 }
 
