@@ -100,6 +100,9 @@ if (navigator.mediaDevices) {
 window.sonacoveElectronAPI = {
     openExternalLink,
     setupRenderer,
+    captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
+    saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
+    showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {

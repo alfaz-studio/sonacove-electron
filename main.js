@@ -54,6 +54,7 @@ const {
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
 const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
+const { setupScreenshotIPC } = require('./app/features/sonacove/screenshot');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
@@ -651,6 +652,8 @@ function createJitsiMeetWindow() {
         checkForUpdatesManually,
         capture
     });
+
+    setupScreenshotIPC(ipcMain);
 
     windowState.manage(mainWindow);
 

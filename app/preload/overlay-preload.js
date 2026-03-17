@@ -13,10 +13,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const ALLOWED_CHANNELS = [
     'toggle-click-through-request', // Main → overlay: Alt+X toggle
-    'set-ignore-mouse-events' // Overlay → main: click-through state
+    'set-ignore-mouse-events', // Overlay → main: click-through state
+    'show-in-folder' // Overlay → main: reveal screenshot in file explorer
 ];
 
 contextBridge.exposeInMainWorld('sonacoveElectronAPI', {
+    captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
+    saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
+    showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
     ipc: {
 
         /**
