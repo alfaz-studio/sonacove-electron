@@ -152,6 +152,12 @@ function buildOverlayUrl(data) {
         return null;
     }
 
+    if (joinUrl.protocol !== 'http:' && joinUrl.protocol !== 'https:') {
+        console.error(`❌ buildOverlayUrl: blocked non-http roomUrl scheme "${joinUrl.protocol}"`);
+
+        return null;
+    }
+
     joinUrl.searchParams.set('standalone', 'true');
     joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
     joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
