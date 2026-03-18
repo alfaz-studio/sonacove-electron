@@ -125,14 +125,18 @@ function registerShortcut(win) {
  */
 function wireEvents(win, { onClosed }) {
     // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
-    // without disabling webSecurity globally. This is safer than webSecurity: false
-    // because it only relaxes CORS response headers rather than disabling all
-    // same-origin checks for the entire page.
+    // without disabling webSecurity globally. Only injects CORS headers on responses
+    // that don't already have Access-Control-Allow-Origin, so properly configured
+    // servers (e.g. auth APIs) keep their own CORS policies.
     win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         const headers = { ...details.responseHeaders };
+        const hasACHeader = Object.keys(headers)
+            .some(k => k.toLowerCase() === 'access-control-allow-origin');
 
-        headers['Access-Control-Allow-Origin'] = [ '*' ];
-        headers['Access-Control-Allow-Headers'] = [ '*' ];
+        if (!hasACHeader) {
+            headers['Access-Control-Allow-Origin'] = [ '*' ];
+            headers['Access-Control-Allow-Headers'] = [ '*' ];
+        }
         callback({ responseHeaders: headers });
     });
 

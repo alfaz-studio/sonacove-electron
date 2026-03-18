@@ -20,7 +20,8 @@ const {
     createOverlayWindow,
     configurePlatform,
     registerShortcut,
-    wireEvents
+    wireEvents,
+    overlayWindows
 } = require('./window-factory');
 
 // ── Module state ────────────────────────────────────────────────────────────
@@ -134,6 +135,9 @@ function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
 
         // Remove the 'closed' listener before destroy to prevent double-notify:
         // destroy() fires 'closed' → cleanup → notify, then we'd notify again below.
+        // Explicitly remove from overlayWindows since the 'closed' listener that
+        // would do this is being stripped by removeAllListeners.
+        overlayWindows.delete(annotationWindow);
         annotationWindow.removeAllListeners('closed');
         annotationWindow.destroy();
         annotationWindow = null;

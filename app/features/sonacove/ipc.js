@@ -37,25 +37,8 @@ function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
     }
 
     // Toggle Annotation Overlay
-    register('toggle-annotation', (event, data, ...args) => {
-        let config = data;
-
-        if (typeof data === 'boolean') {
-            config = {
-                enabled: data,
-                roomUrl: args[0],
-                collabDetails: args[1],
-                collabServerUrl: args[2]
-            };
-        } else if (typeof data === 'string') {
-            config = {
-                enabled: true,
-                roomUrl: data,
-                collabDetails: args[0],
-                collabServerUrl: args[1]
-            };
-        }
-
+    // The renderer always sends the object form: { enabled, collabDetails, ... }
+    register('toggle-annotation', (event, config) => {
         if (isDev) {
             console.log('🖌️ IPC: toggle-annotation received.', {
                 enabled: config.enabled,
