@@ -3,7 +3,7 @@ const path = require('path');
 
 const sonacoveConfig = require('./config');
 const { showDeeplinkModal } = require('./in-app-dialogs');
-const { closeOverlay } = require('./overlay-window');
+const { closeOverlay, getOverlayWindow } = require('./overlay-window');
 
 let pendingDeepLinkUrl = null;
 let navigatingDeepLink = false;
@@ -14,11 +14,12 @@ let navigatingDeepLink = false;
  * @returns {BrowserWindow|undefined} The main visible window.
  */
 function getMainWindow() {
+    const overlay = getOverlayWindow();
     const windows = BrowserWindow.getAllWindows();
 
-    // Filter out small windows (PiP, overlays) that could otherwise match.
+    // Exclude the annotation overlay (fullscreen, transparent) and small windows (PiP).
     return windows.find(w =>
-        !w.isDestroyed() && w.isVisible() && w.getBounds().width >= 600);
+        !w.isDestroyed() && w.isVisible() && w !== overlay && w.getBounds().width >= 600);
 }
 
 /**
