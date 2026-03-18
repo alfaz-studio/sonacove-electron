@@ -108,7 +108,7 @@ window.sonacoveElectronAPI = {
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {
-                return;
+                return () => {};
             }
             const cb = (_event, ...args) => listener(...args);
 
