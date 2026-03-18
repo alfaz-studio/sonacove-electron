@@ -76,6 +76,7 @@ function configurePlatform(win, screenBounds) {
     // Exclude the overlay from screen capture so annotations don't appear
     // in the shared screen stream. On Windows 10 2004+ this uses
     // WDA_EXCLUDEFROMCAPTURE; on macOS it sets NSWindowSharingNone.
+    // Note: silently a no-op on Linux — Electron does not implement it there.
     win.setContentProtection(true);
 
     if (process.platform === 'darwin') {

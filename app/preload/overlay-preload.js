@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld('sonacoveElectronAPI', {
          */
         on: (channel, listener) => {
             if (!ALLOWED_CHANNELS.includes(channel)) {
-                return;
+                return () => {};
             }
             const cb = (_event, ...args) => listener(...args);
 

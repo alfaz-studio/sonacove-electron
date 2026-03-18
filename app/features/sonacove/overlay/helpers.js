@@ -81,7 +81,7 @@ function resolvePreloadPath() {
     const dirs = [
         path.join(app.getAppPath(), 'build'),
         app.getAppPath(),
-        path.join(__dirname, '..', '..', '..', '..', 'app', 'preload')
+        path.join(__dirname, '..', '..', '..', '..', 'app', 'preload') // unbundled dev fallback — never reached in webpack builds
     ];
 
     for (const dir of dirs) {
@@ -115,7 +115,7 @@ function resolvePreloadPath() {
  * @param {string} [data.roomUrl] - Room URL for standalone whiteboard mode.
  * @param {Object} [data.collabDetails] - Collaboration room details.
  * @param {string} [data.collabServerUrl] - Collaboration server URL.
- * @returns {string} The fully-formed overlay URL.
+ * @returns {string|null} The fully-formed overlay URL, or null if validation fails.
  */
 function buildOverlayUrl(data) {
     const { annotationsUrl, roomUrl, collabDetails, collabServerUrl, localParticipantName } = data;
