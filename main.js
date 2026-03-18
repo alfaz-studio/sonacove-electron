@@ -653,8 +653,6 @@ function createJitsiMeetWindow() {
         capture
     });
 
-    setupScreenshotIPC(ipcMain);
-
     windowState.manage(mainWindow);
 
     // Show a branded splash screen first, then navigate to the remote URL.
@@ -1000,6 +998,10 @@ app.on('certificate-error',
 app.on('ready', () => {
     initAnalytics();
     capture('app_launched');
+
+    // Register screenshot IPC handlers once at app level (not per-window)
+    // to avoid "Attempted to register a second handler" crashes on window recreation.
+    setupScreenshotIPC(ipcMain);
 
     setupChildWindowIcon();
     createJitsiMeetWindow();

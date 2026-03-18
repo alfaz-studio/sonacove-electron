@@ -27,7 +27,7 @@ function registerProtocol() {
  * @param {string} deepLink - The deep link URL to process.
  * @returns {boolean} Success status.
  */
-function navigateDeepLink(deepLink) {
+async function navigateDeepLink(deepLink) {
     try {
         let rawPath = deepLink.replace('sonacove://', '');
 
@@ -75,7 +75,7 @@ function navigateDeepLink(deepLink) {
                 const currentUrl = new URL(win.webContents.getURL());
 
                 if (currentUrl.pathname.startsWith('/meet')) {
-                    const choice = dialog.showMessageBoxSync(win, {
+                    const { response } = await dialog.showMessageBox(win, {
                         type: 'question',
                         buttons: [ 'Leave Meeting', 'Stay' ],
                         title: 'Meeting in Progress',
@@ -84,7 +84,7 @@ function navigateDeepLink(deepLink) {
                         cancelId: 1
                     });
 
-                    if (choice !== 0) {
+                    if (response !== 0) {
                         return false;
                     }
 
@@ -102,8 +102,6 @@ function navigateDeepLink(deepLink) {
         }
 
         return false;
-
-
     } catch (error) {
         console.error('Error parsing deep link:', error);
 

@@ -8,6 +8,9 @@ const {
 } = require('./constants');
 const { getIconPath } = require('../../main-window/icon');
 
+/** Module-level set tracking overlay windows (safer than setting arbitrary props on BrowserWindow). */
+const overlayWindows = new Set();
+
 /**
  * Creates the BrowserWindow instance for the annotation overlay.
  *
@@ -28,7 +31,6 @@ function createOverlayWindow(screenBounds, preloadPath) {
         frame: false,
         alwaysOnTop: true,
         hasShadow: false,
-        enableLargerThanScreen: true,
         roundedCorners: false,
         fullscreen: !isMac,
         resizable: false,
@@ -39,15 +41,12 @@ function createOverlayWindow(screenBounds, preloadPath) {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-
-            // webSecurity is disabled because the overlay loads content from the
-            // app origin (e.g. localhost:5173 in dev) which may fetch assets
-            // (fonts, collab WebSocket handshake) from the collab server on a
-            // different origin. contextIsolation: true ensures this does NOT
-            // give the page access to Node internals despite the relaxed CORS.
-            webSecurity: false,
             sandbox: true,
-            preload: preloadPath
+            preload: preloadPath,
+
+            // Dedicated partition so the CORS relaxation in wireEvents()
+            // only affects the overlay, not the main window's session.
+            partition: 'persist:overlay'
         }
     };
 
@@ -57,8 +56,9 @@ function createOverlayWindow(screenBounds, preloadPath) {
 
     const win = new BrowserWindow(windowOptions);
 
-    // Tag so getMainWindow() can exclude the overlay from its search
-    win._isAnnotationOverlay = true;
+    // Track so getMainWindow() can exclude overlays from its search
+    overlayWindows.add(win);
+    win.on('closed', () => overlayWindows.delete(win));
 
     return win;
 }
@@ -124,6 +124,18 @@ function registerShortcut(win) {
  * @returns {void}
  */
 function wireEvents(win, { onClosed }) {
+    // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
+    // without disabling webSecurity globally. This is safer than webSecurity: false
+    // because it only relaxes CORS response headers rather than disabling all
+    // same-origin checks for the entire page.
+    win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        const headers = { ...details.responseHeaders };
+
+        headers['Access-Control-Allow-Origin'] = [ '*' ];
+        headers['Access-Control-Allow-Headers'] = [ '*' ];
+        callback({ responseHeaders: headers });
+    });
+
     win.webContents.on('did-finish-load', () => {
         if (win && !win.isDestroyed()) {
             win.show();
@@ -138,5 +150,6 @@ module.exports = {
     createOverlayWindow,
     configurePlatform,
     registerShortcut,
-    wireEvents
+    wireEvents,
+    overlayWindows
 };

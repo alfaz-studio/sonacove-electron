@@ -4,6 +4,7 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 
 const { OVERLAY_PRELOAD_FILENAME } = require('./constants');
+const { overlayWindows } = require('./window-factory');
 
 // ── Window lookup ───────────────────────────────────────────────────────────
 
@@ -13,23 +14,16 @@ const { OVERLAY_PRELOAD_FILENAME } = require('./constants');
  * @returns {BrowserWindow|undefined} The main window instance.
  */
 function getMainWindow() {
-    const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !w._isAnnotationOverlay);
+    const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !overlayWindows.has(w));
 
-    // 1. Try by title
-    const byTitle = windows.find(w => w.getTitle().includes('Sonacove'));
-
-    if (byTitle) {
-        return byTitle;
-    }
-
-    // 2. Try by visibility
+    // 1. Try by visibility (more reliable than title which may not be set during startup)
     const visible = windows.find(w => w.isVisible());
 
     if (visible) {
         return visible;
     }
 
-    // 3. Fallback
+    // 2. Fallback
     return windows[0];
 }
 
@@ -87,10 +81,7 @@ function resolvePreloadPath() {
     const dirs = [
         path.join(app.getAppPath(), 'build'),
         app.getAppPath(),
-        path.join(__dirname, '..', '..', '..', 'app', 'preload'),
-        path.join(__dirname, '..', '..', '..', 'build'),
-        path.join(__dirname, '..', '..', '..', '..', 'build'),
-        path.join(__dirname, '..', '..', '..', '..', '..', 'build')
+        path.join(__dirname, '..', '..', '..', 'app', 'preload')
     ];
 
     for (const dir of dirs) {

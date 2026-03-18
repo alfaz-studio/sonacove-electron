@@ -33,7 +33,9 @@ const whitelistedIpcChannels = [
     'leave-modal-action'
 ];
 
-ipcRenderer.setMaxListeners(20);
+// Unlimited listeners — the preload subscribes to many channels across the app
+// lifecycle and there is no memory leak concern (all on the same ipcRenderer singleton).
+ipcRenderer.setMaxListeners(0);
 
 /**
  * Open an external URL.
