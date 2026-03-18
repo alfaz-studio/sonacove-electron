@@ -13,8 +13,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const ALLOWED_CHANNELS = [
     'toggle-click-through-request', // Main → overlay: Alt+X toggle
-    'set-ignore-mouse-events', // Overlay → main: click-through state
-    'show-in-folder' // Overlay → main: reveal screenshot in file explorer
+    'set-ignore-mouse-events' // Overlay → main: click-through state
 ];
 
 contextBridge.exposeInMainWorld('sonacoveElectronAPI', {

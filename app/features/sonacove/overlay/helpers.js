@@ -81,7 +81,7 @@ function resolvePreloadPath() {
     const dirs = [
         path.join(app.getAppPath(), 'build'),
         app.getAppPath(),
-        path.join(__dirname, '..', '..', '..', 'app', 'preload')
+        path.join(__dirname, '..', '..', '..', '..', 'app', 'preload')
     ];
 
     for (const dir of dirs) {
@@ -121,6 +121,20 @@ function buildOverlayUrl(data) {
     const { annotationsUrl, roomUrl, collabDetails, collabServerUrl, localParticipantName } = data;
 
     if (annotationsUrl) {
+        try {
+            const parsed = new URL(annotationsUrl);
+
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                console.error(`❌ buildOverlayUrl: blocked non-http annotationsUrl scheme "${parsed.protocol}"`);
+
+                return null;
+            }
+        } catch {
+            console.error(`❌ buildOverlayUrl: invalid annotationsUrl "${annotationsUrl}"`);
+
+            return null;
+        }
+
         if (isDev) {
             console.log(`🖌️ Opening Annotations Overlay: ${annotationsUrl}`);
         }

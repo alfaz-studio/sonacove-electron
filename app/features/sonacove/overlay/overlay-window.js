@@ -105,7 +105,7 @@ function toggleOverlay(mainWindow, data) {
 
     annotationWindow.loadURL(overlayUrl);
     registerShortcut(annotationWindow);
-    wireEvents(annotationWindow, {
+    wireEvents(annotationWindow, data.collabServerUrl, {
         onClosed: () => {
             annotationWindow = null;
             globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);

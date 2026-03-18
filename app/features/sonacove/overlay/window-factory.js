@@ -119,26 +119,39 @@ function registerShortcut(win) {
  * Wires lifecycle event listeners on the overlay window (load, close, cleanup).
  *
  * @param {BrowserWindow} win - The overlay window.
+ * @param {string} [collabServerUrl] - The collab server URL (for scoped CORS injection).
  * @param {Object} callbacks - Lifecycle callbacks.
  * @param {Function} callbacks.onClosed - Called when the window is closed externally.
  * @returns {void}
  */
-function wireEvents(win, { onClosed }) {
+function wireEvents(win, collabServerUrl, { onClosed }) {
     // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
-    // without disabling webSecurity globally. Only injects CORS headers on responses
-    // that don't already have Access-Control-Allow-Origin, so properly configured
-    // servers (e.g. auth APIs) keep their own CORS policies.
-    win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-        const headers = { ...details.responseHeaders };
-        const hasACHeader = Object.keys(headers)
-            .some(k => k.toLowerCase() === 'access-control-allow-origin');
+    // without disabling webSecurity globally. Scoped to the collab server origin
+    // so other endpoints (auth, analytics) keep their own CORS policies.
+    let collabOrigin = null;
 
-        if (!hasACHeader) {
-            headers['Access-Control-Allow-Origin'] = [ '*' ];
-            headers['Access-Control-Allow-Headers'] = [ '*' ];
+    try {
+        if (collabServerUrl) {
+            collabOrigin = new URL(collabServerUrl).origin;
         }
-        callback({ responseHeaders: headers });
-    });
+    } catch { /* invalid URL — skip CORS injection */ }
+
+    if (collabOrigin) {
+        win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+            const headers = { ...details.responseHeaders };
+
+            if (details.url.startsWith(collabOrigin)) {
+                const hasACHeader = Object.keys(headers)
+                    .some(k => k.toLowerCase() === 'access-control-allow-origin');
+
+                if (!hasACHeader) {
+                    headers['Access-Control-Allow-Origin'] = [ '*' ];
+                    headers['Access-Control-Allow-Headers'] = [ '*' ];
+                }
+            }
+            callback({ responseHeaders: headers });
+        });
+    }
 
     win.webContents.on('did-finish-load', () => {
         if (win && !win.isDestroyed()) {
