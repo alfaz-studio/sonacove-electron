@@ -1,25 +1,12 @@
-const { app, BrowserWindow } = require('electron');
+const { app } = require('electron');
 const path = require('path');
 
 const sonacoveConfig = require('./config');
 const { showDeeplinkModal } = require('./in-app-dialogs');
-const { closeOverlay } = require('./overlay-window');
+const { closeOverlay, getMainWindow } = require('./overlay-window');
 
 let pendingDeepLinkUrl = null;
 let navigatingDeepLink = false;
-
-/**
- * Finds the main visible application window to receive deep link events.
- *
- * @returns {BrowserWindow|undefined} The main visible window.
- */
-function getMainWindow() {
-    const windows = BrowserWindow.getAllWindows();
-
-    // Filter out small windows (PiP, overlays) that could otherwise match.
-    return windows.find(w =>
-        !w.isDestroyed() && w.isVisible() && w.getBounds().width >= 600);
-}
 
 /**
  * Registers the custom protocol scheme for the application.
