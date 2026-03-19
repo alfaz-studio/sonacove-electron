@@ -12,7 +12,11 @@ let pendingNotify = true;
  * @returns {BrowserWindow|undefined} The main window instance.
  */
 function getMainWindow() {
-    return BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.getTitle() === 'Sonacove Meets');
+    const windows = BrowserWindow.getAllWindows();
+
+    // Exclude the annotation overlay (fullscreen, transparent) and small windows (PiP).
+    return windows.find(w =>
+        !w.isDestroyed() && w.isVisible() && w !== annotationWindow && w.getBounds().width >= 600);
 }
 
 /**
@@ -341,7 +345,8 @@ function restoreMainWindow() {
     }
 }
 
-module.exports = { toggleOverlay,
+module.exports = { getMainWindow,
+    toggleOverlay,
     closeOverlay,
     getOverlayWindow,
     closeViewersWhiteboards };
