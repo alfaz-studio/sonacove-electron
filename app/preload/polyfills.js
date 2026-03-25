@@ -23,11 +23,11 @@ if (typeof Headers === 'undefined') {
             
             if (init) {
                 if (init instanceof Headers) {
-                    for (const [key, value] of init._map) {
+                    for (const [ key, value ] of init._map) {
                         this._map.set(key, value);
                     }
                 } else if (Array.isArray(init)) {
-                    for (const [key, value] of init) {
+                    for (const [ key, value ] of init) {
                         this._map.set(key, value);
                     }
                 } else if (typeof init === 'object') {
@@ -37,50 +37,51 @@ if (typeof Headers === 'undefined') {
                 }
             }
         }
-        
+
         append(name, value) {
             const existing = this._map.get(name);
+
             if (existing) {
                 this._map.set(name, `${existing}, ${value}`);
             } else {
                 this._map.set(name, value);
             }
         }
-        
+
         delete(name) {
             this._map.delete(name);
         }
-        
+
         get(name) {
             return this._map.get(name) || null;
         }
-        
+
         has(name) {
             return this._map.has(name);
         }
-        
+
         set(name, value) {
             this._map.set(name, value);
         }
-        
+
         entries() {
             return this._map.entries();
         }
-        
+
         keys() {
             return this._map.keys();
         }
-        
+
         values() {
             return this._map.values();
         }
-        
+
         forEach(callback, thisArg) {
             this._map.forEach((value, key) => {
                 callback.call(thisArg, value, key, this);
             });
         }
-        
+
         *[Symbol.iterator]() {
             for (const [ key, value ] of this._map) {
                 yield [ key, value ];
@@ -97,7 +98,7 @@ if (typeof FormData === 'undefined') {
         try {
             class FormDataShim {
                 constructor() {
-                    this.boundary = '----ElectronFormDataShimBoundary' + crypto.randomBytes(16).toString('hex');
+                    this.boundary = `----ElectronFormDataShimBoundary${crypto.randomBytes(16).toString('hex')}`;
                     this.parts = [];
                 }
 
@@ -110,11 +111,14 @@ if (typeof FormData === 'undefined') {
                         try {
                             buffer = fs.readFileSync(value.path);
                             const fname = filename || value.name || path.basename(value.path);
+
                             header = `${disposition}; filename="${fname}"\r\n`;
                             const contentType = value.type || 'application/octet-stream';
+
                             header += `Content-Type: ${contentType}\r\n`;
                         } catch (e) {
                             console.warn('FormDataShim: Failed to read file', value.path, e);
+
                             return;
                         }
                     } else {
@@ -122,11 +126,13 @@ if (typeof FormData === 'undefined') {
                         header = `${disposition}\r\n`;
                     }
 
-                    this.parts.push({ header: header + '\r\n', body: buffer });
+                    this.parts.push({ header: `${header}\r\n`,
+                        body: buffer });
                 }
 
                 getPayload() {
                     const chunks = [];
+
                     for (const part of this.parts) {
                         chunks.push(Buffer.from(`--${this.boundary}\r\n`));
                         chunks.push(Buffer.from(part.header));
@@ -134,6 +140,7 @@ if (typeof FormData === 'undefined') {
                         chunks.push(Buffer.from('\r\n'));
                     }
                     chunks.push(Buffer.from(`--${this.boundary}--\r\n`));
+
                     return Buffer.concat(chunks);
                 }
             }
@@ -142,6 +149,7 @@ if (typeof FormData === 'undefined') {
 
             // Patch fetch
             const originalFetch = window.fetch;
+
             window.fetch = async (input, init) => {
                 if (init && init.body && init.body instanceof FormDataShim) {
                     init.headers = {
@@ -150,17 +158,22 @@ if (typeof FormData === 'undefined') {
                     };
                     init.body = init.body.getPayload();
                 }
+
                 return originalFetch(input, init);
             };
 
             // Patch XMLHttpRequest
             const originalXhrSend = XMLHttpRequest.prototype.send;
+
             XMLHttpRequest.prototype.send = function(body) {
                 if (body instanceof FormDataShim) {
                     const payload = body.getPayload();
+
                     this.setRequestHeader('Content-Type', `multipart/form-data; boundary=${body.boundary}`);
+
                     return originalXhrSend.call(this, payload);
                 }
+
                 return originalXhrSend.call(this, body);
             };
 

@@ -50,14 +50,11 @@ const config = require('./app/features/config');
 const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
-    navigateDeepLink,
-    completePendingDeepLink,
-    cancelPendingDeepLink,
-    consumeDeepLinkNavigation
+    navigateDeepLink
 } = require('./app/features/sonacove/deep-link');
 const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
+const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
 const { setupScreenshotIPC } = require('./app/features/sonacove/screenshot');
-const { closeOverlay } = require('./app/features/sonacove/overlay-window');
 const { openExternalLink } = require('./app/features/utils/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
@@ -548,15 +545,7 @@ function createJitsiMeetWindow() {
     // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
     // Not calling event.preventDefault() keeps the page open (prevents unload).
     // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
-    mainWindow.webContents.on('will-prevent-unload', (event) => {
-        // If a deep link navigation is in progress the user already confirmed
-        // via the deep link dialog — skip the leave-meeting modal and allow
-        // the navigation to proceed.
-        if (consumeDeepLinkNavigation()) {
-            event.preventDefault();
-
-            return;
-        }
+    mainWindow.webContents.on('will-prevent-unload', () => {
         showLeaveModal(mainWindow.webContents);
     });
 
@@ -564,16 +553,6 @@ function createJitsiMeetWindow() {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.destroy();
-        }
-    });
-
-    // Handle deep link modal responses.
-    ipcMain.on('deeplink-modal-action', (event, data) => {
-        if (event.sender !== mainWindow?.webContents) return;
-        if (data && data.action === 'confirm') {
-            completePendingDeepLink();
-        } else {
-            cancelPendingDeepLink();
         }
     });
 
@@ -891,7 +870,6 @@ function createJitsiMeetWindow() {
         ipcMain.removeAllListeners('retry-load');
         ipcMain.removeAllListeners('update-toast-action');
         ipcMain.removeAllListeners('leave-modal-action');
-        ipcMain.removeAllListeners('deeplink-modal-action');
         ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
         mainWindow = null;
     });
@@ -995,9 +973,6 @@ if (!gotInstanceLock) {
     process.exit(0);
 }
 
-// Screenshot IPC handlers — registered at module scope so they survive window re-creation.
-setupScreenshotIPC(ipcMain);
-
 /**
  * Run the application.
  */
@@ -1023,6 +998,10 @@ app.on('certificate-error',
 app.on('ready', () => {
     initAnalytics();
     capture('app_launched');
+
+    // Register screenshot IPC handlers once at app level (not per-window)
+    // to avoid "Attempted to register a second handler" crashes on window recreation.
+    setupScreenshotIPC(ipcMain);
 
     setupChildWindowIcon();
     createJitsiMeetWindow();

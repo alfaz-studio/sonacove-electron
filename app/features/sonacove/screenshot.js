@@ -1,4 +1,4 @@
-const { app, desktopCapturer, screen, shell } = require('electron');
+const { BrowserWindow, app, desktopCapturer, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,11 +10,16 @@ const path = require('path');
  */
 function setupScreenshotIPC(ipcMain) {
     // Full-screen screenshot (for annotation overlay).
-    ipcMain.handle('capture-screenshot', async () => {
+    // Captures the screen the calling window is on (multi-monitor aware).
+    // Falls back to primary display if the sender window can't be determined.
+    ipcMain.handle('capture-screenshot', async (event) => {
         try {
-            const primaryDisplay = screen.getPrimaryDisplay();
-            const { width, height } = primaryDisplay.size;
-            const scaleFactor = primaryDisplay.scaleFactor;
+            const senderWindow = BrowserWindow.fromWebContents(event.sender);
+            const targetDisplay = senderWindow && !senderWindow.isDestroyed()
+                ? screen.getDisplayMatching(senderWindow.getBounds())
+                : screen.getPrimaryDisplay();
+            const { width, height } = targetDisplay.size;
+            const scaleFactor = targetDisplay.scaleFactor;
 
             const sources = await desktopCapturer.getSources({
                 types: [ 'screen' ],
@@ -28,9 +33,9 @@ function setupScreenshotIPC(ipcMain) {
                 return null;
             }
 
-            // Match the primary display by display_id (sources[0] isn't guaranteed to be primary on multi-monitor).
-            const primaryId = String(primaryDisplay.id);
-            const source = sources.find(s => s.display_id === primaryId) || sources[0];
+            // Match the target display by display_id (sources[0] isn't guaranteed to be correct on multi-monitor).
+            const targetId = String(targetDisplay.id);
+            const source = sources.find(s => s.display_id === targetId) || sources[0];
 
             return source.thumbnail.toDataURL('image/png');
         } catch (error) {

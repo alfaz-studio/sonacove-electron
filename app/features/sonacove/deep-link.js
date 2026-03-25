@@ -1,12 +1,9 @@
-const { app } = require('electron');
+const { app, dialog } = require('electron');
 const path = require('path');
 
 const sonacoveConfig = require('./config');
-const { showDeeplinkModal } = require('./in-app-dialogs');
-const { closeOverlay, getMainWindow } = require('./overlay-window');
-
-let pendingDeepLinkUrl = null;
-let navigatingDeepLink = false;
+const { getMainWindow } = require('./overlay/helpers');
+const { closeOverlay } = require('./overlay/overlay-window');
 
 /**
  * Registers the custom protocol scheme for the application.
@@ -30,12 +27,12 @@ function registerProtocol() {
  * @param {string} deepLink - The deep link URL to process.
  * @returns {boolean} Success status.
  */
-function navigateDeepLink(deepLink) {
+async function navigateDeepLink(deepLink) {
     try {
         let rawPath = deepLink.replace('sonacove://', '');
 
         try {
-            const appHost = new URL(sonacoveConfig.currentConfig.landing).host;
+            const appHost = new URL(sonacoveConfig.currentConfig.landing).host; // e.g. sonacove.com
             const meetHost = new URL(sonacoveConfig.currentConfig.meetRoot).host;
 
             if (rawPath.startsWith(appHost)) {
@@ -45,23 +42,26 @@ function navigateDeepLink(deepLink) {
             }
         } catch (e) { /* ignore URL parsing error */ }
 
-        if (rawPath.startsWith('/')) rawPath = rawPath.substring(1);
-        if (rawPath.endsWith('/')) rawPath = rawPath.slice(0, -1);
+        if (rawPath.startsWith('/')) {
+            rawPath = rawPath.substring(1);
+        }
+        if (rawPath.endsWith('/')) {
+            rawPath = rawPath.slice(0, -1);
+        }
 
         const meetRoot = sonacoveConfig.currentConfig.meetRoot;
         let targetUrl = '';
 
         if (rawPath.startsWith('meet/')) {
             const meetRootOrigin = new URL(meetRoot).origin; // https://sonacove.com
+
             targetUrl = `${meetRootOrigin}/${rawPath}`;
-        }
-        else if (rawPath && rawPath !== '') {
+        } else if (rawPath && rawPath !== '') {
             // Ensure meetRoot doesn't have trailing slash for clean concatenation
             const cleanMeetRoot = meetRoot.endsWith('/') ? meetRoot.slice(0, -1) : meetRoot;
+
             targetUrl = `${cleanMeetRoot}/${rawPath}`;
-        }
-        // Case C: Empty path
-        else {
+        } else {
             targetUrl = sonacoveConfig.currentConfig.landing;
         }
 
@@ -74,11 +74,21 @@ function navigateDeepLink(deepLink) {
             try {
                 const currentUrl = new URL(win.webContents.getURL());
 
-                if (currentUrl.pathname === '/meet' || currentUrl.pathname.startsWith('/meet/')) {
-                    pendingDeepLinkUrl = targetUrl;
-                    showDeeplinkModal(win.webContents);
+                if (currentUrl.pathname.startsWith('/meet')) {
+                    const { response } = await dialog.showMessageBox(win, {
+                        type: 'question',
+                        buttons: [ 'Leave Meeting', 'Stay' ],
+                        title: 'Meeting in Progress',
+                        message: 'You are already in a meeting. Do you want to leave and join a new one?',
+                        defaultId: 1,
+                        cancelId: 1
+                    });
 
-                    return false; // navigation pending user decision
+                    if (response !== 0) {
+                        return false;
+                    }
+
+                    closeOverlay(false, 'deep-link-navigation');
                 }
             } catch (e) { /* ignore URL parse errors */ }
 
@@ -99,61 +109,7 @@ function navigateDeepLink(deepLink) {
     }
 }
 
-/**
- * Completes a pending deep link navigation after user confirms leaving a meeting.
- *
- * @returns {boolean} Whether navigation was performed.
- */
-function completePendingDeepLink() {
-    const win = getMainWindow();
-
-    if (pendingDeepLinkUrl && win) {
-        const url = pendingDeepLinkUrl;
-
-        pendingDeepLinkUrl = null;
-        navigatingDeepLink = true;
-        closeOverlay(false, 'deep-link-navigation');
-        win.loadURL(url);
-        if (win.isMinimized()) {
-            win.restore();
-        }
-        win.focus();
-
-        return true;
-    }
-    pendingDeepLinkUrl = null;
-
-    return false;
-}
-
-/**
- * Returns true (once) if a deep link navigation is in progress.
- * Used to suppress the will-prevent-unload modal when the user already
- * confirmed via the deep link dialog.
- *
- * @returns {boolean}
- */
-function consumeDeepLinkNavigation() {
-    if (navigatingDeepLink) {
-        navigatingDeepLink = false;
-
-        return true;
-    }
-
-    return false;
-}
-
-/**
- * Cancels a pending deep link navigation.
- */
-function cancelPendingDeepLink() {
-    pendingDeepLinkUrl = null;
-}
-
 module.exports = {
     registerProtocol,
-    navigateDeepLink,
-    completePendingDeepLink,
-    cancelPendingDeepLink,
-    consumeDeepLinkNavigation
+    navigateDeepLink
 };

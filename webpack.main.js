@@ -3,8 +3,11 @@ const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
     target: 'electron-main',
-    entry: { main: './main.js',
-        preload: './app/preload/preload.js' },
+    entry: {
+        main: './main.js',
+        preload: './app/preload/preload.js',
+        'overlay-preload': './app/preload/overlay-preload.js'
+    },
     output: {
         path: path.resolve('./build'),
         filename: '[name].js'
