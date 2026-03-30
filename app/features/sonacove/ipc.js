@@ -3,6 +3,12 @@ const isDev = require('electron-is-dev');
 
 const sonacoveConfig = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
+const {
+    openParticipantWindow,
+    sendParticipantFrame,
+    closeParticipantWindow,
+    shrinkToPill,
+} = require('../pip/participant-window');
 
 /**
  * Previously registered listeners, keyed by channel.
@@ -127,6 +133,36 @@ function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
 
     register('open-help-docs', () => {
         shell.openExternal('https://docs.sonacove.com/');
+    });
+
+    // ── Participant PiP panel ─────────────────────────────────────────────────
+
+    // Renderer signals that local screenshare started and there are remote
+    // participants to show — open the floating participant overlay window.
+    register('pip-screenshare-start', () => {
+        try {
+            openParticipantWindow();
+        } catch (err) {
+            console.error('❌ ParticipantPiP: Failed to open window:', err);
+        }
+    });
+
+    // Renderer sends a JPEG frame (base64 data URL) — forward to the overlay.
+    register('pip-screenshare-frame', (_event, frameData) => {
+        sendParticipantFrame(frameData);
+    });
+
+    // Renderer signals screenshare ended — close the overlay window cleanly.
+    register('pip-screenshare-stop', () => {
+        closeParticipantWindow(false);
+    });
+
+    // User clicked the close (×) button inside the overlay panel.
+    // Shrink to a floating pill instead of destroying the window, so the pill
+    // remains visible (always-on-top) over the shared screen — matching the
+    // annotation pencil reopen pill behaviour.
+    register('pp-close-request', () => {
+        shrinkToPill();
     });
 
     // PostHog Analytics

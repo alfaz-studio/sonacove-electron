@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Participants</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Outer shell ─────────────────────────────────────────────────────── */
+    .panel {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: rgba(18, 18, 32, 0.96);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 12px 40px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+
+    /* ── Control bar (bottom) ────────────────────────────────────────────── */
+    .header {
+      height: 28px;
+      background: rgba(10, 10, 22, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 0 10px;
+      flex-shrink: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 5px rgba(74, 222, 128, 0.6);
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.4);
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+    }
+
+    /* Buttons — must opt out of drag region. */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      -webkit-app-region: no-drag;
+    }
+
+    .icon-btn {
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 13px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      flex-shrink: 0;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .close-btn:hover {
+      background: rgba(231, 76, 60, 0.75);
+      color: #fff;
+    }
+
+    /* ── Video area ──────────────────────────────────────────────────────── */
+    .video-area {
+      flex: 1;
+      position: relative;
+      background: #1a1a2e;
+      overflow: hidden;
+    }
+
+    #frame-img {
+      width: 100%;
+      height: 100%;
+      object-fit: fill; /* canvas already cover-crops each tile */
+      display: block;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    #frame-img.visible {
+      opacity: 1;
+    }
+
+    /* ── Placeholder shown until the first frame arrives ─────────────────── */
+    .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .placeholder.hidden {
+      display: none;
+    }
+
+    .placeholder-icon {
+      font-size: 24px;
+      opacity: 0.2;
+    }
+
+    .placeholder-text {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.2);
+      letter-spacing: 0.3px;
+    }
+
+    /* ── Pill mode — shown when panel is minimised ───────────────────────── */
+    .pill-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pill-overlay.active {
+      display: flex;
+    }
+
+    .pill-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #6965db;
+      color: #ffffff;
+      border: none;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      transform: scale(0.5);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .pill-btn.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .pill-btn:hover {
+      background: #7c7ae0;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+
+    <!-- Video frame area -->
+    <div class="video-area">
+      <img id="frame-img" alt="" draggable="false">
+      <div class="placeholder" id="placeholder">
+        <span class="placeholder-icon">👥</span>
+        <span class="placeholder-text">Waiting for participants…</span>
+      </div>
+    </div>
+
+    <!-- Control bar — draggable, with layout toggle + close (at bottom) -->
+    <div class="header">
+      <div class="header-left">
+        <div class="header-dot" id="statusDot"></div>
+        <span class="header-title">Participants</span>
+      </div>
+      <div class="header-actions">
+        <!-- Layout toggle: shows the icon for the OTHER orientation (what you'll switch TO) -->
+        <button class="icon-btn" id="toggleBtn" title="Toggle layout">⇄</button>
+        <button class="icon-btn close-btn" id="closeBtn" title="Close panel">✕</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Pill shown when panel is minimised -->
+  <div class="pill-overlay" id="pillOverlay">
+    <button class="pill-btn" id="pillBtn" title="Show Participants">👥</button>
+  </div>
+
+  <script>
+    (function () {
+      const frameImg    = document.getElementById('frame-img');
+      const placeholder = document.getElementById('placeholder');
+      const closeBtn    = document.getElementById('closeBtn');
+      const toggleBtn   = document.getElementById('toggleBtn');
+      const statusDot   = document.getElementById('statusDot');
+      const pillOverlay = document.getElementById('pillOverlay');
+      const pillBtn     = document.getElementById('pillBtn');
+      const panel       = document.querySelector('.panel');
+
+      // Icons: show the layout you will switch TO when clicking.
+      const ICONS = {
+        horizontal: '⇅',  // currently horizontal → click to go vertical
+        vertical:   '⇄',  // currently vertical   → click to go horizontal
+      };
+
+      let currentOrientation = 'horizontal';
+      let firstFrameReceived = false;
+
+      function resetFrame() {
+        firstFrameReceived = false;
+        frameImg.classList.remove('visible');
+        placeholder.classList.remove('hidden');
+      }
+
+      function updateToggleIcon() {
+        toggleBtn.title = currentOrientation === 'horizontal'
+          ? 'Switch to vertical layout'
+          : 'Switch to horizontal layout';
+        toggleBtn.textContent = ICONS[currentOrientation];
+      }
+
+      updateToggleIcon();
+
+      // Close button.
+      closeBtn.addEventListener('click', () => {
+        window.panelAPI.close();
+      });
+
+      // Layout toggle button.
+      toggleBtn.addEventListener('click', () => {
+        window.panelAPI.toggleOrientation();
+      });
+
+      // Main process confirms orientation change.
+      window.panelAPI.onOrientationChanged(function (orientation) {
+        currentOrientation = orientation;
+        updateToggleIcon();
+        resetFrame();
+      });
+
+      // Receive video frames.
+      window.panelAPI.onFrame(function (src) {
+        if (!firstFrameReceived) {
+          firstFrameReceived = true;
+          placeholder.classList.add('hidden');
+          frameImg.classList.add('visible');
+          statusDot.style.background = '#4ade80';
+        }
+        frameImg.src = src;
+      });
+
+      // Switch to pill mode (window shrinks to 56×56).
+      window.panelAPI.onEnterPillMode(function () {
+        panel.style.display = 'none';
+        pillOverlay.classList.add('active');
+        // Animate pill in after a tick so the transition fires.
+        requestAnimationFrame(function () {
+          pillBtn.classList.add('visible');
+        });
+      });
+
+      // Switch back to full panel mode.
+      window.panelAPI.onEnterPanelMode(function () {
+        pillBtn.classList.remove('visible');
+        setTimeout(function () {
+          pillOverlay.classList.remove('active');
+          panel.style.display = '';
+          resetFrame();
+          statusDot.style.background = '#4ade80';
+        }, 200);
+      });
+
+      // Pill drag + click — distinguish by whether the mouse moved.
+      let pillDragging = false;
+      let pillMoved = false;
+
+      pillBtn.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) { return; }
+        pillDragging = true;
+        pillMoved = false;
+        window.panelAPI.startWindowDrag();
+        e.preventDefault();
+      });
+
+      window.addEventListener('mousemove', function () {
+        if (pillDragging) { pillMoved = true; }
+      });
+
+      window.addEventListener('mouseup', function () {
+        if (!pillDragging) { return; }
+        pillDragging = false;
+        window.panelAPI.stopWindowDrag();
+        if (!pillMoved) {
+          // Pure click (no drag) → reopen the full panel.
+          window.panelAPI.reopen();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

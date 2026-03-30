@@ -632,7 +632,7 @@ function createJitsiMeetWindow() {
         if (parsedUrl.pathname.startsWith('/meet')) {
             const meetRootUrl = new URL(sonacoveConfig.currentConfig.meetRoot);
 
-            if (parsedUrl.hostname !== meetRootUrl.hostname) {
+            if (parsedUrl.origin !== meetRootUrl.origin) {
                 event.preventDefault();
 
                 // Strip the /meet prefix from pathname — meetRoot already

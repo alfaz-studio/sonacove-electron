@@ -6,7 +6,8 @@ module.exports = {
     entry: {
         main: './main.js',
         preload: './app/preload/preload.js',
-        'overlay-preload': './app/preload/overlay-preload.js'
+        'overlay-preload': './app/preload/overlay-preload.js',
+        'participant-panel-preload': './app/features/pip/participant-panel-preload.js',
     },
     output: {
         path: path.resolve('./build'),
@@ -19,7 +20,8 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 { from: 'app/splash.html', to: 'splash.html' },
-                { from: 'app/error.html', to: 'error.html' }
+                { from: 'app/error.html', to: 'error.html' },
+                { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' }
             ]
         })
     ],
