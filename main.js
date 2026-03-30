@@ -542,6 +542,67 @@ function createJitsiMeetWindow() {
         }
     }
 
+    // ── Screen Sharing via getDisplayMedia ────────────────────────────────
+    // Setting this handler enables navigator.mediaDevices.getDisplayMedia() in the renderer.
+    // Without it, getDisplayMedia fails and lib-jitsi-meet falls back to the legacy
+    // getUserMedia({ chromeMediaSource: 'desktop' }) path which can't use restrictOwnAudio.
+    //
+    // With this handler + restrictOwnAudio constraint, system audio loopback excludes
+    // the Electron app's own audio output — so teachers can share YouTube audio without
+    // echoing meeting voices back to everyone.
+    mainWindow.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
+        try {
+            const sources = await desktopCapturer.getSources({
+                types: [ 'screen', 'window' ],
+                thumbnailSize: { width: 300,
+                    height: 300 },
+                fetchWindowIcons: true
+            });
+
+            const mappedSources = sources.map(source => ({
+                id: source.id,
+                name: source.name,
+                thumbnail: { dataUrl: source.thumbnail.toDataURL() }
+            }));
+
+            // Ask the renderer to show our custom DesktopPicker dialog
+            mainWindow.webContents.send('display-media-request', mappedSources);
+
+            // Wait for the user's selection
+            const result = await new Promise(resolve => {
+                ipcMain.once('display-media-response', (_, data) => resolve(data));
+            });
+
+            if (!result?.sourceId) {
+                callback(); // User cancelled
+
+                return;
+            }
+
+            const source = sources.find(s => s.id === result.sourceId);
+
+            if (!source) {
+                callback();
+
+                return;
+            }
+
+            const streams = { video: source };
+
+            // System audio loopback only works for screen sources (not individual windows).
+            // The restrictOwnAudio constraint (in getDisplayMedia) tells Chromium to exclude
+            // this app's audio from the loopback capture.
+            if (result.shareAudio && source.id.startsWith('screen:')) {
+                streams.audio = 'loopback';
+            }
+
+            callback(streams);
+        } catch (err) {
+            console.error('Display media handler error:', err);
+            callback();
+        }
+    });
+
     // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
     // Not calling event.preventDefault() keeps the page open (prevents unload).
     // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().

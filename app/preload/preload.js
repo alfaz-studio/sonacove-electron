@@ -30,7 +30,9 @@ const whitelistedIpcChannels = [
     'posthog-capture',
     'retry-load',
     'update-toast-action',
-    'leave-modal-action'
+    'leave-modal-action',
+    'display-media-request',
+    'display-media-response'
 ];
 
 // Unlimited listeners — the preload subscribes to many channels across the app
@@ -105,6 +107,9 @@ window.sonacoveElectronAPI = {
     captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
     saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
+    respondToDisplayMedia: data => {
+        ipcRenderer.send('display-media-response', data);
+    },
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {
@@ -152,6 +157,18 @@ window.sonacoveElectronAPI = {
         }
     }
 };
+
+// ── getDisplayMedia bridge ──────────────────────────────────────────────
+// When the main process intercepts a getDisplayMedia call (via
+// setDisplayMediaRequestHandler), it sends available sources here.
+// We dispatch a CustomEvent so the web app (conference.js) can show its
+// DesktopPicker dialog. Once the user selects a source, the web app calls
+// sonacoveElectronAPI.respondToDisplayMedia() to send the choice back.
+ipcRenderer.on('display-media-request', (_, sources) => {
+    window.dispatchEvent(
+        new CustomEvent('electron-display-media-request', { detail: { sources } })
+    );
+});
 
 window.JitsiMeetElectron = {
     /**
