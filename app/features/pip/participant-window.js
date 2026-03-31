@@ -2,16 +2,31 @@ const { BrowserWindow, ipcMain, screen, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { getMainWindow } = require('../sonacove/overlay/overlay-window');
-
 let participantWindow = null;
+
+/**
+ * Returns the actual main application window, reliably excluding the
+ * participant panel.  The generic getActualMainWindow() helper picks the first
+ * *visible* window which, when the main window is minimized, is the
+ * always-on-top PiP panel — not what we want.
+ *
+ * @returns {BrowserWindow|null}
+ */
+function getActualMainWindow() {
+    const windows = BrowserWindow.getAllWindows().filter(
+        w => !w.isDestroyed() && w !== participantWindow
+    );
+
+    return windows[0] || null;
+}
 let currentOrientation = 'horizontal'; // 'horizontal' | 'vertical'
 let isPillMode = false;
 let lastParticipantsData = null; // Buffered for re-send on did-finish-load
 
 const PILL_SIZE = 56;
 
-// ── Pill window drag state ────────────────────────────────────────────────────
+// ── Window drag state ─────────────────────────────────────────────────────────
+let isDragging = false;
 let dragPollInterval = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -23,8 +38,15 @@ ipcMain.on('pp-start-window-drag', () => {
     const mousePos = screen.getCursorScreenPoint();
     const bounds = participantWindow.getBounds();
 
+    isDragging = true;
     dragOffsetX = mousePos.x - bounds.x;
     dragOffsetY = mousePos.y - bounds.y;
+
+    // Store the window size at drag start — setBounds() is used instead of
+    // setPosition() because on Windows, setPosition() on transparent frameless
+    // windows can cause gradual size drift.
+    const dragWidth = bounds.width;
+    const dragHeight = bounds.height;
 
     if (dragPollInterval) {
         clearInterval(dragPollInterval);
@@ -38,14 +60,17 @@ ipcMain.on('pp-start-window-drag', () => {
         }
         const pos = screen.getCursorScreenPoint();
 
-        participantWindow.setPosition(
-            Math.round(pos.x - dragOffsetX),
-            Math.round(pos.y - dragOffsetY)
-        );
+        participantWindow.setBounds({
+            x: Math.round(pos.x - dragOffsetX),
+            y: Math.round(pos.y - dragOffsetY),
+            width: dragWidth,
+            height: dragHeight
+        });
     }, 16); // ~60 fps
 });
 
 ipcMain.on('pp-stop-window-drag', () => {
+    isDragging = false;
     if (dragPollInterval) {
         clearInterval(dragPollInterval);
         dragPollInterval = null;
@@ -121,11 +146,11 @@ function getWindowPosition(orientation, workArea) {
  * Also notifies both the panel and the main renderer of the new orientation.
  */
 function applyOrientation() {
-    if (!participantWindow || participantWindow.isDestroyed()) {
+    if (!participantWindow || participantWindow.isDestroyed() || isDragging) {
         return;
     }
 
-    const mainWindow = getMainWindow();
+    const mainWindow = getActualMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
@@ -135,8 +160,7 @@ function applyOrientation() {
 
     participantWindow.setResizable(true);
     participantWindow.setMinimumSize(1, 1);
-    participantWindow.setSize(W, H);
-    participantWindow.setPosition(x, y);
+    participantWindow.setBounds({ x, y, width: W, height: H });
     participantWindow.setResizable(false);
 
     // Tell the panel UI (toggle button label).
@@ -158,21 +182,21 @@ ipcMain.on('pip-toggle-orientation', () => {
 // ── IPC: participant count changed — resize window in place ──────────────────
 
 ipcMain.on('pip-resize', (_event, { count }) => {
-    if (!participantWindow || participantWindow.isDestroyed() || isPillMode) {
+    if (!participantWindow || participantWindow.isDestroyed() || isPillMode || isDragging) {
         return;
     }
     currentParticipantCount = Math.max(1, count);
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
 
-    const mainWindow = getMainWindow();
+    const mainWindow = getActualMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
     const { x, y } = getWindowPosition(currentOrientation, display.workArea);
 
     participantWindow.setResizable(true);
-    participantWindow.setSize(W, H);
-    participantWindow.setPosition(x, y);
+    participantWindow.setMinimumSize(1, 1);
+    participantWindow.setBounds({ x, y, width: W, height: H });
     participantWindow.setResizable(false);
 });
 
@@ -226,7 +250,7 @@ function openParticipantWindow() {
     }
 
     // ── Determine initial position ────────────────────────────────────────
-    const mainWindow = getMainWindow();
+    const mainWindow = getActualMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
@@ -362,7 +386,7 @@ function closeParticipantWindow(notifyUserClosed = false) {
     }
 
     if (notifyUserClosed) {
-        const mw = getMainWindow();
+        const mw = getActualMainWindow();
 
         if (mw && !mw.isDestroyed()) {
             mw.webContents.send('pip-panel-closed');
@@ -386,7 +410,7 @@ function shrinkToPill() {
     isPillMode = true;
 
     // Default pill position: bottom-right corner of the work area.
-    const mainWindow = getMainWindow();
+    const mainWindow = getActualMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
@@ -407,7 +431,7 @@ function shrinkToPill() {
     participantWindow.webContents.send('pp-enter-pill-mode');
 
     // Tell main renderer to stop sending frames.
-    const mw = getMainWindow();
+    const mw = getActualMainWindow();
 
     if (mw && !mw.isDestroyed()) {
         mw.webContents.send('pip-panel-closed');
@@ -428,23 +452,22 @@ function expandFromPill() {
     isPillMode = false;
 
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const mainWindow = getMainWindow();
+    const mainWindow = getActualMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
     const { x: posX, y: posY } = getWindowPosition(currentOrientation, display.workArea);
 
     participantWindow.setResizable(true);
-    participantWindow.setMinimumSize(TILE_W + TILE_PAD * 2 + BORDER * 2, H_TILE_H + TILE_PAD * 2 + HEADER_H + BORDER * 2);
-    participantWindow.setSize(W, H);
-    participantWindow.setPosition(posX, posY);
+    participantWindow.setMinimumSize(1, 1);
+    participantWindow.setBounds({ x: posX, y: posY, width: W, height: H });
     participantWindow.setResizable(false);
 
     // Tell panel HTML to switch back to panel mode.
     participantWindow.webContents.send('pp-enter-panel-mode');
 
     // Tell main renderer to resume sending frames.
-    const mw = getMainWindow();
+    const mw = getActualMainWindow();
 
     if (mw && !mw.isDestroyed()) {
         mw.webContents.send('pip-panel-reopened');
@@ -454,6 +477,24 @@ function expandFromPill() {
 // ── IPC: user clicks pill to reopen panel ────────────────────────────────────
 ipcMain.on('pp-reopen-request', () => {
     expandFromPill();
+});
+
+// ── IPC: user clicks "back to meeting" — restore main window & close PiP ────
+ipcMain.on('pp-focus-main', () => {
+    // getActualMainWindow() returns the first visible window, which is the PiP panel
+    // when the main window is minimized. Find the main window by excluding the
+    // participant panel from the list.
+    const windows = BrowserWindow.getAllWindows().filter(
+        w => !w.isDestroyed() && w !== participantWindow
+    );
+    const mw = windows[0];
+
+    if (mw) {
+        if (mw.isMinimized()) {
+            mw.restore();
+        }
+        mw.focus();
+    }
 });
 
 /**

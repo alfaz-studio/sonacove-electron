@@ -21,11 +21,11 @@ let registeredListeners = {};
  * Registers all Sonacove-specific IPC listeners.
  *
  * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
- * @param {BrowserWindow} _mainWindow - The main window (unused, kept for call-site compat).
+ * @param {BrowserWindow} mainWindow - The main application window.
  * @param {Object} [handlers] - Additional handlers (e.g., for About dialog).
  * @returns {void}
  */
-function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
+function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Remove only our own previously registered listeners
     for (const [ channel, listener ] of Object.entries(registeredListeners)) {
         ipcMain.removeListener(channel, listener);
@@ -164,19 +164,18 @@ function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
     });
 
     // User toggled mic/cam from the PiP panel — forward to main renderer.
+    // Use the direct mainWindow reference (not getMainWindow()) because
+    // getMainWindow() picks the first *visible* window, which is the PiP
+    // panel itself when the main window is minimized.
     register('pp-toggle-audio', () => {
-        const mw = getMainWindow();
-
-        if (mw && !mw.isDestroyed()) {
-            mw.webContents.send('pip-toggle-audio');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-toggle-audio');
         }
     });
 
     register('pp-toggle-video', () => {
-        const mw = getMainWindow();
-
-        if (mw && !mw.isDestroyed()) {
-            mw.webContents.send('pip-toggle-video');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-toggle-video');
         }
     });
 
