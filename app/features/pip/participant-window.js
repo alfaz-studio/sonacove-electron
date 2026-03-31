@@ -98,9 +98,9 @@ function getWindowPosition(orientation, workArea) {
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, orientation);
 
     if (orientation === 'horizontal') {
-        // Horizontally centred, above the dock / taskbar.
+        // Bottom-right corner, above the dock / taskbar.
         return {
-            x: workArea.x + Math.round((workArea.width - W) / 2),
+            x: workArea.x + workArea.width - W - MARGIN,
             y: workArea.y + workArea.height - H - MARGIN,
         };
     }

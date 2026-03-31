@@ -31,6 +31,8 @@ const whitelistedIpcChannels = [
     'pip-panel-reopened',
     'pip-orientation-changed',
     'pip-resize',
+    'pip-window-minimized',
+    'pip-window-restored',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',

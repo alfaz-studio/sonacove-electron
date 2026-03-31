@@ -449,7 +449,8 @@ function createJitsiMeetWindow() {
             nodeIntegration: false,
             preload: path.resolve(basePath, 'build', 'preload.js'),
             sandbox: false,
-            webSecurity: false
+            webSecurity: false,
+            backgroundThrottling: false
         }
     };
 
@@ -570,6 +571,25 @@ function createJitsiMeetWindow() {
 
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
+
+    // Participant PiP — open overlay when the main window is minimized
+    mainWindow.on('minimize', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-window-minimized');
+        }
+    });
+
+    mainWindow.on('restore', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-window-restored');
+        }
+    });
+
+    mainWindow.on('focus', () => {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
+            mainWindow.webContents.send('pip-window-restored');
+        }
+    });
 
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
@@ -1007,9 +1027,9 @@ app.on('ready', () => {
     createJitsiMeetWindow();
 });
 
-if (isDev) {
-    app.on('ready', createWebRTCInternalsWindow);
-}
+// if (isDev) {
+//     app.on('ready', createWebRTCInternalsWindow);
+// }
 
 app.on('second-instance', (event, commandLine) => {
     /**
