@@ -33,6 +33,7 @@ const whitelistedIpcChannels = [
     'pip-resize',
     'pip-window-minimized',
     'pip-window-restored',
+    'pp-participants-update',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',

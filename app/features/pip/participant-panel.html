@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Participants</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
@@ -16,146 +18,192 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Outer shell ─────────────────────────────────────────────────────── */
+    /* ── Panel ──────────────────────────────────────────────────────────── */
     .panel {
       width: 100%;
       height: 100%;
       display: flex;
       flex-direction: column;
-      background: rgba(18, 18, 32, 0.96);
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow:
-        0 4px 6px rgba(0, 0, 0, 0.3),
-        0 12px 40px rgba(0, 0, 0, 0.55);
+      background: rgba(20, 20, 20, 0.9);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .panel.hiding {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+
+    .panel.hidden {
+      display: none;
+    }
+
+    /* ── Tiles Container ────────────────────────────────────────────────── */
+    .tiles-container {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      gap: 6px;
+      padding: 6px;
       overflow: hidden;
     }
 
-    /* ── Control bar (bottom) ────────────────────────────────────────────── */
-    .header {
-      height: 28px;
-      background: rgba(10, 10, 22, 0.9);
+    .tiles-container.vertical {
+      flex-direction: column;
+    }
+
+    /* ── Tile ───────────────────────────────────────────────────────────── */
+    .tile {
+      width: 200px;
+      height: 130px;
+      background: #040404;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .tiles-container.vertical .tile {
+      width: 200px;
+      height: 160px;
+    }
+
+    .tile-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .tile-avatar {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #040404;
+    }
+
+    .tile-avatar-img {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .tile-avatar-initials {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFFFFF;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .tile-avatar-fallback {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .tile-name-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 32px;
+      background: linear-gradient(to bottom, transparent, rgba(4, 4, 4, 0.93));
+      padding: 0 8px 6px;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .tiles-container.vertical .tile-name-bar {
+      height: 34px;
+    }
+
+    .tile-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: #FFFFFF;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Control Bar ────────────────────────────────────────────────────── */
+    .control-bar {
+      height: 32px;
+      background: rgba(255, 255, 255, 0.04);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 8px 0 10px;
+      padding: 0 10px;
       flex-shrink: 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      -webkit-app-region: drag;
       user-select: none;
     }
 
-    .header-left {
+    .control-left {
       display: flex;
       align-items: center;
       gap: 6px;
+      color: #858585;
     }
 
-    .header-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #4ade80;
-      box-shadow: 0 0 5px rgba(74, 222, 128, 0.6);
+    .control-left svg {
       flex-shrink: 0;
     }
 
-    .header-title {
-      font-size: 10px;
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.4);
-      letter-spacing: 0.7px;
-      text-transform: uppercase;
+    .participant-count {
+      font-size: 11px;
+      font-weight: 400;
+      color: #858585;
     }
 
-    /* Buttons — must opt out of drag region. */
-    .header-actions {
+    .control-right {
       display: flex;
       align-items: center;
       gap: 4px;
-      -webkit-app-region: no-drag;
     }
 
-    .icon-btn {
-      width: 22px;
-      height: 22px;
+    .ctrl-btn {
+      width: 24px;
+      height: 24px;
       border: none;
       border-radius: 6px;
-      background: transparent;
-      color: rgba(255, 255, 255, 0.45);
-      font-size: 13px;
-      line-height: 1;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      transition: background 0.12s;
       flex-shrink: 0;
     }
 
-    .icon-btn:hover {
+    .ctrl-btn:hover {
       background: rgba(255, 255, 255, 0.12);
-      color: rgba(255, 255, 255, 0.85);
     }
 
-    .close-btn:hover {
-      background: rgba(231, 76, 60, 0.75);
-      color: #fff;
-    }
-
-    /* ── Video area ──────────────────────────────────────────────────────── */
-    .video-area {
-      flex: 1;
-      position: relative;
-      background: #1a1a2e;
-      overflow: hidden;
-    }
-
-    #frame-img {
-      width: 100%;
-      height: 100%;
-      object-fit: fill; /* canvas already cover-crops each tile */
-      display: block;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-
-    #frame-img.visible {
-      opacity: 1;
-    }
-
-    /* ── Placeholder shown until the first frame arrives ─────────────────── */
-    .placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      pointer-events: none;
-    }
-
-    .placeholder.hidden {
-      display: none;
-    }
-
-    .placeholder-icon {
-      font-size: 24px;
-      opacity: 0.2;
-    }
-
-    .placeholder-text {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.2);
-      letter-spacing: 0.3px;
-    }
-
-    /* ── Pill mode — shown when panel is minimised ───────────────────────── */
+    /* ── Pill Mode ──────────────────────────────────────────────────────── */
     .pill-overlay {
       display: none;
       position: fixed;
@@ -172,18 +220,18 @@
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: #6965db;
-      color: #ffffff;
+      background: linear-gradient(to bottom, #6C5CE7, #4834D4);
+      color: #FFFFFFEE;
       border: none;
-      font-size: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 4px 24px rgba(108, 92, 231, 0.2), 0 8px 32px rgba(0, 0, 0, 0.4);
       opacity: 0;
       transform: scale(0.5);
       transition: opacity 0.2s ease, transform 0.2s ease;
+      position: relative;
     }
 
     .pill-btn.visible {
@@ -191,152 +239,336 @@
       transform: scale(1);
     }
 
-    .pill-btn:hover {
-      background: #7c7ae0;
+    .pill-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 20px;
+      height: 20px;
+      background: #E04848;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 700;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .pill-badge.hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="panel">
+  <div class="panel" id="panel">
+    <!-- Tiles -->
+    <div class="tiles-container" id="tilesContainer"></div>
 
-    <!-- Video frame area -->
-    <div class="video-area">
-      <img id="frame-img" alt="" draggable="false">
-      <div class="placeholder" id="placeholder">
-        <span class="placeholder-icon">👥</span>
-        <span class="placeholder-text">Waiting for participants…</span>
+    <!-- Control Bar -->
+    <div class="control-bar">
+      <div class="control-left">
+        <span id="gripIcon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></svg>
+        </span>
+        <span class="participant-count" id="participantCount">0 participants</span>
+      </div>
+      <div class="control-right">
+        <button class="ctrl-btn" id="toggleBtn" title="Toggle layout">
+          <span id="toggleIcon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
+          </span>
+        </button>
+        <button class="ctrl-btn" id="closeBtn" title="Minimize to pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+        </button>
       </div>
     </div>
-
-    <!-- Control bar — draggable, with layout toggle + close (at bottom) -->
-    <div class="header">
-      <div class="header-left">
-        <div class="header-dot" id="statusDot"></div>
-        <span class="header-title">Participants</span>
-      </div>
-      <div class="header-actions">
-        <!-- Layout toggle: shows the icon for the OTHER orientation (what you'll switch TO) -->
-        <button class="icon-btn" id="toggleBtn" title="Toggle layout">⇄</button>
-        <button class="icon-btn close-btn" id="closeBtn" title="Close panel">✕</button>
-      </div>
-    </div>
-
   </div>
 
-  <!-- Pill shown when panel is minimised -->
+  <!-- Pill -->
   <div class="pill-overlay" id="pillOverlay">
-    <button class="pill-btn" id="pillBtn" title="Show Participants">👥</button>
+    <button class="pill-btn" id="pillBtn" title="Show Participants">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="pill-badge hidden" id="pillBadge">0</span>
+    </button>
   </div>
 
   <script>
     (function () {
-      const frameImg    = document.getElementById('frame-img');
-      const placeholder = document.getElementById('placeholder');
-      const closeBtn    = document.getElementById('closeBtn');
-      const toggleBtn   = document.getElementById('toggleBtn');
-      const statusDot   = document.getElementById('statusDot');
-      const pillOverlay = document.getElementById('pillOverlay');
-      const pillBtn     = document.getElementById('pillBtn');
-      const panel       = document.querySelector('.panel');
+      var panel = document.getElementById('panel');
+      var tilesContainer = document.getElementById('tilesContainer');
+      var closeBtn = document.getElementById('closeBtn');
+      var toggleBtn = document.getElementById('toggleBtn');
+      var toggleIcon = document.getElementById('toggleIcon');
+      var gripIcon = document.getElementById('gripIcon');
+      var participantCountEl = document.getElementById('participantCount');
+      var pillOverlay = document.getElementById('pillOverlay');
+      var pillBtn = document.getElementById('pillBtn');
+      var pillBadge = document.getElementById('pillBadge');
 
-      // Icons: show the layout you will switch TO when clicking.
-      const ICONS = {
-        horizontal: '⇅',  // currently horizontal → click to go vertical
-        vertical:   '⇄',  // currently vertical   → click to go horizontal
-      };
+      // SVG templates
+      var GRIP_HORIZONTAL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></svg>';
+      var GRIP_VERTICAL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>';
+      var TOGGLE_COLUMNS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>';
+      var TOGGLE_ROWS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></svg>';
+      var USER_FALLBACK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
-      let currentOrientation = 'horizontal';
-      let firstFrameReceived = false;
+      var currentOrientation = 'horizontal';
+      var participants = [];
+      var isPillMode = false;
 
-      function resetFrame() {
-        firstFrameReceived = false;
-        frameImg.classList.remove('visible');
-        placeholder.classList.remove('hidden');
+      // ── Orientation helpers ──────────────────────────────────────────────
+      function applyOrientation() {
+        if (currentOrientation === 'vertical') {
+          tilesContainer.classList.add('vertical');
+        } else {
+          tilesContainer.classList.remove('vertical');
+        }
+
+        gripIcon.innerHTML = currentOrientation === 'horizontal' ? GRIP_HORIZONTAL : GRIP_VERTICAL;
+
+        // Toggle icon shows what you'll switch TO
+        if (currentOrientation === 'horizontal') {
+          toggleIcon.innerHTML = TOGGLE_COLUMNS;
+          toggleBtn.title = 'Switch to vertical layout';
+        } else {
+          toggleIcon.innerHTML = TOGGLE_ROWS;
+          toggleBtn.title = 'Switch to horizontal layout';
+        }
       }
 
-      function updateToggleIcon() {
-        toggleBtn.title = currentOrientation === 'horizontal'
-          ? 'Switch to vertical layout'
-          : 'Switch to horizontal layout';
-        toggleBtn.textContent = ICONS[currentOrientation];
+      // ── Tile rendering ───────────────────────────────────────────────────
+      function renderTiles() {
+        var existingTiles = tilesContainer.querySelectorAll('.tile');
+        var existingMap = {};
+        for (var i = 0; i < existingTiles.length; i++) {
+          existingMap[existingTiles[i].getAttribute('data-participant-id')] = existingTiles[i];
+        }
+
+        var newIds = {};
+        for (var j = 0; j < participants.length; j++) {
+          newIds[participants[j].id] = true;
+        }
+
+        // Remove tiles for participants no longer present
+        for (var id in existingMap) {
+          if (!newIds[id]) {
+            existingMap[id].remove();
+          }
+        }
+
+        // Add or update tiles
+        for (var k = 0; k < participants.length; k++) {
+          var p = participants[k];
+          var tile = existingMap[p.id];
+
+          if (!tile) {
+            tile = createTile(p);
+            tilesContainer.appendChild(tile);
+          } else {
+            updateTile(tile, p);
+          }
+        }
       }
 
-      updateToggleIcon();
+      function createTile(p) {
+        var tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.setAttribute('data-participant-id', p.id);
 
-      // Close button.
-      closeBtn.addEventListener('click', () => {
-        window.panelAPI.close();
+        var videoImg = document.createElement('img');
+        videoImg.className = 'tile-video';
+        videoImg.draggable = false;
+        videoImg.alt = '';
+        tile.appendChild(videoImg);
+
+        var avatarDiv = document.createElement('div');
+        avatarDiv.className = 'tile-avatar';
+        tile.appendChild(avatarDiv);
+
+        var nameBar = document.createElement('div');
+        nameBar.className = 'tile-name-bar';
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'tile-name';
+        nameBar.appendChild(nameSpan);
+        tile.appendChild(nameBar);
+
+        updateTile(tile, p);
+        return tile;
+      }
+
+      function updateTile(tile, p) {
+        var videoImg = tile.querySelector('.tile-video');
+        var avatarDiv = tile.querySelector('.tile-avatar');
+        var nameSpan = tile.querySelector('.tile-name');
+
+        nameSpan.textContent = p.name || '';
+
+        // If has video and video img is already showing a frame, keep showing it.
+        // If hasVideo is false, hide video and show avatar.
+        if (!p.hasVideo) {
+          videoImg.style.display = 'none';
+          avatarDiv.style.display = 'flex';
+        }
+        // When hasVideo is true, we wait for actual frames to show the video img.
+
+        // Update avatar content
+        renderAvatar(avatarDiv, p);
+      }
+
+      function renderAvatar(container, p) {
+        container.innerHTML = '';
+
+        if (p.avatarURL) {
+          var img = document.createElement('img');
+          img.className = 'tile-avatar-img';
+          img.src = p.avatarURL;
+          img.alt = p.name || '';
+          img.onerror = function () {
+            // Fallback to initials on load error
+            container.innerHTML = '';
+            appendInitialsOrFallback(container, p);
+          };
+          container.appendChild(img);
+        } else {
+          appendInitialsOrFallback(container, p);
+        }
+      }
+
+      function appendInitialsOrFallback(container, p) {
+        if (p.initials) {
+          var initialsDiv = document.createElement('div');
+          initialsDiv.className = 'tile-avatar-initials';
+          initialsDiv.textContent = p.initials;
+          initialsDiv.style.backgroundColor = p.avatarColor || '#555';
+          container.appendChild(initialsDiv);
+        } else {
+          var fallback = document.createElement('div');
+          fallback.className = 'tile-avatar-fallback';
+          fallback.innerHTML = USER_FALLBACK;
+          container.appendChild(fallback);
+        }
+      }
+
+      // ── Participant count ────────────────────────────────────────────────
+      function updateParticipantCount() {
+        var count = participants.length;
+        participantCountEl.textContent = count + (count === 1 ? ' participant' : ' participants');
+
+        // Update pill badge
+        if (count > 0) {
+          pillBadge.textContent = count;
+          pillBadge.classList.remove('hidden');
+        } else {
+          pillBadge.classList.add('hidden');
+        }
+      }
+
+      // ── API callbacks ────────────────────────────────────────────────────
+      window.panelAPI.onParticipantsUpdate(function (data) {
+        participants = data;
+        renderTiles();
+        updateParticipantCount();
       });
 
-      // Layout toggle button.
-      toggleBtn.addEventListener('click', () => {
-        window.panelAPI.toggleOrientation();
+      window.panelAPI.onFrame(function (frameData) {
+        var id = frameData.id;
+        var data = frameData.data;
+        var tile = tilesContainer.querySelector('.tile[data-participant-id="' + id + '"]');
+        if (!tile) return;
+
+        var videoImg = tile.querySelector('.tile-video');
+        var avatarDiv = tile.querySelector('.tile-avatar');
+
+        videoImg.src = data;
+        videoImg.style.display = 'block';
+        avatarDiv.style.display = 'none';
       });
 
-      // Main process confirms orientation change.
       window.panelAPI.onOrientationChanged(function (orientation) {
         currentOrientation = orientation;
-        updateToggleIcon();
-        resetFrame();
+        applyOrientation();
       });
 
-      // Receive video frames.
-      window.panelAPI.onFrame(function (src) {
-        if (!firstFrameReceived) {
-          firstFrameReceived = true;
-          placeholder.classList.add('hidden');
-          frameImg.classList.add('visible');
-          statusDot.style.background = '#4ade80';
-        }
-        frameImg.src = src;
-      });
-
-      // Switch to pill mode (window shrinks to 56×56).
       window.panelAPI.onEnterPillMode(function () {
-        panel.style.display = 'none';
-        pillOverlay.classList.add('active');
-        // Animate pill in after a tick so the transition fires.
-        requestAnimationFrame(function () {
-          pillBtn.classList.add('visible');
-        });
-      });
-
-      // Switch back to full panel mode.
-      window.panelAPI.onEnterPanelMode(function () {
-        pillBtn.classList.remove('visible');
+        isPillMode = true;
+        // Animate panel out, then show pill
+        panel.classList.add('hiding');
         setTimeout(function () {
-          pillOverlay.classList.remove('active');
-          panel.style.display = '';
-          resetFrame();
-          statusDot.style.background = '#4ade80';
+          panel.classList.add('hidden');
+          panel.classList.remove('hiding');
+          pillOverlay.classList.add('active');
+          requestAnimationFrame(function () {
+            pillBtn.classList.add('visible');
+          });
         }, 200);
       });
 
-      // Pill drag + click — distinguish by whether the mouse moved.
-      let pillDragging = false;
-      let pillMoved = false;
+      window.panelAPI.onEnterPanelMode(function () {
+        isPillMode = false;
+        // Animate pill out, then show panel
+        pillBtn.classList.remove('visible');
+        setTimeout(function () {
+          pillOverlay.classList.remove('active');
+          panel.classList.remove('hidden');
+          // Animate panel in from scaled-down state
+          panel.classList.add('hiding');
+          requestAnimationFrame(function () {
+            panel.classList.remove('hiding');
+          });
+        }, 200);
+      });
+
+      // ── Control bar buttons ──────────────────────────────────────────────
+      closeBtn.addEventListener('click', function () {
+        window.panelAPI.close();
+      });
+
+      toggleBtn.addEventListener('click', function () {
+        window.panelAPI.toggleOrientation();
+      });
+
+      // ── Pill drag logic ──────────────────────────────────────────────────
+      var DRAG_THRESHOLD = 5; // px — ignore micro-movements during a click
+      var pillDragging = false;
+      var pillStartX = 0;
+      var pillStartY = 0;
+      var pillMoved = false;
 
       pillBtn.addEventListener('mousedown', function (e) {
-        if (e.button !== 0) { return; }
+        if (e.button !== 0) return;
         pillDragging = true;
         pillMoved = false;
+        pillStartX = e.screenX;
+        pillStartY = e.screenY;
         window.panelAPI.startWindowDrag();
         e.preventDefault();
       });
 
-      window.addEventListener('mousemove', function () {
-        if (pillDragging) { pillMoved = true; }
+      window.addEventListener('mousemove', function (e) {
+        if (!pillDragging || pillMoved) return;
+        var dx = Math.abs(e.screenX - pillStartX);
+        var dy = Math.abs(e.screenY - pillStartY);
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+          pillMoved = true;
+        }
       });
 
       window.addEventListener('mouseup', function () {
-        if (!pillDragging) { return; }
+        if (!pillDragging) return;
         pillDragging = false;
         window.panelAPI.stopWindowDrag();
         if (!pillMoved) {
-          // Pure click (no drag) → reopen the full panel.
           window.panelAPI.reopen();
         }
       });
+
+      // ── Init ─────────────────────────────────────────────────────────────
+      applyOrientation();
+      updateParticipantCount();
     })();
   </script>
 </body>

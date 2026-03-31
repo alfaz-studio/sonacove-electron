@@ -12,12 +12,23 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('panelAPI', {
     /**
      * Register a callback that fires whenever a new video frame arrives.
+     * Data is an object: { id: string, data: string } where data is a base64 JPEG.
      *
-     * @param {function(string): void} cb - Called with the base64 JPEG data URL.
+     * @param {function(Object): void} cb - Called with { id, data }.
      * @returns {void}
      */
     onFrame(cb) {
         ipcRenderer.on('pp-frame', (_event, data) => cb(data));
+    },
+
+    /**
+     * Register a callback that fires when participant metadata updates.
+     *
+     * @param {function(Array): void} cb - Called with array of participant objects.
+     * @returns {void}
+     */
+    onParticipantsUpdate(cb) {
+        ipcRenderer.on('pp-participants-update', (_event, data) => cb(data));
     },
 
     /**

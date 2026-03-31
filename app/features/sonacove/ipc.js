@@ -6,6 +6,7 @@ const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow 
 const {
     openParticipantWindow,
     sendParticipantFrame,
+    sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
 } = require('../pip/participant-window');
@@ -147,9 +148,14 @@ function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
         }
     });
 
-    // Renderer sends a JPEG frame (base64 data URL) — forward to the overlay.
+    // Renderer sends a per-participant JPEG frame — forward to the overlay.
     register('pip-screenshare-frame', (_event, frameData) => {
         sendParticipantFrame(frameData);
+    });
+
+    // Renderer sends participant metadata (names, avatars, camera state).
+    register('pp-participants-update', (_event, participants) => {
+        sendParticipantsUpdate(participants);
     });
 
     // Renderer signals screenshare ended — close the overlay window cleanly.

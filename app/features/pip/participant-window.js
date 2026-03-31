@@ -7,6 +7,7 @@ const { getMainWindow } = require('../sonacove/overlay/overlay-window');
 let participantWindow = null;
 let currentOrientation = 'horizontal'; // 'horizontal' | 'vertical'
 let isPillMode = false;
+let lastParticipantsData = null; // Buffered for re-send on did-finish-load
 
 const PILL_SIZE = 56;
 
@@ -58,7 +59,9 @@ const TILE_W = 200;
 const H_TILE_H = 130; // tile height in horizontal mode
 const V_TILE_H = 160; // tile height in vertical mode (taller / squarish)
 const TILE_GAP = 6;
-const HEADER_H = 28;
+const TILE_PAD = 6;   // padding inside the tiles container (each side)
+const HEADER_H = 32;
+const BORDER = 1;     // panel border width (each side)
 
 const MARGIN = 20;
 
@@ -66,8 +69,7 @@ let currentParticipantCount = 1;
 
 /**
  * Computes the BrowserWindow dimensions for a given participant count and
- * orientation.  Mirrors the canvas formula in ParticipantPiPCanvas.tsx so the
- * content always fills the window edge-to-edge (no padding).
+ * orientation.  Accounts for tile container padding, gaps, and panel border.
  *
  * @param {number} count
  * @param {string} orientation
@@ -76,17 +78,19 @@ let currentParticipantCount = 1;
 function computeWindowSize(count, orientation) {
     const n = Math.max(1, count);
     const tileH = orientation === 'horizontal' ? H_TILE_H : V_TILE_H;
+    const pad2 = TILE_PAD * 2;  // top+bottom or left+right padding
+    const bdr2 = BORDER * 2;    // border on both sides
 
     if (orientation === 'horizontal') {
         return {
-            width:  n * TILE_W + (n - 1) * TILE_GAP,
-            height: tileH + HEADER_H,
+            width:  n * TILE_W + (n - 1) * TILE_GAP + pad2 + bdr2,
+            height: tileH + pad2 + HEADER_H + bdr2,
         };
     }
 
     return {
-        width:  TILE_W,
-        height: n * tileH + (n - 1) * TILE_GAP + HEADER_H,
+        width:  TILE_W + pad2 + bdr2,
+        height: n * tileH + (n - 1) * TILE_GAP + pad2 + HEADER_H + bdr2,
     };
 }
 
@@ -129,8 +133,11 @@ function applyOrientation() {
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
     const { x, y } = getWindowPosition(currentOrientation, display.workArea);
 
+    participantWindow.setResizable(true);
+    participantWindow.setMinimumSize(1, 1);
     participantWindow.setSize(W, H);
     participantWindow.setPosition(x, y);
+    participantWindow.setResizable(false);
 
     // Tell the panel UI (toggle button label).
     participantWindow.webContents.send('pp-orientation-changed', currentOrientation);
@@ -157,8 +164,15 @@ ipcMain.on('pip-resize', (_event, { count }) => {
     currentParticipantCount = Math.max(1, count);
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
 
+    const mainWindow = getMainWindow();
+    const display = mainWindow
+        ? screen.getDisplayMatching(mainWindow.getBounds())
+        : screen.getPrimaryDisplay();
+    const { x, y } = getWindowPosition(currentOrientation, display.workArea);
+
     participantWindow.setResizable(true);
     participantWindow.setSize(W, H);
+    participantWindow.setPosition(x, y);
     participantWindow.setResizable(false);
 });
 
@@ -176,8 +190,7 @@ function openParticipantWindow() {
         return; // Already open.
     }
 
-    // Reset to horizontal and single-participant size on each new screenshare session.
-    currentOrientation = 'horizontal';
+    // Keep the user's last chosen orientation; only reset participant count.
     currentParticipantCount = 1;
 
     // ── Resolve preload path ──────────────────────────────────────────────
@@ -228,8 +241,8 @@ function openParticipantWindow() {
             y: posY,
             width: W,
             height: H,
-            minWidth: TILE_W,
-            minHeight: H_TILE_H + HEADER_H,
+            minWidth: TILE_W + TILE_PAD * 2 + BORDER * 2,
+            minHeight: H_TILE_H + TILE_PAD * 2 + HEADER_H + BORDER * 2,
             transparent: true,
             frame: false,
             alwaysOnTop: true,
@@ -267,6 +280,12 @@ function openParticipantWindow() {
         if (participantWindow && !participantWindow.isDestroyed()) {
             // Send initial orientation so the toggle button shows the right icon.
             participantWindow.webContents.send('pp-orientation-changed', currentOrientation);
+
+            // Re-send buffered participant data that may have arrived before load.
+            if (lastParticipantsData) {
+                participantWindow.webContents.send('pp-participants-update', lastParticipantsData);
+            }
+
             participantWindow.show();
         }
     });
@@ -299,10 +318,10 @@ function openParticipantWindow() {
 }
 
 /**
- * Sends a JPEG frame (base64 data-URL string) to the participant panel.
- * Silently drops the frame if the window is not open.
+ * Sends a per-participant JPEG frame to the participant panel.
+ * Data is { id: string, data: string }.
  *
- * @param {string} frameData - Base64 JPEG data URL.
+ * @param {{ id: string, data: string }} frameData
  * @returns {void}
  */
 function sendParticipantFrame(frameData) {
@@ -310,6 +329,21 @@ function sendParticipantFrame(frameData) {
         return;
     }
     participantWindow.webContents.send('pp-frame', frameData);
+}
+
+/**
+ * Sends participant metadata to the panel so it can render tiles with
+ * avatars, names, and camera state.
+ *
+ * @param {Array} participants - Array of participant metadata objects.
+ * @returns {void}
+ */
+function sendParticipantsUpdate(participants) {
+    lastParticipantsData = participants;
+    if (!participantWindow || participantWindow.isDestroyed()) {
+        return;
+    }
+    participantWindow.webContents.send('pp-participants-update', participants);
 }
 
 /**
@@ -321,6 +355,7 @@ function sendParticipantFrame(frameData) {
  * @returns {void}
  */
 function closeParticipantWindow(notifyUserClosed = false) {
+    lastParticipantsData = null;
     if (participantWindow && !participantWindow.isDestroyed()) {
         participantWindow.destroy();
         participantWindow = null;
@@ -400,7 +435,7 @@ function expandFromPill() {
     const { x: posX, y: posY } = getWindowPosition(currentOrientation, display.workArea);
 
     participantWindow.setResizable(true);
-    participantWindow.setMinimumSize(TILE_W, H_TILE_H + HEADER_H);
+    participantWindow.setMinimumSize(TILE_W + TILE_PAD * 2 + BORDER * 2, H_TILE_H + TILE_PAD * 2 + HEADER_H + BORDER * 2);
     participantWindow.setSize(W, H);
     participantWindow.setPosition(posX, posY);
     participantWindow.setResizable(false);
@@ -433,6 +468,7 @@ function getParticipantWindow() {
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
+    sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
     getParticipantWindow,
