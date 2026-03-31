@@ -124,4 +124,14 @@ contextBridge.exposeInMainWorld('panelAPI', {
     stopWindowDrag() {
         ipcRenderer.send('pp-stop-window-drag');
     },
+
+    /**
+     * Tell the main process to restore and focus the main window,
+     * closing the PiP panel.
+     *
+     * @returns {void}
+     */
+    focusMainWindow() {
+        ipcRenderer.send('pp-focus-main');
+    },
 });
