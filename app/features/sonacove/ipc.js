@@ -163,6 +163,23 @@ function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
         closeParticipantWindow(false);
     });
 
+    // User toggled mic/cam from the PiP panel — forward to main renderer.
+    register('pp-toggle-audio', () => {
+        const mw = getMainWindow();
+
+        if (mw && !mw.isDestroyed()) {
+            mw.webContents.send('pip-toggle-audio');
+        }
+    });
+
+    register('pp-toggle-video', () => {
+        const mw = getMainWindow();
+
+        if (mw && !mw.isDestroyed()) {
+            mw.webContents.send('pip-toggle-video');
+        }
+    });
+
     // User clicked the close (×) button inside the overlay panel.
     // Shrink to a floating pill instead of destroying the window, so the pill
     // remains visible (always-on-top) over the shared screen — matching the

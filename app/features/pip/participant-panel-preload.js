@@ -32,6 +32,20 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Tell the main process to toggle the local user's microphone.
+     */
+    toggleAudio() {
+        ipcRenderer.send('pp-toggle-audio');
+    },
+
+    /**
+     * Tell the main process to toggle the local user's camera.
+     */
+    toggleVideo() {
+        ipcRenderer.send('pp-toggle-video');
+    },
+
+    /**
      * Tell the main process the user clicked the close button.
      *
      * @returns {void}
