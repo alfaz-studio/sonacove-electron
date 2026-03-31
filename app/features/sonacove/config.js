@@ -22,10 +22,10 @@ const URLS = {
     // ⚠ staging-launcher/main.js patchMainJs() replaces these URL strings
     // directly in compiled builds — keep in sync with the patterns there.
     staging: {
-        landing: 'http://localhost:4321/dashboard',
-        meetRoot: 'https://localhost:5175/meet',
-        allowedHosts: [ 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
-        defaultServerURL: 'http://localhost:3001'
+        landing: 'https://localhost:5175/meet/test1234',
+        meetRoot: 'https://localhost:5175/meet/test1234',
+        allowedHosts: [ 'sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        defaultServerURL: 'https://sonacove.com'
     }
 };
 
