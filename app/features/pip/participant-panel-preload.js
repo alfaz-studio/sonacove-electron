@@ -46,6 +46,13 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Tell the main process to open the chat panel in the main window.
+     */
+    openChat() {
+        ipcRenderer.send('pp-open-chat');
+    },
+
+    /**
      * Tell the main process the user clicked the close button.
      *
      * @returns {void}

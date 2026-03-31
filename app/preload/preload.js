@@ -36,6 +36,7 @@ const whitelistedIpcChannels = [
     'pp-participants-update',
     'pip-toggle-audio',
     'pip-toggle-video',
+    'pip-open-chat',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',

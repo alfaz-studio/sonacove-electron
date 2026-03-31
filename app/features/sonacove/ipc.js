@@ -179,6 +179,17 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
+    // User clicked chat badge in PiP — restore main window and open chat.
+    register('pp-open-chat', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+            }
+            mainWindow.focus();
+            mainWindow.webContents.send('pip-open-chat');
+        }
+    });
+
     // User clicked the close (×) button inside the overlay panel.
     // Shrink to a floating pill instead of destroying the window, so the pill
     // remains visible (always-on-top) over the shared screen — matching the
