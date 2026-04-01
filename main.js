@@ -568,9 +568,17 @@ function createJitsiMeetWindow() {
             // Ask the renderer to show our custom DesktopPicker dialog
             mainWindow.webContents.send('display-media-request', mappedSources);
 
-            // Wait for the user's selection
+            // Wait for the user's selection (60s timeout to prevent hanging if picker is dismissed)
             const result = await new Promise(resolve => {
-                ipcMain.once('display-media-response', (_, data) => resolve(data));
+                const timeout = setTimeout(() => {
+                    ipcMain.removeAllListeners('display-media-response');
+                    resolve(null);
+                }, 60000);
+
+                ipcMain.once('display-media-response', (_, data) => {
+                    clearTimeout(timeout);
+                    resolve(data);
+                });
             });
 
             if (!result?.sourceId) {
