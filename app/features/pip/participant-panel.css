@@ -61,7 +61,7 @@ html, body {
 /* ── Tile ─────────────────────────────────────────────────────────────────── */
 
 .tile {
-  width: 200px;
+  width: 250px;
   height: 130px;
   background: #040404;
   border-radius: 10px;
@@ -83,7 +83,7 @@ html, body {
 }
 
 .tiles-container.vertical .tile {
-  width: 200px;
+  width: 250px;
   height: 160px;
 }
 
@@ -288,6 +288,14 @@ html, body {
 
 .ctrl-btn:hover {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.ctrl-btn-danger {
+  color: #FF6B6B;
+}
+
+.ctrl-btn-danger:hover {
+  background: rgba(255, 107, 107, 0.15);
 }
 
 /* ── Chat Badge ───────────────────────────────────────────────────────────── */

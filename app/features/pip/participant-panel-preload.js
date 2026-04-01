@@ -154,6 +154,16 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Tell the main process to end the meeting (leave conference)
+     * without restoring the main window.
+     *
+     * @returns {void}
+     */
+    endMeeting() {
+        ipcRenderer.send('pp-end-meeting');
+    },
+
+    /**
      * Tell the main process to start an edge resize.
      *
      * @param {string} edge - 'left' | 'right' | 'top' | 'bottom'

@@ -35,6 +35,9 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
             <span class="chat-badge-count hidden" id="chatBadgeCount">0</span>
         </button>
+        <button class="ctrl-btn ctrl-btn-danger" id="endMeetingBtn" title="End meeting">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 2.59 3.4Z"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+        </button>
         <button class="ctrl-btn" id="backBtn" title="Back to meeting">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
         </button>
@@ -471,6 +474,10 @@
 
       document.getElementById('chatBtn').addEventListener('click', function () {
         window.panelAPI.openChat();
+      });
+
+      document.getElementById('endMeetingBtn').addEventListener('click', function () {
+        window.panelAPI.endMeeting();
       });
 
       // ── Init ───────────────────────────────────────────────────────────────

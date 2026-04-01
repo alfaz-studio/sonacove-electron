@@ -7,7 +7,7 @@
 
 // ── Tile sizing ──────────────────────────────────────────────────────────────
 
-const TILE_W = 200;   // tile width — same for both orientations
+const TILE_W = 250;   // tile width — same for both orientations
 const H_TILE_H = 130; // tile height in horizontal mode (landscape)
 const V_TILE_H = 160; // tile height in vertical mode (squarish)
 const TILE_GAP = 6;
@@ -43,6 +43,7 @@ const IPC = {
     TOGGLE_VIDEO: 'pp-toggle-video',
     OPEN_CHAT: 'pp-open-chat',
     FOCUS_MAIN: 'pp-focus-main',
+    END_MEETING: 'pp-end-meeting',
     START_EDGE_RESIZE: 'pp-start-edge-resize',
     STOP_EDGE_RESIZE: 'pp-stop-edge-resize',
 

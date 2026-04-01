@@ -195,6 +195,15 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
+    // User clicked "End meeting" in the PiP panel — leave conference
+    // without restoring the main window.
+    register('pp-end-meeting', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-end-meeting');
+        }
+        closeParticipantWindow(false);
+    });
+
     // User clicked the close (×) button inside the overlay panel.
     // Shrink to a floating pill instead of destroying the window, so the pill
     // remains visible (always-on-top) over the shared screen — matching the
