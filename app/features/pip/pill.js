@@ -125,6 +125,10 @@ function expandFromPill(count, orientation) {
 function setupPillHandlers(getWindow, getState) {
     _getWindow = getWindow;
 
+    ipcMain.on(IPC.CLOSE_REQUEST, () => {
+        shrinkToPill();
+    });
+
     ipcMain.on(IPC.REOPEN_REQUEST, () => {
         const { count, orientation } = getState();
 
@@ -137,6 +141,7 @@ function setupPillHandlers(getWindow, getState) {
  */
 function cleanup() {
     _isPillMode = false;
+    ipcMain.removeAllListeners(IPC.CLOSE_REQUEST);
     ipcMain.removeAllListeners(IPC.REOPEN_REQUEST);
 }
 
