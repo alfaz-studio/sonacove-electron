@@ -46,6 +46,11 @@ function shrinkToPill() {
 
     _isPillMode = true;
 
+    // Tell the renderer to transition to pill mode first, then resize the
+    // window after the panel hide animation completes.  Resizing a transparent
+    // BrowserWindow on Windows before the renderer is ready causes blank frames.
+    win.webContents.send(IPC.ENTER_PILL_MODE);
+
     const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
@@ -54,23 +59,28 @@ function shrinkToPill() {
     const pillX = waX + waW - PILL_SIZE - MARGIN;
     const pillY = waY + waH - PILL_SIZE - MARGIN;
 
-    // Lock to pill size — prevent resize while in pill mode.
-    win.setMinimumSize(PILL_SIZE, PILL_SIZE);
-    win.setMaximumSize(PILL_SIZE, PILL_SIZE);
-    win.setBounds({
-        x: Math.max(0, pillX),
-        y: Math.max(0, pillY),
-        width: PILL_SIZE,
-        height: PILL_SIZE,
-    });
-
-    win.webContents.send(IPC.ENTER_PILL_MODE);
-
     const mw = getMainWindow();
 
     if (mw && !mw.isDestroyed()) {
         mw.webContents.send(IPC.PANEL_CLOSED);
     }
+
+    // Wait for the renderer's 200ms hide animation before shrinking.
+    setTimeout(() => {
+        if (!win || win.isDestroyed()) {
+            return;
+        }
+
+        // Lock to pill size — prevent resize while in pill mode.
+        win.setMinimumSize(PILL_SIZE, PILL_SIZE);
+        win.setMaximumSize(PILL_SIZE, PILL_SIZE);
+        win.setBounds({
+            x: Math.max(0, pillX),
+            y: Math.max(0, pillY),
+            width: PILL_SIZE,
+            height: PILL_SIZE,
+        });
+    }, 220);
 }
 
 /**
@@ -125,10 +135,6 @@ function expandFromPill(count, orientation) {
 function setupPillHandlers(getWindow, getState) {
     _getWindow = getWindow;
 
-    ipcMain.on(IPC.CLOSE_REQUEST, () => {
-        shrinkToPill();
-    });
-
     ipcMain.on(IPC.REOPEN_REQUEST, () => {
         const { count, orientation } = getState();
 
@@ -141,7 +147,6 @@ function setupPillHandlers(getWindow, getState) {
  */
 function cleanup() {
     _isPillMode = false;
-    ipcMain.removeAllListeners(IPC.CLOSE_REQUEST);
     ipcMain.removeAllListeners(IPC.REOPEN_REQUEST);
 }
 

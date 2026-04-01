@@ -158,9 +158,14 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         sendParticipantsUpdate(participants);
     });
 
-    // Renderer signals screenshare ended — close the overlay window cleanly.
+    // Renderer signals screenshare ended — close the overlay window unless
+    // we're in pill mode (user minimised the panel but the window stays alive).
     register('pip-screenshare-stop', () => {
-        closeParticipantWindow(false);
+        const { isPillMode } = require('../pip/pill');
+
+        if (!isPillMode()) {
+            closeParticipantWindow(false);
+        }
     });
 
     // User toggled mic/cam from the PiP panel — forward to main renderer.
