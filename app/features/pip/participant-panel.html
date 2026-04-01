@@ -7,7 +7,13 @@
   <link rel="stylesheet" href="participant-panel.css">
 </head>
 <body>
-  <div class="panel" id="panel">
+  <div class="panel resize-horizontal" id="panel">
+    <!-- Resize edge zones -->
+    <div class="resize-edge resize-edge-left" data-edge="left"></div>
+    <div class="resize-edge resize-edge-right" data-edge="right"></div>
+    <div class="resize-edge resize-edge-top" data-edge="top"></div>
+    <div class="resize-edge resize-edge-bottom" data-edge="bottom"></div>
+
     <!-- Tiles -->
     <div class="tiles-container" id="tilesContainer"></div>
 
@@ -65,6 +71,8 @@
 
       var currentOrientation = 'horizontal';
       var participants = [];
+      var visibleTileCount = 4;
+      var resizeEdge = null; // which edge is being dragged — determines slice direction
       var isPillMode = false;
       var DRAG_THRESHOLD = 5;
 
@@ -83,6 +91,13 @@
       // ── Tile rendering ─────────────────────────────────────────────────────
 
       function renderTiles() {
+        // Resize from left/top → hide from the start (leftmost/topmost disappears).
+        // Resize from right/bottom or default → hide from the end.
+        var hideFromStart = resizeEdge === 'left' || resizeEdge === 'top';
+        var visible = hideFromStart
+          ? participants.slice(participants.length - visibleTileCount)
+          : participants.slice(0, visibleTileCount);
+
         var existingTiles = tilesContainer.querySelectorAll('.tile');
         var existingMap = {};
         for (var i = 0; i < existingTiles.length; i++) {
@@ -90,8 +105,8 @@
         }
 
         var newIds = {};
-        for (var j = 0; j < participants.length; j++) {
-          newIds[participants[j].id] = true;
+        for (var j = 0; j < visible.length; j++) {
+          newIds[visible[j].id] = true;
         }
 
         for (var id in existingMap) {
@@ -100,8 +115,8 @@
           }
         }
 
-        for (var k = 0; k < participants.length; k++) {
-          var p = participants[k];
+        for (var k = 0; k < visible.length; k++) {
+          var p = visible[k];
           var tile = existingMap[p.id];
 
           if (!tile) {
@@ -245,8 +260,12 @@
       function applyOrientation() {
         if (currentOrientation === 'vertical') {
           tilesContainer.classList.add('vertical');
+          panel.classList.remove('resize-horizontal');
+          panel.classList.add('resize-vertical');
         } else {
           tilesContainer.classList.remove('vertical');
+          panel.classList.remove('resize-vertical');
+          panel.classList.add('resize-horizontal');
         }
 
         gripIcon.innerHTML = GRIP_ICON;
@@ -261,11 +280,17 @@
       }
 
       function updateParticipantCount() {
-        var count = participants.length;
-        participantCountEl.textContent = count + (count === 1 ? ' participant' : ' participants');
+        var total = participants.length;
+        var shown = Math.min(visibleTileCount, total);
 
-        if (count > 0) {
-          pillBadge.textContent = count;
+        if (shown < total) {
+          participantCountEl.textContent = shown + ' of ' + total;
+        } else {
+          participantCountEl.textContent = total + (total === 1 ? ' participant' : ' participants');
+        }
+
+        if (total > 0) {
+          pillBadge.textContent = total;
           pillBadge.classList.remove('hidden');
         } else {
           pillBadge.classList.add('hidden');
@@ -305,6 +330,13 @@
       window.panelAPI.onOrientationChanged(function (orientation) {
         currentOrientation = orientation;
         applyOrientation();
+      });
+
+      window.panelAPI.onVisibleCountChanged(function (data) {
+        visibleTileCount = data.count;
+        resizeEdge = data.edge;
+        renderTiles();
+        updateParticipantCount();
       });
 
       window.panelAPI.onEnterPillMode(function () {
@@ -399,6 +431,27 @@
         window.panelAPI.stopWindowDrag();
         if (!pillMoved) {
           window.panelAPI.reopen();
+        }
+      });
+
+      // ── Edge resize ───────────────────────────────────────────────────────
+
+      var edgeResizing = false;
+
+      document.querySelectorAll('.resize-edge').forEach(function (edgeEl) {
+        edgeEl.addEventListener('mousedown', function (e) {
+          if (e.button !== 0) return;
+          edgeResizing = true;
+          window.panelAPI.startEdgeResize(edgeEl.getAttribute('data-edge'));
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      });
+
+      window.addEventListener('mouseup', function () {
+        if (edgeResizing) {
+          edgeResizing = false;
+          window.panelAPI.stopEdgeResize();
         }
       });
 

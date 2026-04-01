@@ -9,6 +9,7 @@ const { ipcMain, screen } = require('electron');
 const { PILL_SIZE, MARGIN, IPC } = require('./constants');
 const { getMainWindow } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
+const { setVisibleTileCount } = require('./resize');
 
 let _getWindow = null;
 let _isPillMode = false;
@@ -53,15 +54,15 @@ function shrinkToPill() {
     const pillX = waX + waW - PILL_SIZE - MARGIN;
     const pillY = waY + waH - PILL_SIZE - MARGIN;
 
-    win.setResizable(true);
+    // Lock to pill size — prevent resize while in pill mode.
     win.setMinimumSize(PILL_SIZE, PILL_SIZE);
+    win.setMaximumSize(PILL_SIZE, PILL_SIZE);
     win.setBounds({
         x: Math.max(0, pillX),
         y: Math.max(0, pillY),
         width: PILL_SIZE,
         height: PILL_SIZE,
     });
-    win.setResizable(false);
 
     win.webContents.send(IPC.ENTER_PILL_MODE);
 
@@ -88,6 +89,9 @@ function expandFromPill(count, orientation) {
 
     _isPillMode = false;
 
+    // Reset visible count to show all tiles when reopening from pill.
+    setVisibleTileCount(count);
+
     const { width: W, height: H } = computeWindowSize(count, orientation);
     const mainWindow = getMainWindow();
     const display = mainWindow
@@ -95,12 +99,14 @@ function expandFromPill(count, orientation) {
         : screen.getPrimaryDisplay();
     const { x: posX, y: posY } = getWindowPosition(count, orientation, display.workArea);
 
-    win.setResizable(true);
+    // Release pill size lock, set bounds, then let participant-window
+    // re-apply proper constraints on the next resize/orientation event.
+    win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
     win.setBounds({ x: posX, y: posY, width: W, height: H });
-    win.setResizable(false);
 
     win.webContents.send(IPC.ENTER_PANEL_MODE);
+    win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: count, edge: null });
 
     const mw = getMainWindow();
 

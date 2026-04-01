@@ -68,6 +68,18 @@ html, body {
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
+  animation: tileIn 0.18s ease-out;
+}
+
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .tiles-container.vertical .tile {
@@ -360,4 +372,45 @@ html, body {
 
 .pill-badge.hidden {
   display: none;
+}
+
+/* ── Resize Edge Zones ───────────────────────────────────────────────── */
+
+.resize-edge {
+  position: absolute;
+  z-index: 10;
+  display: none;
+}
+
+.resize-edge-left,
+.resize-edge-right {
+  top: 0;
+  bottom: 32px; /* above control bar */
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.resize-edge-left { left: 0; }
+.resize-edge-right { right: 0; }
+
+.resize-edge-top,
+.resize-edge-bottom {
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.resize-edge-top { top: 0; }
+.resize-edge-bottom { bottom: 32px; }
+
+/* Show the correct edges based on orientation */
+.panel.resize-horizontal .resize-edge-left,
+.panel.resize-horizontal .resize-edge-right {
+  display: block;
+}
+
+.panel.resize-vertical .resize-edge-top,
+.panel.resize-vertical .resize-edge-bottom {
+  display: block;
 }

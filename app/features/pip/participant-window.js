@@ -13,6 +13,7 @@ const { setParticipantWindow, getMainWindow, resolveFile } = require('./helpers'
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
+const { setupResizeHandlers, isResizing, getVisibleTileCount, setVisibleTileCount } = require('./resize');
 
 let participantWindow = null;
 let currentOrientation = 'horizontal';
@@ -26,6 +27,7 @@ const getState = () => ({ count: currentParticipantCount, orientation: currentOr
 
 setupDragHandlers(getWindow);
 setupPillHandlers(getWindow, getState);
+setupResizeHandlers(getWindow, getState);
 
 // ── Orientation ──────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ setupPillHandlers(getWindow, getState);
  * Notifies both the panel renderer and the main renderer.
  */
 function applyOrientation() {
-    if (!participantWindow || participantWindow.isDestroyed() || isDragging()) {
+    if (!participantWindow || participantWindow.isDestroyed() || isDragging() || isResizing()) {
         return;
     }
 
@@ -43,19 +45,44 @@ function applyOrientation() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
 
-    const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const { x, y } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
+    // Clamp visible count to current participant count after orientation change.
+    const visibleCount = Math.min(getVisibleTileCount(), currentParticipantCount);
 
-    participantWindow.setResizable(true);
+    setVisibleTileCount(visibleCount);
+
+    const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
+    const { x, y } = getWindowPosition(visibleCount, currentOrientation, display.workArea);
+
+    updateSizeConstraints();
     participantWindow.setMinimumSize(1, 1);
     participantWindow.setBounds({ x, y, width: W, height: H });
-    participantWindow.setResizable(false);
+    updateSizeConstraints();
 
     participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
+    participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
 
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(IPC.ORIENTATION_CHANGED_RENDERER, currentOrientation);
     }
+}
+
+/**
+ * Updates min/max size constraints based on current orientation and
+ * participant count, constraining resize to the correct axis.
+ */
+function updateSizeConstraints() {
+    if (!participantWindow || participantWindow.isDestroyed()) {
+        return;
+    }
+
+    // Min = 1 tile, max = all participants.
+    // Horizontal: height locked (min == max), width varies.
+    // Vertical: width locked (min == max), height varies.
+    const minSize = computeWindowSize(1, currentOrientation);
+    const maxSize = computeWindowSize(currentParticipantCount, currentOrientation);
+
+    participantWindow.setMinimumSize(minSize.width, minSize.height);
+    participantWindow.setMaximumSize(maxSize.width, maxSize.height);
 }
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
@@ -66,23 +93,43 @@ ipcMain.on(IPC.TOGGLE_ORIENTATION, () => {
 });
 
 ipcMain.on(IPC.RESIZE, (_event, { count }) => {
-    if (!participantWindow || participantWindow.isDestroyed() || isPillMode() || isDragging()) {
+    if (!participantWindow || participantWindow.isDestroyed() || isPillMode() || isDragging() || isResizing()) {
         return;
     }
 
+    const prevCount = currentParticipantCount;
+
     currentParticipantCount = Math.max(1, count);
-    const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
+
+    // Clamp visible count if participants left.
+    let visibleCount = getVisibleTileCount();
+
+    if (visibleCount > currentParticipantCount) {
+        visibleCount = currentParticipantCount;
+        setVisibleTileCount(visibleCount);
+    }
+
+    // If the user hasn't manually resized (visible == prev total), auto-expand
+    // to show new participants.
+    if (visibleCount === prevCount && currentParticipantCount > prevCount) {
+        visibleCount = currentParticipantCount;
+        setVisibleTileCount(visibleCount);
+    }
+
+    const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
 
     const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x, y } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
+    const { x, y } = getWindowPosition(visibleCount, currentOrientation, display.workArea);
 
-    participantWindow.setResizable(true);
+    updateSizeConstraints();
     participantWindow.setMinimumSize(1, 1);
     participantWindow.setBounds({ x, y, width: W, height: H });
-    participantWindow.setResizable(false);
+    updateSizeConstraints();
+
+    participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
 });
 
 ipcMain.on(IPC.FOCUS_MAIN, () => {
@@ -107,6 +154,7 @@ function openParticipantWindow() {
     }
 
     currentParticipantCount = 1;
+    setVisibleTileCount(1);
 
     const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
 
@@ -144,7 +192,7 @@ function openParticipantWindow() {
             frame: false,
             alwaysOnTop: true,
             hasShadow: true,
-            resizable: false,
+            resizable: true,
             skipTaskbar: true,
             show: false,
             webPreferences: {

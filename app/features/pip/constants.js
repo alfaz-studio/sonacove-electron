@@ -43,10 +43,13 @@ const IPC = {
     TOGGLE_VIDEO: 'pp-toggle-video',
     OPEN_CHAT: 'pp-open-chat',
     FOCUS_MAIN: 'pp-focus-main',
+    START_EDGE_RESIZE: 'pp-start-edge-resize',
+    STOP_EDGE_RESIZE: 'pp-stop-edge-resize',
 
     // Main → panel renderer
     FRAME: 'pp-frame',
     ORIENTATION_CHANGED: 'pp-orientation-changed',
+    VISIBLE_COUNT_CHANGED: 'pp-visible-count-changed',
     ENTER_PILL_MODE: 'pp-enter-pill-mode',
     ENTER_PANEL_MODE: 'pp-enter-panel-mode',
 

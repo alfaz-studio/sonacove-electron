@@ -82,6 +82,17 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Register a callback that fires when the visible tile count changes
+     * (user resized the window, or participants changed).
+     *
+     * @param {function(number): void} cb - Called with the new visible count.
+     * @returns {void}
+     */
+    onVisibleCountChanged(cb) {
+        ipcRenderer.on('pp-visible-count-changed', (_event, data) => cb(data));
+    },
+
+    /**
      * Register a callback that fires when the main process wants the panel
      * to switch to pill (minimised) mode.
      *
@@ -140,5 +151,21 @@ contextBridge.exposeInMainWorld('panelAPI', {
      */
     focusMainWindow() {
         ipcRenderer.send('pp-focus-main');
+    },
+
+    /**
+     * Tell the main process to start an edge resize.
+     *
+     * @param {string} edge - 'left' | 'right' | 'top' | 'bottom'
+     */
+    startEdgeResize(edge) {
+        ipcRenderer.send('pp-start-edge-resize', { edge });
+    },
+
+    /**
+     * Tell the main process to stop edge resizing.
+     */
+    stopEdgeResize() {
+        ipcRenderer.send('pp-stop-edge-resize');
     },
 });
