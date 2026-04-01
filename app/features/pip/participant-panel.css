@@ -136,6 +136,30 @@ html, body {
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* ── Tile Audio Level Indicator ───────────────────────────────────────────── */
+
+.tile-audio-indicator {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.tile-audio-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #44A5FF;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+}
+
 /* ── Tile Pin Button ──────────────────────────────────────────────────────── */
 
 .tile-pin-btn {

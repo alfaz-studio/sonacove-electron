@@ -80,6 +80,8 @@
       var pinnedIds = {};   // { participantId: true } — pinned participants
       var isPillMode = false;
       var DRAG_THRESHOLD = 5;
+      var AUDIO_LEVEL_DOTS = 5;
+      var AUDIO_LEVEL_SENSITIVITY = 1.2;
 
       // ── DOM refs ───────────────────────────────────────────────────────────
 
@@ -178,6 +180,16 @@
         avatarDiv.className = 'tile-avatar';
         tile.appendChild(avatarDiv);
 
+        // Audio level dots.
+        var audioIndicator = document.createElement('div');
+        audioIndicator.className = 'tile-audio-indicator';
+        for (var d = 0; d < AUDIO_LEVEL_DOTS; d++) {
+          var dot = document.createElement('span');
+          dot.className = 'tile-audio-dot';
+          audioIndicator.appendChild(dot);
+        }
+        tile.appendChild(audioIndicator);
+
         // Pin button — top-left.
         var pinBtn = document.createElement('button');
         pinBtn.className = 'tile-pin-btn' + (pinnedIds[p.id] ? ' pinned' : '');
@@ -269,6 +281,18 @@
           tile.classList.remove('raised-hand');
           if (existingBadge) {
             existingBadge.remove();
+          }
+        }
+
+        // Audio level dots — same logic as AudioLevelIndicator.tsx.
+        var audioDots = tile.querySelectorAll('.tile-audio-dot');
+        if (audioDots.length) {
+          var rawLevel = p.audioLevel || 0;
+          var capped = Math.min(1, rawLevel * AUDIO_LEVEL_SENSITIVITY);
+          var stretched = capped * AUDIO_LEVEL_DOTS;
+          for (var di = 0; di < audioDots.length; di++) {
+            var dist = Math.abs(di - 2);
+            audioDots[di].style.opacity = Math.min(1, Math.max(0, stretched - dist));
           }
         }
 
