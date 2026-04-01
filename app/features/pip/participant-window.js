@@ -420,11 +420,12 @@ function shrinkToPill() {
 
     participantWindow.setResizable(true);
     participantWindow.setMinimumSize(PILL_SIZE, PILL_SIZE);
-    participantWindow.setSize(PILL_SIZE, PILL_SIZE);
-    participantWindow.setPosition(
-        Math.max(0, pillX),
-        Math.max(0, pillY)
-    );
+    participantWindow.setBounds({
+        x: Math.max(0, pillX),
+        y: Math.max(0, pillY),
+        width: PILL_SIZE,
+        height: PILL_SIZE
+    });
     participantWindow.setResizable(false);
 
     // Tell panel HTML to switch to pill mode.
@@ -481,13 +482,7 @@ ipcMain.on('pp-reopen-request', () => {
 
 // ── IPC: user clicks "back to meeting" — restore main window & close PiP ────
 ipcMain.on('pp-focus-main', () => {
-    // getActualMainWindow() returns the first visible window, which is the PiP panel
-    // when the main window is minimized. Find the main window by excluding the
-    // participant panel from the list.
-    const windows = BrowserWindow.getAllWindows().filter(
-        w => !w.isDestroyed() && w !== participantWindow
-    );
-    const mw = windows[0];
+    const mw = getActualMainWindow();
 
     if (mw) {
         if (mw.isMinimized()) {

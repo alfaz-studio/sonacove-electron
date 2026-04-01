@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Participants</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    /* Use system font stack — no external CDN dependency */
 
     *, *::before, *::after {
       box-sizing: border-box;
@@ -18,7 +18,7 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -110,7 +110,7 @@
       color: #FFFFFF;
       font-size: 16px;
       font-weight: 700;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .tile-avatar-fallback {
@@ -345,7 +345,7 @@
       align-items: center;
       justify-content: center;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .pill-badge.hidden {
@@ -696,6 +696,9 @@
         window.panelAPI.toggleOrientation();
       });
 
+      // ── Drag threshold (shared by panel and pill drag) ──────────────────
+      var DRAG_THRESHOLD = 5; // px — ignore micro-movements during a click
+
       // ── Panel drag via grip handle ────────────────────────────────────────
       var panelDragPending = false;
       var panelDragging = false;
@@ -730,7 +733,6 @@
       });
 
       // ── Pill drag logic ──────────────────────────────────────────────────
-      var DRAG_THRESHOLD = 5; // px — ignore micro-movements during a click
       var pillDragging = false;
       var pillStartX = 0;
       var pillStartY = 0;
