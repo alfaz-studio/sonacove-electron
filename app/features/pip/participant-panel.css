@@ -136,6 +136,46 @@ html, body {
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* ── Tile Pin Button ──────────────────────────────────────────────────────── */
+
+.tile-pin-btn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.12s, color 0.12s;
+}
+
+.tile:hover .tile-pin-btn {
+  opacity: 1;
+}
+
+.tile-pin-btn.pinned {
+  opacity: 1;
+  background: rgba(70, 135, 237, 0.85);
+  color: #FFFFFF;
+}
+
+.tile-pin-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #FFFFFF;
+}
+
+.tile-pin-btn.pinned:hover {
+  background: rgba(70, 135, 237, 1);
+}
+
 /* ── Tile Name Bar ────────────────────────────────────────────────────────── */
 
 .tile-name-bar {

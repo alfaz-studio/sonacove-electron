@@ -69,6 +69,7 @@
       var VIDEO_ON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>';
       var VIDEO_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.66 5H14a2 2 0 0 1 2 2v2.34l1 1L22 7v10"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
       var HAND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>';
+      var PIN_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
 
       // ── State ──────────────────────────────────────────────────────────────
 
@@ -76,6 +77,7 @@
       var participants = [];
       var visibleTileCount = 4;
       var resizeEdge = null; // which edge is being dragged — determines slice direction
+      var pinnedIds = {};   // { participantId: true } — pinned participants
       var isPillMode = false;
       var DRAG_THRESHOLD = 5;
 
@@ -93,13 +95,43 @@
 
       // ── Tile rendering ─────────────────────────────────────────────────────
 
-      function renderTiles() {
-        // Resize from left/top → hide from the start (leftmost/topmost disappears).
-        // Resize from right/bottom or default → hide from the end.
+      function getVisibleParticipants() {
+        if (visibleTileCount >= participants.length) {
+          return participants.slice();
+        }
+
+        // Pinned participants are always shown. Fill remaining slots
+        // from unpinned, respecting the resize-edge direction.
+        var pinned = [];
+        var unpinned = [];
+        for (var i = 0; i < participants.length; i++) {
+          if (pinnedIds[participants[i].id]) {
+            pinned.push(participants[i]);
+          } else {
+            unpinned.push(participants[i]);
+          }
+        }
+
+        var slotsLeft = Math.max(0, visibleTileCount - pinned.length);
         var hideFromStart = resizeEdge === 'left' || resizeEdge === 'top';
-        var visible = hideFromStart
-          ? participants.slice(participants.length - visibleTileCount)
-          : participants.slice(0, visibleTileCount);
+        var fillers = hideFromStart
+          ? unpinned.slice(unpinned.length - slotsLeft)
+          : unpinned.slice(0, slotsLeft);
+
+        // Merge back in original order.
+        var visibleSet = {};
+        for (var j = 0; j < pinned.length; j++) visibleSet[pinned[j].id] = true;
+        for (var k = 0; k < fillers.length; k++) visibleSet[fillers[k].id] = true;
+
+        var result = [];
+        for (var m = 0; m < participants.length; m++) {
+          if (visibleSet[participants[m].id]) result.push(participants[m]);
+        }
+        return result;
+      }
+
+      function renderTiles() {
+        var visible = getVisibleParticipants();
 
         var existingTiles = tilesContainer.querySelectorAll('.tile');
         var existingMap = {};
@@ -145,6 +177,22 @@
         var avatarDiv = document.createElement('div');
         avatarDiv.className = 'tile-avatar';
         tile.appendChild(avatarDiv);
+
+        // Pin button — top-left.
+        var pinBtn = document.createElement('button');
+        pinBtn.className = 'tile-pin-btn' + (pinnedIds[p.id] ? ' pinned' : '');
+        pinBtn.title = pinnedIds[p.id] ? 'Unpin' : 'Pin';
+        pinBtn.innerHTML = PIN_ICON;
+        pinBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (pinnedIds[p.id]) {
+            delete pinnedIds[p.id];
+          } else {
+            pinnedIds[p.id] = true;
+          }
+          renderTiles();
+        });
+        tile.appendChild(pinBtn);
 
         var nameBar = document.createElement('div');
         nameBar.className = 'tile-name-bar';
@@ -221,6 +269,18 @@
           tile.classList.remove('raised-hand');
           if (existingBadge) {
             existingBadge.remove();
+          }
+        }
+
+        // Pin indicator.
+        var pinBtn = tile.querySelector('.tile-pin-btn');
+        if (pinBtn) {
+          if (pinnedIds[p.id]) {
+            pinBtn.classList.add('pinned');
+            pinBtn.title = 'Unpin';
+          } else {
+            pinBtn.classList.remove('pinned');
+            pinBtn.title = 'Pin';
           }
         }
       }
@@ -313,6 +373,14 @@
 
       window.panelAPI.onParticipantsUpdate(function (data) {
         participants = data.participants || [];
+
+        // Clean up pins for participants who left.
+        var currentIds = {};
+        for (var i = 0; i < participants.length; i++) currentIds[participants[i].id] = true;
+        for (var pid in pinnedIds) {
+          if (!currentIds[pid]) delete pinnedIds[pid];
+        }
+
         renderTiles();
         updateParticipantCount();
         updateChatBadge(data.unreadChatCount || 0);
