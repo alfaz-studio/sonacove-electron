@@ -1027,9 +1027,9 @@ app.on('ready', () => {
     createJitsiMeetWindow();
 });
 
-// if (isDev) {
-//     app.on('ready', createWebRTCInternalsWindow);
-// }
+if (isDev) {
+    app.on('ready', createWebRTCInternalsWindow);
+}
 
 app.on('second-instance', (event, commandLine) => {
     /**

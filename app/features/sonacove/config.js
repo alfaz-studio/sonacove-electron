@@ -10,20 +10,18 @@ const appEnv = process.env.APP_ENV
             : 'staging');
 const isProd = appEnv === 'production';
 
-console.log(`Running in ${appEnv} environment (isProd: ${isProd})`);
-
 const URLS = {
     production: {
-        landing: 'http://localhost:4321/dashboard',
-        meetRoot: 'https://localhost:5175/meet',
-        allowedHosts: [ 'localhost','sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
+        landing: 'https://sonacove.com/dashboard',
+        meetRoot: 'https://sonacove.com/meet',
+        allowedHosts: [ 'sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
         defaultServerURL: 'https://sonacove.com'
     },
     // ⚠ staging-launcher/main.js patchMainJs() replaces these URL strings
     // directly in compiled builds — keep in sync with the patterns there.
     staging: {
-        landing: 'https://localhost:5175/meet/test1234',
-        meetRoot: 'https://localhost:5175/meet/test1234',
+        landing: 'https://sonacove.catfurr.workers.dev/dashboard',
+        meetRoot: 'https://sona-app.catfurr.workers.dev/meet',
         allowedHosts: [ 'sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
         defaultServerURL: 'https://sonacove.com'
     }
