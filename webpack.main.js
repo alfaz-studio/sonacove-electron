@@ -21,7 +21,8 @@ module.exports = {
             patterns: [
                 { from: 'app/splash.html', to: 'splash.html' },
                 { from: 'app/error.html', to: 'error.html' },
-                { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' }
+                { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' },
+                { from: 'app/features/pip/participant-panel.css', to: 'participant-panel.css' }
             ]
         })
     ],

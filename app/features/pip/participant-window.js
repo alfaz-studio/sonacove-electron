@@ -1,198 +1,83 @@
-const { BrowserWindow, ipcMain, screen, app } = require('electron');
-const fs = require('fs');
-const path = require('path');
+/**
+ * Participant PiP panel — window lifecycle orchestrator.
+ *
+ * Creates and manages the always-on-top floating panel that shows participant
+ * tiles when the main window is minimized.  Delegates sizing, drag, and pill
+ * mode to dedicated modules.
+ */
+
+const { BrowserWindow, ipcMain, screen } = require('electron');
+
+const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
+const { setParticipantWindow, getMainWindow, resolveFile } = require('./helpers');
+const { computeWindowSize, getWindowPosition } = require('./sizing');
+const { setupDragHandlers, isDragging } = require('./drag');
+const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
 
 let participantWindow = null;
-
-/**
- * Returns the actual main application window, reliably excluding the
- * participant panel.  The generic getActualMainWindow() helper picks the first
- * *visible* window which, when the main window is minimized, is the
- * always-on-top PiP panel — not what we want.
- *
- * @returns {BrowserWindow|null}
- */
-function getActualMainWindow() {
-    const windows = BrowserWindow.getAllWindows().filter(
-        w => !w.isDestroyed() && w !== participantWindow
-    );
-
-    return windows[0] || null;
-}
-let currentOrientation = 'horizontal'; // 'horizontal' | 'vertical'
-let isPillMode = false;
-let lastParticipantsData = null; // Buffered for re-send on did-finish-load
-
-const PILL_SIZE = 56;
-
-// ── Window drag state ─────────────────────────────────────────────────────────
-let isDragging = false;
-let dragPollInterval = null;
-let dragOffsetX = 0;
-let dragOffsetY = 0;
-
-ipcMain.on('pp-start-window-drag', () => {
-    if (!participantWindow || participantWindow.isDestroyed()) {
-        return;
-    }
-    const mousePos = screen.getCursorScreenPoint();
-    const bounds = participantWindow.getBounds();
-
-    isDragging = true;
-    dragOffsetX = mousePos.x - bounds.x;
-    dragOffsetY = mousePos.y - bounds.y;
-
-    // Store the window size at drag start — setBounds() is used instead of
-    // setPosition() because on Windows, setPosition() on transparent frameless
-    // windows can cause gradual size drift.
-    const dragWidth = bounds.width;
-    const dragHeight = bounds.height;
-
-    if (dragPollInterval) {
-        clearInterval(dragPollInterval);
-    }
-    dragPollInterval = setInterval(() => {
-        if (!participantWindow || participantWindow.isDestroyed()) {
-            clearInterval(dragPollInterval);
-            dragPollInterval = null;
-
-            return;
-        }
-        const pos = screen.getCursorScreenPoint();
-
-        participantWindow.setBounds({
-            x: Math.round(pos.x - dragOffsetX),
-            y: Math.round(pos.y - dragOffsetY),
-            width: dragWidth,
-            height: dragHeight
-        });
-    }, 16); // ~60 fps
-});
-
-ipcMain.on('pp-stop-window-drag', () => {
-    isDragging = false;
-    if (dragPollInterval) {
-        clearInterval(dragPollInterval);
-        dragPollInterval = null;
-    }
-});
-
-// Dynamic tile-based sizing — mirrors ParticipantPiPCanvas.tsx constants.
-// TILE_W is the same for both orientations; tile height differs so horizontal
-// tiles are landscape and vertical tiles are squarish.
-const TILE_W = 200;
-const H_TILE_H = 130; // tile height in horizontal mode
-const V_TILE_H = 160; // tile height in vertical mode (taller / squarish)
-const TILE_GAP = 6;
-const TILE_PAD = 6;   // padding inside the tiles container (each side)
-const HEADER_H = 32;
-const BORDER = 1;     // panel border width (each side)
-
-const MARGIN = 20;
-
+let currentOrientation = 'horizontal';
 let currentParticipantCount = 1;
+let lastParticipantsData = null;
+
+// ── Wire up drag and pill subsystems ─────────────────────────────────────────
+
+const getWindow = () => participantWindow;
+const getState = () => ({ count: currentParticipantCount, orientation: currentOrientation });
+
+setupDragHandlers(getWindow);
+setupPillHandlers(getWindow, getState);
+
+// ── Orientation ──────────────────────────────────────────────────────────────
 
 /**
- * Computes the BrowserWindow dimensions for a given participant count and
- * orientation.  Accounts for tile container padding, gaps, and panel border.
- *
- * @param {number} count
- * @param {string} orientation
- * @returns {{ width: number, height: number }}
- */
-function computeWindowSize(count, orientation) {
-    const n = Math.max(1, count);
-    const tileH = orientation === 'horizontal' ? H_TILE_H : V_TILE_H;
-    const pad2 = TILE_PAD * 2;  // top+bottom or left+right padding
-    const bdr2 = BORDER * 2;    // border on both sides
-
-    if (orientation === 'horizontal') {
-        return {
-            width:  n * TILE_W + (n - 1) * TILE_GAP + pad2 + bdr2,
-            height: tileH + pad2 + HEADER_H + bdr2,
-        };
-    }
-
-    return {
-        width:  TILE_W + pad2 + bdr2,
-        height: n * tileH + (n - 1) * TILE_GAP + pad2 + HEADER_H + bdr2,
-    };
-}
-
-/**
- * Computes the (x, y) position for the panel given an orientation and the
- * work area of the display that contains the main window.
- */
-function getWindowPosition(orientation, workArea) {
-    const { width: W, height: H } = computeWindowSize(currentParticipantCount, orientation);
-
-    if (orientation === 'horizontal') {
-        // Bottom-right corner, above the dock / taskbar.
-        return {
-            x: workArea.x + workArea.width - W - MARGIN,
-            y: workArea.y + workArea.height - H - MARGIN,
-        };
-    }
-
-    // Vertical: right side, vertically centred.
-    return {
-        x: workArea.x + workArea.width - W - MARGIN,
-        y: workArea.y + Math.round((workArea.height - H) / 2),
-    };
-}
-
-/**
- * Resizes and repositions the panel window to match `currentOrientation`.
- * Also notifies both the panel and the main renderer of the new orientation.
+ * Resizes and repositions the panel to match the current orientation.
+ * Notifies both the panel renderer and the main renderer.
  */
 function applyOrientation() {
-    if (!participantWindow || participantWindow.isDestroyed() || isDragging) {
+    if (!participantWindow || participantWindow.isDestroyed() || isDragging()) {
         return;
     }
 
-    const mainWindow = getActualMainWindow();
+    const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
 
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const { x, y } = getWindowPosition(currentOrientation, display.workArea);
+    const { x, y } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
 
     participantWindow.setResizable(true);
     participantWindow.setMinimumSize(1, 1);
     participantWindow.setBounds({ x, y, width: W, height: H });
     participantWindow.setResizable(false);
 
-    // Tell the panel UI (toggle button label).
-    participantWindow.webContents.send('pp-orientation-changed', currentOrientation);
+    participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
 
-    // Tell the main renderer (canvas dimensions / drawing algorithm).
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pip-orientation-changed', currentOrientation);
+        mainWindow.webContents.send(IPC.ORIENTATION_CHANGED_RENDERER, currentOrientation);
     }
 }
 
-// ── IPC: orientation toggle (sent from participant panel) ────────────────────
+// ── IPC handlers ─────────────────────────────────────────────────────────────
 
-ipcMain.on('pip-toggle-orientation', () => {
+ipcMain.on(IPC.TOGGLE_ORIENTATION, () => {
     currentOrientation = currentOrientation === 'horizontal' ? 'vertical' : 'horizontal';
     applyOrientation();
 });
 
-// ── IPC: participant count changed — resize window in place ──────────────────
-
-ipcMain.on('pip-resize', (_event, { count }) => {
-    if (!participantWindow || participantWindow.isDestroyed() || isPillMode || isDragging) {
+ipcMain.on(IPC.RESIZE, (_event, { count }) => {
+    if (!participantWindow || participantWindow.isDestroyed() || isPillMode() || isDragging()) {
         return;
     }
+
     currentParticipantCount = Math.max(1, count);
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
 
-    const mainWindow = getActualMainWindow();
+    const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x, y } = getWindowPosition(currentOrientation, display.workArea);
+    const { x, y } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
 
     participantWindow.setResizable(true);
     participantWindow.setMinimumSize(1, 1);
@@ -200,65 +85,53 @@ ipcMain.on('pip-resize', (_event, { count }) => {
     participantWindow.setResizable(false);
 });
 
+ipcMain.on(IPC.FOCUS_MAIN, () => {
+    const mw = getMainWindow();
+
+    if (mw) {
+        if (mw.isMinimized()) {
+            mw.restore();
+        }
+        mw.focus();
+    }
+});
+
+// ── Window lifecycle ─────────────────────────────────────────────────────────
+
 /**
  * Opens the floating participant PiP panel.
- *
- * The panel is a small, always-on-top, frameless window.  It starts in
- * horizontal strip mode (bottom-centre of the display containing the main
- * window) and can be toggled to vertical (right side) by the user.
- *
- * @returns {void}
  */
 function openParticipantWindow() {
     if (participantWindow && !participantWindow.isDestroyed()) {
-        return; // Already open.
+        return;
     }
 
-    // Keep the user's last chosen orientation; only reset participant count.
     currentParticipantCount = 1;
 
-    // ── Resolve preload path ──────────────────────────────────────────────
-    const preloadCandidates = [
-        path.join(app.getAppPath(), 'build', 'participant-panel-preload.js'),
-        path.join(app.getAppPath(), 'participant-panel-preload.js'),
-        path.join(__dirname, 'participant-panel-preload.js'),
-        path.join(__dirname, '../../../build/participant-panel-preload.js'),
-    ];
-    const preloadPath = preloadCandidates.find(p => fs.existsSync(p));
+    const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
 
     if (!preloadPath) {
         console.error('❌ ParticipantPiP: Could not find participant-panel-preload.js');
-        console.error('Searched:', preloadCandidates);
 
         return;
     }
 
-    // ── Resolve HTML path ─────────────────────────────────────────────────
-    const htmlCandidates = [
-        path.join(app.getAppPath(), 'build', 'participant-panel.html'),
-        path.join(app.getAppPath(), 'participant-panel.html'),
-        path.join(__dirname, 'participant-panel.html'),
-        path.join(__dirname, '../../../build/participant-panel.html'),
-    ];
-    const htmlPath = htmlCandidates.find(p => fs.existsSync(p));
+    const htmlPath = resolveFile('participant-panel.html', __dirname);
 
     if (!htmlPath) {
         console.error('❌ ParticipantPiP: Could not find participant-panel.html');
-        console.error('Searched:', htmlCandidates);
 
         return;
     }
 
-    // ── Determine initial position ────────────────────────────────────────
-    const mainWindow = getActualMainWindow();
+    const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
 
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const { x: posX, y: posY } = getWindowPosition(currentOrientation, display.workArea);
+    const { x: posX, y: posY } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
 
-    // ── Create window ─────────────────────────────────────────────────────
     try {
         participantWindow = new BrowserWindow({
             x: posX,
@@ -288,6 +161,8 @@ function openParticipantWindow() {
         return;
     }
 
+    setParticipantWindow(participantWindow);
+
     // macOS: float above full-screen apps.
     if (process.platform === 'darwin') {
         participantWindow.setAlwaysOnTop(true, 'floating');
@@ -298,23 +173,22 @@ function openParticipantWindow() {
 
     participantWindow.on('closed', () => {
         participantWindow = null;
+        setParticipantWindow(null);
+        resetPill();
     });
 
     participantWindow.webContents.on('did-finish-load', () => {
         if (participantWindow && !participantWindow.isDestroyed()) {
-            // Send initial orientation so the toggle button shows the right icon.
-            participantWindow.webContents.send('pp-orientation-changed', currentOrientation);
+            participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
 
-            // Re-send buffered participant data that may have arrived before load.
             if (lastParticipantsData) {
-                participantWindow.webContents.send('pp-participants-update', lastParticipantsData);
+                participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, lastParticipantsData);
             }
 
             participantWindow.show();
         }
     });
 
-    // Ignore non-critical load abort (-3 = ERR_ABORTED from navigation cancel).
     participantWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
         if (errorCode === -3) {
             return;
@@ -328,6 +202,7 @@ function openParticipantWindow() {
     participantWindow.webContents.on('render-process-gone', (_event, details) => {
         console.error('❌ ParticipantPiP: Renderer crashed:', details.reason);
         participantWindow = null;
+        setParticipantWindow(null);
     });
 
     console.log(`✅ ParticipantPiP: Loading ${htmlPath}`);
@@ -341,162 +216,40 @@ function openParticipantWindow() {
     }
 }
 
-/**
- * Sends a per-participant JPEG frame to the participant panel.
- * Data is { id: string, data: string }.
- *
- * @param {{ id: string, data: string }} frameData
- * @returns {void}
- */
+// ── Data forwarding ──────────────────────────────────────────────────────────
+
 function sendParticipantFrame(frameData) {
     if (!participantWindow || participantWindow.isDestroyed()) {
         return;
     }
-    participantWindow.webContents.send('pp-frame', frameData);
+    participantWindow.webContents.send(IPC.FRAME, frameData);
 }
 
-/**
- * Sends participant metadata to the panel so it can render tiles with
- * avatars, names, and camera state.
- *
- * @param {Array} participants - Array of participant metadata objects.
- * @returns {void}
- */
 function sendParticipantsUpdate(participants) {
     lastParticipantsData = participants;
     if (!participantWindow || participantWindow.isDestroyed()) {
         return;
     }
-    participantWindow.webContents.send('pp-participants-update', participants);
+    participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, participants);
 }
 
-/**
- * Closes the participant panel window and optionally notifies the main
- * renderer that the panel was dismissed by the user (not by screenshare end).
- *
- * @param {boolean} [notifyUserClosed=false] - Whether to send 'pip-panel-closed'
- *   to the main renderer so it stops sending frames and resets its state.
- * @returns {void}
- */
 function closeParticipantWindow(notifyUserClosed = false) {
     lastParticipantsData = null;
     if (participantWindow && !participantWindow.isDestroyed()) {
         participantWindow.destroy();
         participantWindow = null;
+        setParticipantWindow(null);
     }
 
     if (notifyUserClosed) {
-        const mw = getActualMainWindow();
+        const mw = getMainWindow();
 
         if (mw && !mw.isDestroyed()) {
-            mw.webContents.send('pip-panel-closed');
+            mw.webContents.send(IPC.PANEL_CLOSED);
         }
     }
 }
 
-/**
- * Shrinks the participant panel to a floating pill button.
- * The BrowserWindow stays alive (always-on-top) so the pill floats above the
- * shared screen — identical behaviour to the annotations pencil reopen pill.
- * Sends 'pip-panel-closed' to the main renderer so frame-sending stops.
- *
- * @returns {void}
- */
-function shrinkToPill() {
-    if (!participantWindow || participantWindow.isDestroyed()) {
-        return;
-    }
-
-    isPillMode = true;
-
-    // Default pill position: bottom-right corner of the work area.
-    const mainWindow = getActualMainWindow();
-    const display = mainWindow
-        ? screen.getDisplayMatching(mainWindow.getBounds())
-        : screen.getPrimaryDisplay();
-    const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
-    const pillX = waX + waW - PILL_SIZE - MARGIN;
-    const pillY = waY + waH - PILL_SIZE - MARGIN;
-
-    participantWindow.setResizable(true);
-    participantWindow.setMinimumSize(PILL_SIZE, PILL_SIZE);
-    participantWindow.setBounds({
-        x: Math.max(0, pillX),
-        y: Math.max(0, pillY),
-        width: PILL_SIZE,
-        height: PILL_SIZE
-    });
-    participantWindow.setResizable(false);
-
-    // Tell panel HTML to switch to pill mode.
-    participantWindow.webContents.send('pp-enter-pill-mode');
-
-    // Tell main renderer to stop sending frames.
-    const mw = getActualMainWindow();
-
-    if (mw && !mw.isDestroyed()) {
-        mw.webContents.send('pip-panel-closed');
-    }
-}
-
-/**
- * Expands the floating pill back to a full participant panel.
- * Sends 'pip-panel-reopened' to the main renderer so frame-sending resumes.
- *
- * @returns {void}
- */
-function expandFromPill() {
-    if (!participantWindow || participantWindow.isDestroyed()) {
-        return;
-    }
-
-    isPillMode = false;
-
-    const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const mainWindow = getActualMainWindow();
-    const display = mainWindow
-        ? screen.getDisplayMatching(mainWindow.getBounds())
-        : screen.getPrimaryDisplay();
-    const { x: posX, y: posY } = getWindowPosition(currentOrientation, display.workArea);
-
-    participantWindow.setResizable(true);
-    participantWindow.setMinimumSize(1, 1);
-    participantWindow.setBounds({ x: posX, y: posY, width: W, height: H });
-    participantWindow.setResizable(false);
-
-    // Tell panel HTML to switch back to panel mode.
-    participantWindow.webContents.send('pp-enter-panel-mode');
-
-    // Tell main renderer to resume sending frames.
-    const mw = getActualMainWindow();
-
-    if (mw && !mw.isDestroyed()) {
-        mw.webContents.send('pip-panel-reopened');
-    }
-}
-
-// ── IPC: user clicks pill to reopen panel ────────────────────────────────────
-ipcMain.on('pp-reopen-request', () => {
-    expandFromPill();
-});
-
-// ── IPC: user clicks "back to meeting" — restore main window & close PiP ────
-ipcMain.on('pp-focus-main', () => {
-    const mw = getActualMainWindow();
-
-    if (mw) {
-        if (mw.isMinimized()) {
-            mw.restore();
-        }
-        mw.focus();
-    }
-});
-
-/**
- * Returns the participant window instance or null.
- *
- * @returns {BrowserWindow|null}
- */
 function getParticipantWindow() {
     return participantWindow;
 }

@@ -4,354 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Participants</title>
-  <style>
-    /* Use system font stack — no external CDN dependency */
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: transparent;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    /* ── Panel ──────────────────────────────────────────────────────────── */
-    .panel {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      background: rgba(20, 20, 20, 0.9);
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
-      overflow: hidden;
-      opacity: 1;
-      transform: scale(1);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    .panel.hiding {
-      opacity: 0;
-      transform: scale(0.85);
-    }
-
-    .panel.hidden {
-      display: none;
-    }
-
-    /* ── Tiles Container ────────────────────────────────────────────────── */
-    .tiles-container {
-      flex: 1;
-      display: flex;
-      flex-direction: row;
-      gap: 6px;
-      padding: 6px;
-      overflow: hidden;
-    }
-
-    .tiles-container.vertical {
-      flex-direction: column;
-    }
-
-    /* ── Tile ───────────────────────────────────────────────────────────── */
-    .tile {
-      width: 200px;
-      height: 130px;
-      background: #040404;
-      border-radius: 10px;
-      overflow: hidden;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .tiles-container.vertical .tile {
-      width: 200px;
-      height: 160px;
-    }
-
-    .tile-video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: none;
-    }
-
-    .tile-avatar {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #040404;
-    }
-
-    .tile-avatar-img {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-
-    .tile-avatar-initials {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #FFFFFF;
-      font-size: 16px;
-      font-weight: 700;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    .tile-avatar-fallback {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: #333;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255, 255, 255, 0.5);
-    }
-
-    .tile-name-bar {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 2;
-      height: 32px;
-      background: linear-gradient(to bottom, transparent, rgba(4, 4, 4, 0.93));
-      padding: 0 8px 6px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 4px;
-    }
-
-    .tile-status-icons {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      flex-shrink: 0;
-    }
-
-    .tile-status-btn {
-      background: rgba(255, 255, 255, 0.12);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 4px;
-      border-radius: 5px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.12s, border-color 0.12s, transform 0.1s;
-    }
-
-    .tile-status-btn:hover {
-      background: rgba(255, 255, 255, 0.25);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .tile-status-btn:active {
-      background: rgba(255, 255, 255, 0.35);
-      transform: scale(0.9);
-    }
-
-    .tiles-container.vertical .tile-name-bar {
-      height: 34px;
-    }
-
-    .tile-name {
-      font-size: 11px;
-      font-weight: 600;
-      color: #FFFFFF;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* ── Control Bar ────────────────────────────────────────────────────── */
-    .control-bar {
-      height: 32px;
-      background: rgba(255, 255, 255, 0.04);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 10px;
-      flex-shrink: 0;
-      user-select: none;
-    }
-
-    .control-left {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: #858585;
-      cursor: grab;
-      flex: 1;
-    }
-
-    .control-left:active {
-      cursor: grabbing;
-    }
-
-    .control-left svg {
-      flex-shrink: 0;
-    }
-
-    .participant-count {
-      font-size: 11px;
-      font-weight: 400;
-      color: #858585;
-    }
-
-    .control-right {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .ctrl-btn {
-      width: 24px;
-      height: 24px;
-      border: none;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.08);
-      color: rgba(255, 255, 255, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: background 0.12s;
-      flex-shrink: 0;
-    }
-
-    .ctrl-btn:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
-
-    /* Speaking indicator — matches filmstrip theme blue */
-    .tile.speaking {
-        box-shadow: 0 0 0 2px #4687ED, 0 0 12px rgba(70, 135, 237, 0.4);
-    }
-
-    /* Raised hand indicator — matches filmstrip warning-02 */
-    .tile.raised-hand {
-        box-shadow: 0 0 0 2px #FFD600, 0 0 8px rgba(255, 214, 0, 0.3);
-    }
-
-    /* Speaking + raised hand — hand takes priority for border color */
-    .tile.speaking.raised-hand {
-        box-shadow: 0 0 0 2px #FFD600, 0 0 12px rgba(70, 135, 237, 0.4);
-    }
-
-    .tile-hand-badge {
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        z-index: 3;
-        width: 22px;
-        height: 22px;
-        background: #FFD600;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .chat-badge-count {
-        position: absolute;
-        top: -4px;
-        right: -4px;
-        min-width: 14px;
-        height: 14px;
-        background: #165ECC;
-        border-radius: 7px;
-        font-size: 9px;
-        font-weight: 700;
-        color: #FFFFFF;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 3px;
-        font-family: 'Inter', sans-serif;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
-
-    .chat-badge-count.hidden {
-        display: none;
-    }
-
-    /* ── Pill Mode ──────────────────────────────────────────────────────── */
-    .pill-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .pill-overlay.active {
-      display: flex;
-    }
-
-    .pill-btn {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: linear-gradient(to bottom, #6C5CE7, #4834D4);
-      color: #FFFFFFEE;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 24px rgba(108, 92, 231, 0.2), 0 8px 32px rgba(0, 0, 0, 0.4);
-      opacity: 0;
-      transform: scale(0.5);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-      position: relative;
-    }
-
-    .pill-btn.visible {
-      opacity: 1;
-      transform: scale(1);
-    }
-
-    .pill-badge {
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      width: 20px;
-      height: 20px;
-      background: #E04848;
-      border-radius: 50%;
-      font-size: 10px;
-      font-weight: 700;
-      color: #FFFFFF;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    .pill-badge.hidden {
-      display: none;
-    }
-  </style>
+  <link rel="stylesheet" href="participant-panel.css">
 </head>
 <body>
   <div class="panel" id="panel">
@@ -396,18 +49,8 @@
 
   <script>
     (function () {
-      var panel = document.getElementById('panel');
-      var tilesContainer = document.getElementById('tilesContainer');
-      var closeBtn = document.getElementById('closeBtn');
-      var toggleBtn = document.getElementById('toggleBtn');
-      var toggleIcon = document.getElementById('toggleIcon');
-      var gripIcon = document.getElementById('gripIcon');
-      var participantCountEl = document.getElementById('participantCount');
-      var pillOverlay = document.getElementById('pillOverlay');
-      var pillBtn = document.getElementById('pillBtn');
-      var pillBadge = document.getElementById('pillBadge');
+      // ── Icons ──────────────────────────────────────────────────────────────
 
-      // SVG templates
       var GRIP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="19" r="1"/></svg>';
       var TOGGLE_COLUMNS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>';
       var TOGGLE_ROWS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></svg>';
@@ -418,31 +61,27 @@
       var VIDEO_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.66 5H14a2 2 0 0 1 2 2v2.34l1 1L22 7v10"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
       var HAND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>';
 
+      // ── State ──────────────────────────────────────────────────────────────
+
       var currentOrientation = 'horizontal';
       var participants = [];
       var isPillMode = false;
+      var DRAG_THRESHOLD = 5;
 
-      // ── Orientation helpers ──────────────────────────────────────────────
-      function applyOrientation() {
-        if (currentOrientation === 'vertical') {
-          tilesContainer.classList.add('vertical');
-        } else {
-          tilesContainer.classList.remove('vertical');
-        }
+      // ── DOM refs ───────────────────────────────────────────────────────────
 
-        gripIcon.innerHTML = GRIP_ICON;
+      var panel = document.getElementById('panel');
+      var tilesContainer = document.getElementById('tilesContainer');
+      var toggleIcon = document.getElementById('toggleIcon');
+      var gripIcon = document.getElementById('gripIcon');
+      var participantCountEl = document.getElementById('participantCount');
+      var pillOverlay = document.getElementById('pillOverlay');
+      var pillBtn = document.getElementById('pillBtn');
+      var pillBadge = document.getElementById('pillBadge');
+      var chatBadgeCount = document.getElementById('chatBadgeCount');
 
-        // Toggle icon shows what you'll switch TO
-        if (currentOrientation === 'horizontal') {
-          toggleIcon.innerHTML = TOGGLE_COLUMNS;
-          toggleBtn.title = 'Switch to vertical layout';
-        } else {
-          toggleIcon.innerHTML = TOGGLE_ROWS;
-          toggleBtn.title = 'Switch to horizontal layout';
-        }
-      }
+      // ── Tile rendering ─────────────────────────────────────────────────────
 
-      // ── Tile rendering ───────────────────────────────────────────────────
       function renderTiles() {
         var existingTiles = tilesContainer.querySelectorAll('.tile');
         var existingMap = {};
@@ -455,14 +94,12 @@
           newIds[participants[j].id] = true;
         }
 
-        // Remove tiles for participants no longer present
         for (var id in existingMap) {
           if (!newIds[id]) {
             existingMap[id].remove();
           }
         }
 
-        // Add or update tiles
         for (var k = 0; k < participants.length; k++) {
           var p = participants[k];
           var tile = existingMap[p.id];
@@ -513,19 +150,14 @@
 
         nameSpan.textContent = p.name || '';
 
-        // If has video and video img is already showing a frame, keep showing it.
-        // If hasVideo is false, hide video and show avatar.
         if (!p.hasVideo) {
           videoImg.style.display = 'none';
           avatarDiv.style.display = 'flex';
         }
-        // When hasVideo is true, we wait for actual frames to show the video img.
 
-        // Update avatar content
         renderAvatar(avatarDiv, p);
 
-        // Update status icons — always show mic and cam state.
-        // Local participant gets clickable buttons to toggle.
+        // Status icons — local gets clickable buttons, remote gets static icons.
         statusIcons.innerHTML = '';
         if (p.id === 'local') {
           var micBtn = document.createElement('button');
@@ -550,14 +182,14 @@
           statusIcons.insertAdjacentHTML('beforeend', p.hasVideo ? VIDEO_ON : VIDEO_OFF);
         }
 
-        // Speaking indicator
+        // Speaking indicator.
         if (p.dominantSpeaker) {
           tile.classList.add('speaking');
         } else {
           tile.classList.remove('speaking');
         }
 
-        // Raised hand indicator
+        // Raised hand indicator.
         var existingBadge = tile.querySelector('.tile-hand-badge');
         if (p.raisedHand) {
           tile.classList.add('raised-hand');
@@ -584,7 +216,6 @@
           img.src = p.avatarURL;
           img.alt = p.name || '';
           img.onerror = function () {
-            // Fallback to initials on load error
             container.innerHTML = '';
             appendInitialsOrFallback(container, p);
           };
@@ -609,12 +240,30 @@
         }
       }
 
-      // ── Participant count ────────────────────────────────────────────────
+      // ── UI updaters ────────────────────────────────────────────────────────
+
+      function applyOrientation() {
+        if (currentOrientation === 'vertical') {
+          tilesContainer.classList.add('vertical');
+        } else {
+          tilesContainer.classList.remove('vertical');
+        }
+
+        gripIcon.innerHTML = GRIP_ICON;
+
+        if (currentOrientation === 'horizontal') {
+          toggleIcon.innerHTML = TOGGLE_COLUMNS;
+          document.getElementById('toggleBtn').title = 'Switch to vertical layout';
+        } else {
+          toggleIcon.innerHTML = TOGGLE_ROWS;
+          document.getElementById('toggleBtn').title = 'Switch to horizontal layout';
+        }
+      }
+
       function updateParticipantCount() {
         var count = participants.length;
         participantCountEl.textContent = count + (count === 1 ? ' participant' : ' participants');
 
-        // Update pill badge
         if (count > 0) {
           pillBadge.textContent = count;
           pillBadge.classList.remove('hidden');
@@ -623,7 +272,17 @@
         }
       }
 
-      // ── API callbacks ────────────────────────────────────────────────────
+      function updateChatBadge(count) {
+        if (count > 0) {
+          chatBadgeCount.textContent = count > 99 ? '99+' : count;
+          chatBadgeCount.classList.remove('hidden');
+        } else {
+          chatBadgeCount.classList.add('hidden');
+        }
+      }
+
+      // ── Panel API event wiring ─────────────────────────────────────────────
+
       window.panelAPI.onParticipantsUpdate(function (data) {
         participants = data.participants || [];
         renderTiles();
@@ -632,15 +291,13 @@
       });
 
       window.panelAPI.onFrame(function (frameData) {
-        var id = frameData.id;
-        var data = frameData.data;
-        var tile = tilesContainer.querySelector('.tile[data-participant-id="' + id + '"]');
+        var tile = tilesContainer.querySelector('.tile[data-participant-id="' + frameData.id + '"]');
         if (!tile) return;
 
         var videoImg = tile.querySelector('.tile-video');
         var avatarDiv = tile.querySelector('.tile-avatar');
 
-        videoImg.src = data;
+        videoImg.src = frameData.data;
         videoImg.style.display = 'block';
         avatarDiv.style.display = 'none';
       });
@@ -652,7 +309,6 @@
 
       window.panelAPI.onEnterPillMode(function () {
         isPillMode = true;
-        // Animate panel out, then show pill
         panel.classList.add('hiding');
         setTimeout(function () {
           panel.classList.add('hidden');
@@ -666,12 +322,10 @@
 
       window.panelAPI.onEnterPanelMode(function () {
         isPillMode = false;
-        // Animate pill out, then show panel
         pillBtn.classList.remove('visible');
         setTimeout(function () {
           pillOverlay.classList.remove('active');
           panel.classList.remove('hidden');
-          // Animate panel in from scaled-down state
           panel.classList.add('hiding');
           requestAnimationFrame(function () {
             panel.classList.remove('hiding');
@@ -679,33 +333,14 @@
         }, 200);
       });
 
-      // ── Control bar buttons ──────────────────────────────────────────────
-      var dragHandle = document.getElementById('dragHandle');
+      // ── Panel drag ─────────────────────────────────────────────────────────
 
-      var backBtn = document.getElementById('backBtn');
-
-      backBtn.addEventListener('click', function () {
-        window.panelAPI.focusMainWindow();
-      });
-
-      closeBtn.addEventListener('click', function () {
-        window.panelAPI.close();
-      });
-
-      toggleBtn.addEventListener('click', function () {
-        window.panelAPI.toggleOrientation();
-      });
-
-      // ── Drag threshold (shared by panel and pill drag) ──────────────────
-      var DRAG_THRESHOLD = 5; // px — ignore micro-movements during a click
-
-      // ── Panel drag via grip handle ────────────────────────────────────────
       var panelDragPending = false;
       var panelDragging = false;
       var panelStartX = 0;
       var panelStartY = 0;
 
-      dragHandle.addEventListener('mousedown', function (e) {
+      document.getElementById('dragHandle').addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;
         panelDragPending = true;
         panelDragging = false;
@@ -732,7 +367,8 @@
         panelDragging = false;
       });
 
-      // ── Pill drag logic ──────────────────────────────────────────────────
+      // ── Pill drag ──────────────────────────────────────────────────────────
+
       var pillDragging = false;
       var pillStartX = 0;
       var pillStartY = 0;
@@ -766,24 +402,26 @@
         }
       });
 
-      // ── Chat badge ──────────────────────────────────────────────────────
-      var chatBtn = document.getElementById('chatBtn');
-      var chatBadgeCount = document.getElementById('chatBadgeCount');
+      // ── Button handlers ────────────────────────────────────────────────────
 
-      function updateChatBadge(count) {
-        if (count > 0) {
-          chatBadgeCount.textContent = count > 99 ? '99+' : count;
-          chatBadgeCount.classList.remove('hidden');
-        } else {
-          chatBadgeCount.classList.add('hidden');
-        }
-      }
+      document.getElementById('closeBtn').addEventListener('click', function () {
+        window.panelAPI.close();
+      });
 
-      chatBtn.addEventListener('click', function () {
+      document.getElementById('toggleBtn').addEventListener('click', function () {
+        window.panelAPI.toggleOrientation();
+      });
+
+      document.getElementById('backBtn').addEventListener('click', function () {
+        window.panelAPI.focusMainWindow();
+      });
+
+      document.getElementById('chatBtn').addEventListener('click', function () {
         window.panelAPI.openChat();
       });
 
-      // ── Init ─────────────────────────────────────────────────────────────
+      // ── Init ───────────────────────────────────────────────────────────────
+
       applyOrientation();
       updateParticipantCount();
     })();
