@@ -449,7 +449,8 @@ function createJitsiMeetWindow() {
             nodeIntegration: false,
             preload: path.resolve(basePath, 'build', 'preload.js'),
             sandbox: false,
-            webSecurity: false
+            webSecurity: false,
+            backgroundThrottling: false
         }
     };
 
@@ -571,6 +572,25 @@ function createJitsiMeetWindow() {
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
 
+    // Participant PiP — open overlay when the main window is minimized
+    mainWindow.on('minimize', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-window-minimized');
+        }
+    });
+
+    mainWindow.on('restore', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-window-restored');
+        }
+    });
+
+    mainWindow.on('focus', () => {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
+            mainWindow.webContents.send('pip-window-restored');
+        }
+    });
+
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
         const validOptions = {
@@ -632,7 +652,7 @@ function createJitsiMeetWindow() {
         if (parsedUrl.pathname.startsWith('/meet')) {
             const meetRootUrl = new URL(sonacoveConfig.currentConfig.meetRoot);
 
-            if (parsedUrl.hostname !== meetRootUrl.hostname) {
+            if (parsedUrl.origin !== meetRootUrl.origin) {
                 event.preventDefault();
 
                 // Strip the /meet prefix from pathname — meetRoot already

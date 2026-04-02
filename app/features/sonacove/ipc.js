@@ -3,6 +3,13 @@ const isDev = require('electron-is-dev');
 
 const sonacoveConfig = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
+const {
+    openParticipantWindow,
+    sendParticipantFrame,
+    sendParticipantsUpdate,
+    closeParticipantWindow,
+    shrinkToPill,
+} = require('../pip/participant-window');
 
 /**
  * Previously registered listeners, keyed by channel.
@@ -14,11 +21,11 @@ let registeredListeners = {};
  * Registers all Sonacove-specific IPC listeners.
  *
  * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
- * @param {BrowserWindow} _mainWindow - The main window (unused, kept for call-site compat).
+ * @param {BrowserWindow} mainWindow - The main application window.
  * @param {Object} [handlers] - Additional handlers (e.g., for About dialog).
  * @returns {void}
  */
-function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
+function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Remove only our own previously registered listeners
     for (const [ channel, listener ] of Object.entries(registeredListeners)) {
         ipcMain.removeListener(channel, listener);
@@ -127,6 +134,82 @@ function setupSonacoveIPC(ipcMain, _mainWindow, handlers = {}) {
 
     register('open-help-docs', () => {
         shell.openExternal('https://docs.sonacove.com/');
+    });
+
+    // ── Participant PiP panel ─────────────────────────────────────────────────
+
+    // Renderer signals that local screenshare started and there are remote
+    // participants to show — open the floating participant overlay window.
+    register('pip-screenshare-start', () => {
+        try {
+            openParticipantWindow();
+        } catch (err) {
+            console.error('❌ ParticipantPiP: Failed to open window:', err);
+        }
+    });
+
+    // Renderer sends a per-participant JPEG frame — forward to the overlay.
+    register('pip-screenshare-frame', (_event, frameData) => {
+        sendParticipantFrame(frameData);
+    });
+
+    // Renderer sends participant metadata (names, avatars, camera state).
+    register('pp-participants-update', (_event, participants) => {
+        sendParticipantsUpdate(participants);
+    });
+
+    // Renderer signals screenshare ended — close the overlay window unless
+    // we're in pill mode (user minimised the panel but the window stays alive).
+    register('pip-screenshare-stop', () => {
+        const { isPillMode } = require('../pip/pill');
+
+        if (!isPillMode()) {
+            closeParticipantWindow(false);
+        }
+    });
+
+    // User toggled mic/cam from the PiP panel — forward to main renderer.
+    // Use the direct mainWindow reference (not getMainWindow()) because
+    // getMainWindow() picks the first *visible* window, which is the PiP
+    // panel itself when the main window is minimized.
+    register('pp-toggle-audio', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-toggle-audio');
+        }
+    });
+
+    register('pp-toggle-video', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-toggle-video');
+        }
+    });
+
+    // User clicked chat badge in PiP — restore main window and open chat.
+    register('pp-open-chat', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) {
+                mainWindow.restore();
+            }
+            mainWindow.focus();
+            mainWindow.webContents.send('pip-open-chat');
+        }
+    });
+
+    // User clicked "End meeting" in the PiP panel — leave conference
+    // without restoring the main window.
+    register('pp-end-meeting', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-end-meeting');
+        }
+        closeParticipantWindow(false);
+    });
+
+    // User clicked the close (×) button inside the overlay panel.
+    // Shrink to a floating pill instead of destroying the window, so the pill
+    // remains visible (always-on-top) over the shared screen — matching the
+    // annotation pencil reopen pill behaviour.
+    register('pp-close-request', () => {
+        shrinkToPill();
     });
 
     // PostHog Analytics
