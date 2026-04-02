@@ -1,4 +1,4 @@
-/* global __dirname */
+ /* global __dirname */
 
 const {
     initPopupsConfigurationMain,
