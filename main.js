@@ -572,11 +572,32 @@ function createJitsiMeetWindow() {
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
 
-    // Participant PiP — open overlay when the main window is minimized
+    // Participant PiP — open overlay when the main window loses focus
+    // (minimize, alt-tab, click another app, etc.)
     mainWindow.on('minimize', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('pip-window-minimized');
         }
+    });
+
+    mainWindow.on('blur', () => {
+        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) {
+            return;
+        }
+
+        // Short delay to check if focus moved to one of our own windows
+        // (e.g. the PIP panel or an overlay) — don't trigger PIP in that case.
+        setTimeout(() => {
+            if (!mainWindow || mainWindow.isDestroyed()) {
+                return;
+            }
+            const focused = BrowserWindow.getFocusedWindow();
+
+            if (!focused) {
+                // Focus left the app entirely — trigger PIP.
+                mainWindow.webContents.send('pip-window-minimized');
+            }
+        }, 100);
     });
 
     mainWindow.on('restore', () => {
@@ -1027,9 +1048,9 @@ app.on('ready', () => {
     createJitsiMeetWindow();
 });
 
-if (isDev) {
-    app.on('ready', createWebRTCInternalsWindow);
-}
+// if (isDev) {
+//     app.on('ready', createWebRTCInternalsWindow);
+// }
 
 app.on('second-instance', (event, commandLine) => {
     /**
