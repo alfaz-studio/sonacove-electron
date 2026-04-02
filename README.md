@@ -1,4 +1,4 @@
-# Jitsi Meet Electron
+ # Jitsi Meet Electron
 
 Desktop application for [Jitsi Meet] built with [Electron].
 
