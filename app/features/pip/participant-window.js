@@ -307,6 +307,10 @@ function getParticipantWindow() {
     return participantWindow;
 }
 
+function getCurrentState() {
+    return { count: currentParticipantCount, orientation: currentOrientation };
+}
+
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
@@ -314,4 +318,5 @@ module.exports = {
     closeParticipantWindow,
     shrinkToPill,
     getParticipantWindow,
+    getCurrentState,
 };
