@@ -591,6 +591,9 @@ function createJitsiMeetWindow() {
 
         // Short delay to check if focus moved to one of our own windows
         // (e.g. the PIP panel or an overlay) — don't trigger PIP in that case.
+        // Note: the minimize handler above fires before blur and sets isMinimized()
+        // synchronously, so the early-return at the top of this handler correctly
+        // prevents double-triggering pip-window-minimized on minimize.
         setTimeout(() => {
             if (!mainWindow || mainWindow.isDestroyed()) {
                 return;
@@ -1061,10 +1064,6 @@ app.on('ready', () => {
     setupChildWindowIcon();
     createJitsiMeetWindow();
 });
-
-// if (isDev) {
-//     app.on('ready', createWebRTCInternalsWindow);
-// }
 
 app.on('second-instance', (event, commandLine) => {
     /**

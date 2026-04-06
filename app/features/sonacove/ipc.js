@@ -144,10 +144,9 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     register('pip-screenshare-start', () => {
         try {
             const { isPillMode, expandFromPill } = require('../pip/pill');
-            const { getParticipantWindow } = require('../pip/participant-window');
+            const { getParticipantWindow, getCurrentState } = require('../pip/participant-window');
 
             if (getParticipantWindow() && isPillMode()) {
-                const { getCurrentState } = require('../pip/participant-window');
                 const { count, orientation } = getCurrentState();
 
                 expandFromPill(count, orientation);
