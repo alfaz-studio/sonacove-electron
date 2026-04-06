@@ -68,16 +68,17 @@ function createOverlayWindow(screenBounds, preloadPath) {
  *
  * @param {BrowserWindow} win - The overlay window.
  * @param {{ x: number, y: number, width: number, height: number }} screenBounds - Target screen bounds.
+ * @param {{ collabEnabled?: boolean }} [options] - Additional options.
  * @returns {void}
  */
-function configurePlatform(win, screenBounds) {
+function configurePlatform(win, screenBounds, options = {}) {
     const { x, y, width, height } = screenBounds;
 
-    // Exclude the overlay from screen capture so annotations don't appear
-    // in the shared screen stream. On Windows 10 2004+ this uses
-    // WDA_EXCLUDEFROMCAPTURE; on macOS it sets NSWindowSharingNone.
-    // Note: silently a no-op on Linux — Electron does not implement it there.
-    win.setContentProtection(true);
+    // When collab is enabled, exclude the overlay from screen capture so
+    // annotations are shared via Excalidraw collab (transparent whiteboard).
+    // When collab is disabled (default), include annotations in the capture
+    // stream so viewers see them directly in the screenshare video.
+    win.setContentProtection(Boolean(options.collabEnabled));
 
     if (process.platform === 'darwin') {
         app.dock.show();
