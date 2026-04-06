@@ -314,7 +314,9 @@ const TITLEBAR_CSS = ''
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
     + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
     + 'background-repeat:no-repeat;background-position:center;}'
-    + '#sonacove-titlebar .stb-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-version{color:#666680;font-size:11px;margin-left:8px;}'
+    + '#sonacove-titlebar .stb-spacer{flex:1;}'
     + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;margin-right:140px;}'
     + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
     + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
@@ -323,7 +325,7 @@ const TITLEBAR_CSS = ''
     + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
     + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
 
-const getTitlebarJS = (iconBase64 = '') => `
+const getTitlebarJS = (iconBase64 = '', appVersion = '') => `
 (function() {
     // Inject styles idempotently to prevent flash on re-navigation.
     var sid = 'sonacove-titlebar-styles';
@@ -346,6 +348,8 @@ const getTitlebarJS = (iconBase64 = '') => `
     bar.innerHTML =
         iconHtml +
         '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
+        ('${appVersion}' ? '<span class="stb-version">v${appVersion}</span>' : '') +
+        '<div class="stb-spacer"></div>' +
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about" title="View app version and system info">About</button>' +
             '<button class="stb-btn" id="stb-updates" title="Check for new versions">Check for Updates</button>' +
@@ -368,7 +372,7 @@ const getTitlebarJS = (iconBase64 = '') => `
     if (titleTarget) {
         new MutationObserver(function() {
             var el = document.querySelector('#sonacove-titlebar .stb-title');
-            if (el) el.textContent = document.title;
+            if (el) el.textContent = document.title || 'Sonacove Meets';
         }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
     }
 })();
@@ -395,7 +399,7 @@ function injectWindowsTitleBar() {
         return;
     }
 
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64())).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), app.getVersion())).catch(() => {});
 }
 
 /**
