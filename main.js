@@ -348,7 +348,7 @@ const getTitlebarJS = (iconBase64 = '', appVersion = '') => `
     bar.innerHTML =
         iconHtml +
         '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
-        ('${appVersion}' ? '<span class="stb-version">v${appVersion}</span>' : '') +
+        ('${appVersion}' ? '<span class="stb-version">v' + '${appVersion}'.split('.').pop() + '</span>' : '') +
         '<div class="stb-spacer"></div>' +
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about" title="View app version and system info">About</button>' +
