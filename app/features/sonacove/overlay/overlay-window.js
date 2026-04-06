@@ -91,7 +91,7 @@ function toggleOverlay(mainWindow, data) {
     }
 
     annotationWindow = createOverlayWindow(currentScreen.bounds, preloadPath);
-    configurePlatform(annotationWindow, currentScreen.bounds);
+    configurePlatform(annotationWindow, currentScreen.bounds, { collabEnabled: data.collabEnabled });
 
     // Load URL, register shortcut, wire events
     const overlayUrl = buildOverlayUrl(data);
