@@ -827,6 +827,16 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
+    // On macOS, append the version patch number to the native title bar.
+    if (process.platform === 'darwin') {
+        const patchVersion = app.getVersion().split('.').pop();
+
+        mainWindow.on('page-title-updated', (event, title) => {
+            event.preventDefault();
+            mainWindow.setTitle(`${title} — v${patchVersion}`);
+        });
+    }
+
     // Inject the custom in-page title bar on Windows after each page load.
     if (process.platform !== 'darwin') {
         mainWindow.webContents.on('did-finish-load', () => {
