@@ -1,0 +1,19 @@
+{
+  "name": "sonacove-loopback-capture",
+  "version": "1.0.0",
+  "description": "Native WASAPI loopback capture with process exclusion for echo-free system audio",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "build": "node-gyp rebuild"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.0.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "os": ["win32"],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
