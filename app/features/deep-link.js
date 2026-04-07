@@ -1,7 +1,7 @@
 const { app, dialog } = require('electron');
 const path = require('path');
 
-const sonacoveConfig = require('./config');
+const config = require('./config');
 const { getMainWindow } = require('./overlay/helpers');
 const { closeOverlay } = require('./overlay/overlay-window');
 
@@ -32,8 +32,8 @@ async function navigateDeepLink(deepLink) {
         let rawPath = deepLink.replace('sonacove://', '');
 
         try {
-            const appHost = new URL(sonacoveConfig.currentConfig.landing).host; // e.g. sonacove.com
-            const meetHost = new URL(sonacoveConfig.currentConfig.meetRoot).host;
+            const appHost = new URL(config.currentConfig.landing).host; // e.g. sonacove.com
+            const meetHost = new URL(config.currentConfig.meetRoot).host;
 
             if (rawPath.startsWith(appHost)) {
                 rawPath = rawPath.replace(appHost, '');
@@ -49,7 +49,7 @@ async function navigateDeepLink(deepLink) {
             rawPath = rawPath.slice(0, -1);
         }
 
-        const meetRoot = sonacoveConfig.currentConfig.meetRoot;
+        const meetRoot = config.currentConfig.meetRoot;
         let targetUrl = '';
 
         if (rawPath.startsWith('meet/')) {
@@ -62,7 +62,7 @@ async function navigateDeepLink(deepLink) {
 
             targetUrl = `${cleanMeetRoot}/${rawPath}`;
         } else {
-            targetUrl = sonacoveConfig.currentConfig.landing;
+            targetUrl = config.currentConfig.landing;
         }
 
         console.log(`🔗 Navigating Deep Link to: ${targetUrl}`);

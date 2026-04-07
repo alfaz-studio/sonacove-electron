@@ -26,11 +26,11 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
-const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
 const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
-} = require('./app/features/sonacove/in-app-dialogs');
-const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/sonacove/paths');
+} = require('./app/features/in-app-dialogs');
+const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/paths');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -47,15 +47,14 @@ if (process.platform === 'win32') {
 }
 
 const config = require('./app/features/config');
-const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink
-} = require('./app/features/sonacove/deep-link');
-const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
-const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
-const { setupScreenshotIPC } = require('./app/features/sonacove/screenshot');
-const { openExternalLink } = require('./app/features/utils/openExternalLink');
+} = require('./app/features/deep-link');
+const { setupSonacoveIPC } = require('./app/features/ipc');
+const { closeOverlay } = require('./app/features/overlay/overlay-window');
+const { setupScreenshotIPC } = require('./app/features/screenshot');
+const { openExternalLink } = require('./app/features/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
 // Check case-insensitively since app.name may return name or productName.
@@ -143,7 +142,7 @@ let webrtcInternalsWindow = null;
 /**
  * Add protocol data
  */
-const appProtocolSurplus = `${config.default.appProtocolPrefix}://`;
+const appProtocolSurplus = `${config.appProtocolPrefix}://`;
 let pendingStartupDeepLink = null;
 
 /**
@@ -458,7 +457,7 @@ function createJitsiMeetWindow() {
         const target = getPopupTarget(url, frameName);
 
         // Allow URLs on allowed hosts to open inside Electron instead of the browser
-        const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
+        const allowedHosts = config.currentConfig.allowedHosts || [];
 
         try {
             const parsedUrl = new URL(url);
@@ -631,7 +630,7 @@ function createJitsiMeetWindow() {
             if (event) {
                 event.preventDefault();
             }
-            const landingUrl = new URL(sonacoveConfig.currentConfig.landing);
+            const landingUrl = new URL(config.currentConfig.landing);
 
             // Remove trailing slash if present on landing pathname
             const basePath = landingUrl.pathname.endsWith('/')
@@ -650,7 +649,7 @@ function createJitsiMeetWindow() {
         }
 
         if (parsedUrl.pathname.startsWith('/meet')) {
-            const meetRootUrl = new URL(sonacoveConfig.currentConfig.meetRoot);
+            const meetRootUrl = new URL(config.currentConfig.meetRoot);
 
             if (parsedUrl.origin !== meetRootUrl.origin) {
                 event.preventDefault();
@@ -658,7 +657,7 @@ function createJitsiMeetWindow() {
                 // Strip the /meet prefix from pathname — meetRoot already
                 // includes it, so we'd otherwise get /meet/meet/room.
                 const roomPath = parsedUrl.pathname.replace(/^\/meet/, '');
-                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${roomPath}${parsedUrl.search}`;
+                const targetUrl = `${config.currentConfig.meetRoot}${roomPath}${parsedUrl.search}`;
 
                 setImmediate(() => {
                     mainWindow.loadURL(targetUrl);
@@ -872,7 +871,7 @@ function createJitsiMeetWindow() {
     ipcMain.on('retry-load', (event) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+            mainWindow.loadURL(config.currentConfig.landing);
         }
     });
 
@@ -897,7 +896,7 @@ function createJitsiMeetWindow() {
         mainWindow.show();
 
         // Splash is now visible — load the remote dashboard.
-        mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+        mainWindow.loadURL(config.currentConfig.landing);
 
         // Try pending startup deeplink if we have one
         if (pendingStartupDeepLink) {
@@ -1086,19 +1085,19 @@ app.on('before-quit', event => {
 // that would hijack deeplinks from the production install.
 if (!isStaging) {
     // remove so we can register each time as we run the app.
-    app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
+    app.removeAsDefaultProtocolClient(config.appProtocolPrefix);
 
     // If we are running a non-packaged version of the app && on windows
     if (isDev && process.platform === 'win32') {
         // Set the path of electron.exe and your app.
         // These two additional parameters are only available on windows.
         app.setAsDefaultProtocolClient(
-            config.default.appProtocolPrefix,
+            config.appProtocolPrefix,
             process.execPath,
             [ path.resolve(process.argv[1]) ]
         );
     } else {
-        app.setAsDefaultProtocolClient(config.default.appProtocolPrefix);
+        app.setAsDefaultProtocolClient(config.appProtocolPrefix);
     }
 }
 

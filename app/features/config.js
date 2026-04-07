@@ -1,5 +1,11 @@
 const { app } = require('electron');
 
+/**
+ * The prefix for the application protocol (deep links).
+ * Must match the "schemes" entry in package.json build.protocols.
+ */
+const appProtocolPrefix = 'sonacove';
+
 // Staging CI patches app name/productName to include "staging".
 // app.name may return 'sonacove-staging' (name) or 'Sonacove Staging' (productName)
 // depending on Electron version, so check case-insensitively.
@@ -50,5 +56,6 @@ if (!isProd) {
 
 const currentConfig = isProd ? URLS.production : URLS.staging;
 
-module.exports = { isProd,
+module.exports = { appProtocolPrefix,
+    isProd,
     currentConfig };

@@ -1,7 +1,7 @@
 const { BrowserWindow, shell } = require('electron');
 const isDev = require('electron-is-dev');
 
-const sonacoveConfig = require('./config');
+const config = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
 const {
     openParticipantWindow,
@@ -9,7 +9,7 @@ const {
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
-} = require('../pip/participant-window');
+} = require('./pip/participant-window');
 
 /**
  * Previously registered listeners, keyed by channel.
@@ -115,7 +115,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         const mw = getMainWindow();
 
         if (mw) {
-            mw.loadURL(sonacoveConfig.currentConfig.landing);
+            mw.loadURL(config.currentConfig.landing);
         }
     });
 
@@ -161,7 +161,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer signals screenshare ended — close the overlay window unless
     // we're in pill mode (user minimised the panel but the window stays alive).
     register('pip-screenshare-stop', () => {
-        const { isPillMode } = require('../pip/pill');
+        const { isPillMode } = require('./pip/pill');
 
         if (!isPillMode()) {
             closeParticipantWindow(false);
