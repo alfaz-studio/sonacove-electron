@@ -12,13 +12,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Remove staging releases for closed PRs
+      - name: Remove staging releases for PRs closed >14 days ago
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           REPO="${{ github.repository }}"
+          RETENTION_DAYS=14
 
-          echo "Scanning for stale staging releases..."
+          echo "Scanning for stale staging releases (retention: ${RETENTION_DAYS} days)..."
 
           # List all releases and filter for staging ones
           gh release list --repo "$REPO" --limit 100 --json tagName,isPrerelease \
@@ -26,16 +27,31 @@ jobs:
           | while read -r TAG; do
             PR_NUM=$(echo "$TAG" | sed 's/staging-pr-//')
 
-            # Check if the PR is still open
-            STATE=$(gh pr view "$PR_NUM" --repo "$REPO" --json state --jq '.state' 2>/dev/null || echo "UNKNOWN")
+            # Get PR state and closed date
+            PR_INFO=$(gh pr view "$PR_NUM" --repo "$REPO" --json state,closedAt 2>/dev/null || echo '{}')
+            STATE=$(echo "$PR_INFO" | jq -r '.state // "UNKNOWN"')
+            CLOSED_AT=$(echo "$PR_INFO" | jq -r '.closedAt // ""')
 
-            if [ "$STATE" != "OPEN" ]; then
-              echo "Removing $TAG (PR #$PR_NUM state: $STATE)"
-              gh release delete "$TAG" --repo "$REPO" --yes 2>/dev/null || true
-              gh api "repos/$REPO/git/refs/tags/$TAG" --method DELETE 2>/dev/null || true
-            else
+            if [ "$STATE" = "OPEN" ]; then
               echo "Keeping $TAG (PR #$PR_NUM is still open)"
+              continue
             fi
+
+            # Check if closed long enough ago
+            if [ -n "$CLOSED_AT" ] && [ "$CLOSED_AT" != "null" ]; then
+              CLOSED_TS=$(date -d "$CLOSED_AT" +%s 2>/dev/null || date -jf "%Y-%m-%dT%H:%M:%SZ" "$CLOSED_AT" +%s 2>/dev/null || echo "0")
+              NOW_TS=$(date +%s)
+              DAYS_SINCE=$(( (NOW_TS - CLOSED_TS) / 86400 ))
+
+              if [ "$DAYS_SINCE" -lt "$RETENTION_DAYS" ]; then
+                echo "Keeping $TAG (PR #$PR_NUM closed ${DAYS_SINCE}d ago, retention: ${RETENTION_DAYS}d)"
+                continue
+              fi
+            fi
+
+            echo "Removing $TAG (PR #$PR_NUM state: $STATE)"
+            gh release delete "$TAG" --repo "$REPO" --yes 2>/dev/null || true
+            gh api "repos/$REPO/git/refs/tags/$TAG" --method DELETE 2>/dev/null || true
           done
 
           echo "Cleanup complete."

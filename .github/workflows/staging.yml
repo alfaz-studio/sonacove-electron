@@ -8,9 +8,8 @@ on:
       - '.github/**'
       - '!.github/workflows/staging.yml'
       - '*.md'
-  pull_request_target:
-    types: [closed]
-    branches: [main]
+  # Note: cleanup of closed PR releases is handled by cleanup-stale-staging.yml
+  # (daily cron with 14-day retention) instead of deleting immediately on close.
 
 jobs:
   create-staging-release:
@@ -266,28 +265,3 @@ jobs:
               });
             }
 
-  cleanup-staging:
-    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Delete staging release and tag
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          PR_NUM=${{ github.event.pull_request.number }}
-          TAG="staging-pr-${PR_NUM}"
-
-          echo "Cleaning up staging release for PR #${PR_NUM}..."
-
-          # Delete the release
-          gh release delete "${TAG}" --repo "${{ github.repository }}" --yes 2>/dev/null || \
-            echo "No release found for ${TAG}"
-
-          # Delete the tag
-          gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
-            --method DELETE 2>/dev/null || \
-            echo "No tag found for ${TAG}"
-
-          echo "Cleanup complete."
