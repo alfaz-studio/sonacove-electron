@@ -6,7 +6,7 @@ const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     IPC_TOGGLE_CLICK_THROUGH
 } = require('./constants');
-const { getIconPath } = require('../../main-window/icon');
+const { getIconPath } = require('../paths');
 
 /** Module-level set tracking overlay windows (safer than setting arbitrary props on BrowserWindow). */
 const overlayWindows = new Set();
