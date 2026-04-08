@@ -135,8 +135,12 @@ function injectStylesJS() {
  * @param {Electron.WebContents} webContents - The target web contents.
  * @param {string} version - The new version number.
  */
-function showUpdateToast(webContents, version) {
+function showUpdateToast(webContents, version, strings = {}) {
     const v = esc(version);
+    const titleText = esc(strings.title || 'Update Ready');
+    const messageText = esc(strings.message || `Version ${v} is ready to install.`);
+    const laterText = esc(strings.later || 'Later');
+    const installText = esc(strings.installNow || 'Install Now');
     const icon = svgIcon(18, ACCENT, SVG_DOWNLOAD);
 
     const js = `(function(){
@@ -151,12 +155,12 @@ t.innerHTML=''
 +'${icon}'
 +'</div>'
 +'<div style="flex:1;min-width:0;">'
-+'<div style="font-weight:600;font-size:14px;margin-bottom:2px;color:#2d2d3a;">Update Ready</div>'
-+'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">Version ${v} is ready to install.</div>'
++'<div style="font-weight:600;font-size:14px;margin-bottom:2px;color:#2d2d3a;">${titleText}</div>'
++'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">${messageText}</div>'
 +'</div></div>'
 +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-+'<button id="snc-toast-later" class="snc-btn" style="background:#fff;border:1px solid #e0e0e0;color:#5a5a6a;">Later</button>'
-+'<button id="snc-toast-install" class="snc-btn" style="background:${ACCENT};color:#fff;">Install Now</button>'
++'<button id="snc-toast-later" class="snc-btn" style="background:#fff;border:1px solid #e0e0e0;color:#5a5a6a;">${laterText}</button>'
++'<button id="snc-toast-install" class="snc-btn" style="background:${ACCENT};color:#fff;">${installText}</button>'
 +'</div>'
 +'<div style="position:absolute;bottom:0;left:0;height:3px;background:rgba(244,81,30,0.35);animation:snc-progress 15s linear forwards;border-radius:0 0 0 12px;"></div>';
 document.body.appendChild(t);
@@ -236,14 +240,14 @@ document.addEventListener('keydown',_onKey);
  *
  * @param {Electron.WebContents} webContents - The target web contents.
  */
-function showLeaveModal(webContents) {
+function showLeaveModal(webContents, strings = {}) {
     _showModal(webContents, {
         id: 'sonacove-leave-modal',
-        title: 'Leave Meeting?',
-        message: 'You are currently in a meeting. Are you sure you want to leave?',
-        confirmLabel: 'Leave',
+        title: strings.title || 'Leave Meeting?',
+        message: strings.message || 'You are currently in a meeting. Are you sure you want to leave?',
+        confirmLabel: strings.confirm || 'Leave',
         confirmColor: ERROR_COLOR,
-        cancelLabel: 'Stay',
+        cancelLabel: strings.cancel || 'Stay',
         ipcChannel: 'leave-modal-action'
     });
 }
@@ -253,14 +257,14 @@ function showLeaveModal(webContents) {
  *
  * @param {Electron.WebContents} webContents - The target web contents.
  */
-function showDeeplinkModal(webContents) {
+function showDeeplinkModal(webContents, strings = {}) {
     _showModal(webContents, {
         id: 'sonacove-deeplink-modal',
-        title: 'Meeting in Progress',
-        message: 'You are already in a meeting. Do you want to leave and join a new one?',
-        confirmLabel: 'Leave Meeting',
+        title: strings.title || 'Meeting in Progress',
+        message: strings.message || 'You are already in a meeting. Do you want to leave and join a new one?',
+        confirmLabel: strings.confirm || 'Leave Meeting',
         confirmColor: ERROR_COLOR,
-        cancelLabel: 'Stay',
+        cancelLabel: strings.cancel || 'Stay',
         ipcChannel: 'deeplink-modal-action'
     });
 }
@@ -301,7 +305,7 @@ t.innerHTML=''
 +'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">${message}</div>'
 +'</div></div>'
 +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-+'<button id="snc-info-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">OK</button>'
++'<button id="snc-info-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">${esc(opts.okLabel || 'OK')}</button>'
 +'</div>';
 document.body.appendChild(t);
 function _dism(){
@@ -327,7 +331,7 @@ document.getElementById('snc-info-ok').onclick=_dism;
  * @param {string} info.nodeVersion - Node.js version.
  * @param {string} info.platform - Platform string (e.g. "win32 x64").
  */
-function showAboutPanel(webContents, info) {
+function showAboutPanel(webContents, info, strings = {}) {
     const appName = esc(info.appName);
     const appVersion = esc(info.appVersion);
     const electronVersion = esc(info.electronVersion);
@@ -349,17 +353,17 @@ t.innerHTML=''
 +'${icon}'
 +'</div>'
 +'<div style="font-weight:700;font-size:17px;color:#2d2d3a;margin-bottom:3px;">${appName}</div>'
-+'<div style="font-size:13px;color:#8a8a9a;">Version ${appVersion}</div>'
++'<div style="font-size:13px;color:#8a8a9a;">${esc(strings.version || ('Version ' + info.appVersion))}</div>'
 +'</div>'
 +'<div style="background:#f8f8fa;border:1px solid #f0f0f2;border-radius:10px;padding:12px 14px;margin-bottom:18px;">'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>Electron</span><span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>Chrome</span><span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>Node.js</span><span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;"><span>Platform</span><span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.electron || 'Electron')}</span><span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.chrome || 'Chrome')}</span><span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.node || 'Node.js')}</span><span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;"><span>${esc(strings.platform || 'Platform')}</span><span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
 +'</div>'
 +'<div style="display:flex;align-items:center;justify-content:space-between;">'
-+'<span style="font-size:11px;color:#b0b0b8;">&copy; ' + new Date().getFullYear() + ' Alfaz Studio</span>'
-+'<button id="snc-about-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">OK</button>'
++'<span style="font-size:11px;color:#b0b0b8;">${esc(strings.copyright || ('\\u00a9 ' + new Date().getFullYear() + ' Alfaz Studio'))}</span>'
++'<button id="snc-about-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">${esc(strings.ok || 'OK')}</button>'
 +'</div>';
 document.body.appendChild(t);
 function _dism(){
