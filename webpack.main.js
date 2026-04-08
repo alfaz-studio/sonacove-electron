@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
@@ -17,6 +18,7 @@ module.exports = {
         __dirname: true
     },
     plugins: [
+        new webpack.IgnorePlugin({ resourceRegExp: /^supports-color$/ }),
         new CopyPlugin({
             patterns: [
                 { from: 'app/splash.html', to: 'splash.html' },
