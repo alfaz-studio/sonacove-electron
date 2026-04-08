@@ -143,8 +143,8 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // If the window already exists in pill mode, expand it back to full panel.
     register('pip-screenshare-start', () => {
         try {
-            const { isPillMode, expandFromPill } = require('../pip/pill');
-            const { getParticipantWindow, getCurrentState } = require('../pip/participant-window');
+            const { isPillMode, expandFromPill } = require('./pip/pill');
+            const { getParticipantWindow, getCurrentState } = require('./pip/participant-window');
 
             if (getParticipantWindow() && isPillMode()) {
                 const { count, orientation } = getCurrentState();
@@ -175,6 +175,14 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
         if (!isPillMode()) {
             shrinkToPill();
+        }
+    });
+
+    // User toggled pin state in the PiP panel — forward to main renderer
+    // so jitsi-meet can protect pinned participants from dominant speaker swapping.
+    register('pp-pin-state-changed', (_event, pinnedIds) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('pip-pin-state-changed', pinnedIds);
         }
     });
 
