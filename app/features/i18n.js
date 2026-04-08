@@ -1,82 +1,51 @@
 'use strict';
 
 const { app } = require('electron');
-const rosetta = require('rosetta');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
 
-const i18n = rosetta();
-
-// Supported locales — add new ones here and create the matching JSON file.
-const SUPPORTED_LOCALES = [ 'en' ];
-const DEFAULT_LOCALE = 'en';
+let translations = {};
 
 /**
- * Loads all locale files into rosetta.
+ * Loads locale JSON into memory.
  * Must be called after app is ready.
  */
-function loadLocales() {
+function initI18n() {
     const localesDir = isDev
         ? path.join(process.cwd(), 'app', 'locales')
         : path.join(app.getAppPath(), 'build', 'locales');
 
-    for (const locale of SUPPORTED_LOCALES) {
-        const filePath = path.join(localesDir, `${locale}.json`);
+    const filePath = path.join(localesDir, 'en.json');
 
-        try {
-            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            i18n.set(locale, data);
-        } catch (err) {
-            console.warn(`[i18n] Failed to load locale "${locale}":`, err.message);
-        }
+    try {
+        translations = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (err) {
+        console.warn('[i18n] Failed to load locale:', err.message);
     }
 }
 
 /**
- * Detects the best locale from Electron's app.getLocale().
- * Falls back to DEFAULT_LOCALE if the system locale isn't supported.
+ * Translation function. Resolves dot-notated keys and interpolates {{params}}.
  *
- * @returns {string} The locale code.
- */
-function detectLocale() {
-    const systemLocale = app.getLocale(); // e.g. 'en-US', 'ar', 'tr'
-    const lang = systemLocale.split('-')[0]; // e.g. 'en', 'ar', 'tr'
-
-    return SUPPORTED_LOCALES.includes(lang) ? lang : DEFAULT_LOCALE;
-}
-
-/**
- * Initializes i18n: loads locale files and sets the active locale.
- * Call once at app startup (after app 'ready' or in the main entry).
- */
-function initI18n() {
-    loadLocales();
-    i18n.locale(detectLocale());
-}
-
-/**
- * Translation function. Use throughout the app.
- *
- * @param {string} key - Dot-notated translation key.
- * @param {Object} [params] - Interpolation values.
- * @returns {string} The translated string, or the key if not found.
+ * @param {string} key - Dot-notated key, e.g. 'update.noUpdatesMessage'.
+ * @param {Object} [params] - Values to interpolate, e.g. { version: '1.0' }.
+ * @returns {string} Translated string, or the key itself if not found.
  */
 function t(key, params) {
-    return i18n.t(key, params) || key;
+    const value = key.split('.').reduce((obj, k) => obj?.[k], translations);
+
+    if (typeof value !== 'string') {
+        return key;
+    }
+
+    if (!params) {
+        return value;
+    }
+
+    return value.replace(/\{\{(\w+)\}\}/g, (_, name) =>
+        params[name] !== undefined ? params[name] : `{{${name}}}`
+    );
 }
 
-/**
- * Returns the full translation table for the current locale.
- * Useful for injecting into renderer pages (error.html, titlebar).
- *
- * @returns {Object} The translation object.
- */
-function getTranslations() {
-    return i18n.table(i18n.locale());
-}
-
-module.exports = { initI18n,
-    t,
-    getTranslations };
+module.exports = { initI18n, t };

@@ -33,8 +33,7 @@ module.exports = {
         '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
         'electron-context-menu': 'require(\'electron-context-menu\')',
         'electron-reload': 'require(\'electron-reload\')',
-        'posthog-node': 'require(\'posthog-node\')',
-        'rosetta': 'require(\'rosetta\')'
+        'posthog-node': 'require(\'posthog-node\')'
     } ],
     resolve: {
         modules: [
