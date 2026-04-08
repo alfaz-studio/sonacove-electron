@@ -171,7 +171,9 @@ contextBridge.exposeInMainWorld('panelAPI', {
      * @param {Object} pinned - { participantId: true } map.
      */
     updatePinState(pinned) {
-        ipcRenderer.send('pp-pin-state-changed', pinned);
+        if (pinned && typeof pinned === 'object' && !Array.isArray(pinned)) {
+            ipcRenderer.send('pp-pin-state-changed', pinned);
+        }
     },
 
     /**

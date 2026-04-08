@@ -10,6 +10,7 @@ const {
     closeParticipantWindow,
     shrinkToPill,
 } = require('./pip/participant-window');
+const { IPC } = require('./pip/constants');
 
 /**
  * Previously registered listeners, keyed by channel.
@@ -180,9 +181,9 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     // User toggled pin state in the PiP panel — forward to main renderer
     // so jitsi-meet can protect pinned participants from dominant speaker swapping.
-    register('pp-pin-state-changed', (_event, pinnedIds) => {
+    register(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('pip-pin-state-changed', pinnedIds);
+            mainWindow.webContents.send(IPC.PIN_STATE_CHANGED_RENDERER, pinnedIds);
         }
     });
 

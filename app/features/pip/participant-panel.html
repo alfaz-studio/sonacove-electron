@@ -194,13 +194,15 @@
         var pinBtn = document.createElement('button');
         pinBtn.className = 'tile-pin-btn' + (pinnedIds[p.id] ? ' pinned' : '');
         pinBtn.title = pinnedIds[p.id] ? 'Unpin' : 'Pin';
+        pinBtn.setAttribute('data-id', p.id);
         pinBtn.innerHTML = PIN_ICON;
         pinBtn.addEventListener('click', function (e) {
           e.stopPropagation();
-          if (pinnedIds[p.id]) {
-            delete pinnedIds[p.id];
+          var pid = this.getAttribute('data-id');
+          if (pinnedIds[pid]) {
+            delete pinnedIds[pid];
           } else {
-            pinnedIds[p.id] = true;
+            pinnedIds[pid] = true;
           }
           window.panelAPI.updatePinState(pinnedIds);
           renderTiles();

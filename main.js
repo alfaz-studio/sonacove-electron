@@ -26,6 +26,7 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
+const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
 const { initI18n, t } = require('./app/features/i18n');
 const {
@@ -618,42 +619,58 @@ function createJitsiMeetWindow() {
 
     // Participant PiP — open overlay when the main window loses focus
     // (minimize, alt-tab, click another app, etc.)
+    let pipMinimizedSent = false;  // idempotency guard — prevents repeated pip-window-minimized
+    let blurTimer = null;          // timer ref so focus/restore can cancel pending blur
+
     mainWindow.on('minimize', () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow && !mainWindow.isDestroyed() && !pipMinimizedSent) {
+            pipMinimizedSent = true;
             mainWindow.webContents.send('pip-window-minimized');
         }
     });
 
     mainWindow.on('blur', () => {
-        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) {
+        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || pipMinimizedSent) {
             return;
         }
 
         // Short delay to check if focus moved to one of our own windows
         // (e.g. the PIP panel or an overlay) — don't trigger PIP in that case.
-        // Note: the minimize handler above fires before blur and sets isMinimized()
-        // synchronously, so the early-return at the top of this handler correctly
-        // prevents double-triggering pip-window-minimized on minimize.
-        setTimeout(() => {
-            if (!mainWindow || mainWindow.isDestroyed()) {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+        }
+        blurTimer = setTimeout(() => {
+            blurTimer = null;
+            if (!mainWindow || mainWindow.isDestroyed() || pipMinimizedSent) {
                 return;
             }
             const focused = BrowserWindow.getFocusedWindow();
 
             if (!focused) {
                 // Focus left the app entirely — trigger PIP.
+                pipMinimizedSent = true;
                 mainWindow.webContents.send('pip-window-minimized');
             }
         }, 100);
     });
 
     mainWindow.on('restore', () => {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+        pipMinimizedSent = false;
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('pip-window-restored');
         }
     });
 
     mainWindow.on('focus', () => {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+        pipMinimizedSent = false;
         if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
             mainWindow.webContents.send('pip-window-restored');
         }
@@ -976,6 +993,9 @@ function createJitsiMeetWindow() {
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
+
+        // Destroy the participant PiP panel (may still be alive in pill mode).
+        closeParticipantWindow(false);
 
         // Close the annotation overlay if it is open
         closeOverlay();
