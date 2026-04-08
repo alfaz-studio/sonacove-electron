@@ -236,7 +236,7 @@ jobs:
               `| macOS x64 (Intel) | \`sonacove-staging-mac-x64.zip\` |`,
               `| macOS arm64 (Apple Silicon) | \`sonacove-staging-mac-arm64.zip\` |`,
               ``,
-              `Or use the **Sonacove Staging Launcher** to download and run automatically.`,
+              `Or use the **[Sonacove Staging Launcher](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/staging-launcher)** to download and run automatically.`,
             ].join('\n');
 
             // Find and update existing bot comment, or create new one
