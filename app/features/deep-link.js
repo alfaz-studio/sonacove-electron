@@ -1,9 +1,11 @@
-const { app, dialog } = require('electron');
+const { app, ipcMain } = require('electron');
 const path = require('path');
 
 const config = require('./config');
 const { getMainWindow } = require('./overlay/helpers');
 const { closeOverlay } = require('./overlay/overlay-window');
+const { showDeeplinkModal } = require('./in-app-dialogs');
+const { t } = require('./i18n');
 
 /**
  * Registers the custom protocol scheme for the application.
@@ -11,12 +13,14 @@ const { closeOverlay } = require('./overlay/overlay-window');
  * @returns {void}
  */
 function registerProtocol() {
+    const protocol = config.appProtocolPrefix;
+
     if (process.defaultApp) {
         if (process.argv.length >= 2) {
-            app.setAsDefaultProtocolClient('sonacove', process.execPath, [ path.resolve(process.argv[1]) ]);
+            app.setAsDefaultProtocolClient(protocol, process.execPath, [ path.resolve(process.argv[1]) ]);
         }
     } else {
-        app.setAsDefaultProtocolClient('sonacove');
+        app.setAsDefaultProtocolClient(protocol);
     }
 }
 
@@ -29,7 +33,7 @@ function registerProtocol() {
  */
 async function navigateDeepLink(deepLink) {
     try {
-        let rawPath = deepLink.replace('sonacove://', '');
+        let rawPath = deepLink.replace(`${config.appProtocolPrefix}://`, '');
 
         try {
             const appHost = new URL(config.currentConfig.landing).host; // e.g. sonacove.com
@@ -75,16 +79,20 @@ async function navigateDeepLink(deepLink) {
                 const currentUrl = new URL(win.webContents.getURL());
 
                 if (currentUrl.pathname.startsWith('/meet')) {
-                    const { response } = await dialog.showMessageBox(win, {
-                        type: 'question',
-                        buttons: [ 'Leave Meeting', 'Stay' ],
-                        title: 'Meeting in Progress',
-                        message: 'You are already in a meeting. Do you want to leave and join a new one?',
-                        defaultId: 1,
-                        cancelId: 1
+                    showDeeplinkModal(win.webContents, {
+                        title: t('deeplinkModal.title'),
+                        message: t('deeplinkModal.message'),
+                        confirm: t('deeplinkModal.confirm'),
+                        cancel: t('deeplinkModal.cancel')
                     });
 
-                    if (response !== 0) {
+                    const action = await new Promise(resolve => {
+                        ipcMain.once('deeplink-modal-action', (_event, data) => {
+                            resolve(data?.action);
+                        });
+                    });
+
+                    if (action !== 'confirm') {
                         return false;
                     }
 
