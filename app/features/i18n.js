@@ -4,6 +4,7 @@ const { app } = require('electron');
 const rosetta = require('rosetta');
 const path = require('path');
 const fs = require('fs');
+const isDev = require('electron-is-dev');
 
 const i18n = rosetta();
 
@@ -12,11 +13,13 @@ const SUPPORTED_LOCALES = [ 'en' ];
 const DEFAULT_LOCALE = 'en';
 
 /**
- * Loads all locale files from app/locales/ into rosetta.
- * Must be called after app is ready (or at module load time in webpack bundle).
+ * Loads all locale files into rosetta.
+ * Must be called after app is ready.
  */
 function loadLocales() {
-    const localesDir = path.resolve(__dirname, '..', 'locales');
+    const localesDir = isDev
+        ? path.join(process.cwd(), 'app', 'locales')
+        : path.join(app.getAppPath(), 'build', 'locales');
 
     for (const locale of SUPPORTED_LOCALES) {
         const filePath = path.join(localesDir, `${locale}.json`);
