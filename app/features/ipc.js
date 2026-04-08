@@ -45,16 +45,16 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     // Toggle Annotation Overlay
     // The renderer always sends the object form: { enabled, collabDetails, ... }
-    register('toggle-annotation', (event, config) => {
+    register('toggle-annotation', (event, overlayConfig) => {
         if (isDev) {
             console.log('🖌️ IPC: toggle-annotation received.', {
-                enabled: config.enabled,
-                roomId: config.collabDetails?.roomId,
-                hasRoomKey: Boolean(config.collabDetails?.roomKey),
-                hasAnnotationsUrl: Boolean(config.annotationsUrl),
-                isWindowSharing: config.isWindowSharing,
-                sourceWidth: config.sourceWidth,
-                sourceHeight: config.sourceHeight
+                enabled: overlayConfig.enabled,
+                roomId: overlayConfig.collabDetails?.roomId,
+                hasRoomKey: Boolean(overlayConfig.collabDetails?.roomKey),
+                hasAnnotationsUrl: Boolean(overlayConfig.annotationsUrl),
+                isWindowSharing: overlayConfig.isWindowSharing,
+                sourceWidth: overlayConfig.sourceWidth,
+                sourceHeight: overlayConfig.sourceHeight
             });
         }
 
@@ -62,7 +62,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         const mw = getMainWindow();
 
         try {
-            toggleOverlay(mw, config);
+            toggleOverlay(mw, overlayConfig);
         } catch (err) {
             console.error('❌ Failed to toggle annotation overlay:', err);
         }
