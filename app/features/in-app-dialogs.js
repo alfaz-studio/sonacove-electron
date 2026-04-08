@@ -137,10 +137,10 @@ function injectStylesJS() {
  */
 function showUpdateToast(webContents, version, strings = {}) {
     const v = esc(version);
-    const titleText = esc(strings.title || 'Update Ready');
-    const messageText = esc(strings.message || `Version ${v} is ready to install.`);
-    const laterText = esc(strings.later || 'Later');
-    const installText = esc(strings.installNow || 'Install Now');
+    const titleText = esc(strings.title);
+    const messageText = esc(strings.message);
+    const laterText = esc(strings.later);
+    const installText = esc(strings.installNow);
     const icon = svgIcon(18, ACCENT, SVG_DOWNLOAD);
 
     const js = `(function(){
@@ -243,11 +243,11 @@ document.addEventListener('keydown',_onKey);
 function showLeaveModal(webContents, strings = {}) {
     _showModal(webContents, {
         id: 'sonacove-leave-modal',
-        title: strings.title || 'Leave Meeting?',
-        message: strings.message || 'You are currently in a meeting. Are you sure you want to leave?',
-        confirmLabel: strings.confirm || 'Leave',
+        title: strings.title,
+        message: strings.message,
+        confirmLabel: strings.confirm,
         confirmColor: ERROR_COLOR,
-        cancelLabel: strings.cancel || 'Stay',
+        cancelLabel: strings.cancel,
         ipcChannel: 'leave-modal-action'
     });
 }
@@ -260,11 +260,11 @@ function showLeaveModal(webContents, strings = {}) {
 function showDeeplinkModal(webContents, strings = {}) {
     _showModal(webContents, {
         id: 'sonacove-deeplink-modal',
-        title: strings.title || 'Meeting in Progress',
-        message: strings.message || 'You are already in a meeting. Do you want to leave and join a new one?',
-        confirmLabel: strings.confirm || 'Leave Meeting',
+        title: strings.title,
+        message: strings.message,
+        confirmLabel: strings.confirm,
         confirmColor: ERROR_COLOR,
-        cancelLabel: strings.cancel || 'Stay',
+        cancelLabel: strings.cancel,
         ipcChannel: 'deeplink-modal-action'
     });
 }
@@ -305,7 +305,7 @@ t.innerHTML=''
 +'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">${message}</div>'
 +'</div></div>'
 +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-+'<button id="snc-info-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">${esc(opts.okLabel || 'OK')}</button>'
++'<button id="snc-info-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">${esc(opts.okLabel)}</button>'
 +'</div>';
 document.body.appendChild(t);
 function _dism(){
@@ -353,17 +353,17 @@ t.innerHTML=''
 +'${icon}'
 +'</div>'
 +'<div style="font-weight:700;font-size:17px;color:#2d2d3a;margin-bottom:3px;">${appName}</div>'
-+'<div style="font-size:13px;color:#8a8a9a;">${esc(strings.version || ('Version ' + info.appVersion))}</div>'
++'<div style="font-size:13px;color:#8a8a9a;">${esc(strings.version)}</div>'
 +'</div>'
 +'<div style="background:#f8f8fa;border:1px solid #f0f0f2;border-radius:10px;padding:12px 14px;margin-bottom:18px;">'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.electron || 'Electron')}</span><span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.chrome || 'Chrome')}</span><span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.node || 'Node.js')}</span><span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;"><span>${esc(strings.platform || 'Platform')}</span><span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.electron)}</span><span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.chrome)}</span><span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.node)}</span><span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;"><span>${esc(strings.platform)}</span><span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
 +'</div>'
 +'<div style="display:flex;align-items:center;justify-content:space-between;">'
-+'<span style="font-size:11px;color:#b0b0b8;">${esc(strings.copyright || ('\\u00a9 ' + new Date().getFullYear() + ' Alfaz Studio'))}</span>'
-+'<button id="snc-about-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">${esc(strings.ok || 'OK')}</button>'
++'<span style="font-size:11px;color:#b0b0b8;">${esc(strings.copyright)}</span>'
++'<button id="snc-about-ok" class="snc-btn" style="background:${ACCENT};color:#fff;">${esc(strings.ok)}</button>'
 +'</div>';
 document.body.appendChild(t);
 function _dism(){

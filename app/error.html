@@ -99,20 +99,20 @@
   var errorCodeEl = document.getElementById('errorCode');
 
   // Set defaults from i18n strings
-  heading.textContent = i18n.heading || 'Unable to connect';
-  subtitle.textContent = i18n.subtitle || 'Something went wrong while loading Sonacove. Please try again.';
-  retryBtn.textContent = i18n.retryButton || 'Try Again';
+  heading.textContent = i18n.heading;
+  subtitle.textContent = i18n.subtitle;
+  retryBtn.textContent = i18n.retryButton;
 
   // Map error codes to user-friendly messages
   if (code === -106 || code === -105 || code === -109 || desc.indexOf('INTERNET') !== -1) {
-    heading.textContent = i18n.offlineHeading || 'You appear to be offline';
-    subtitle.textContent = i18n.offlineSubtitle || 'Check your internet connection and try again.';
+    heading.textContent = i18n.offlineHeading;
+    subtitle.textContent = i18n.offlineSubtitle;
   } else if (code === -102 || code === -118 || code === -101) {
-    heading.textContent = i18n.serverHeading || 'Server is unreachable';
-    subtitle.textContent = i18n.serverSubtitle || 'Sonacove might be temporarily unavailable. Please try again in a moment.';
+    heading.textContent = i18n.serverHeading;
+    subtitle.textContent = i18n.serverSubtitle;
   } else if (desc.indexOf('CERT') !== -1 || desc.indexOf('SSL') !== -1) {
-    heading.textContent = i18n.securityHeading || 'Connection security error';
-    subtitle.textContent = i18n.securitySubtitle || 'A secure connection could not be established. Please try again later.';
+    heading.textContent = i18n.securityHeading;
+    subtitle.textContent = i18n.securitySubtitle;
   }
 
   if (desc) {
@@ -120,7 +120,7 @@
   }
 
   function retry() {
-    retryBtn.textContent = i18n.connecting || 'Connecting\u2026';
+    retryBtn.textContent = i18n.connecting;
     retryBtn.classList.add('loading');
     if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc) {
       window.sonacoveElectronAPI.ipc.send('retry-load');
