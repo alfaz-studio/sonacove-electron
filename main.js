@@ -991,6 +991,12 @@ function createJitsiMeetWindow() {
     ipcMain.on('retry-load', onRetryLoad);
 
     mainWindow.on('closed', () => {
+        // Cancel any pending blur timer.
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
 
@@ -1153,6 +1159,10 @@ app.on('second-instance', (event, commandLine) => {
         handleProtocolCall(commandLine.pop());
     }
 });
+
+if (isDev) {
+    app.on('ready', createWebRTCInternalsWindow);
+}
 
 app.on('window-all-closed', () => {
     app.quit();

@@ -77,7 +77,10 @@
       var participants = [];
       var visibleTileCount = 4;
       var resizeEdge = null; // which edge is being dragged — determines slice direction
-      var pinnedIds = { local: true };   // { participantId: true } — local pinned by default
+      // { participantId: true } — local pinned by default.
+      // The jitsi-meet renderer uses 'local' as the local participant's ID
+      // (see usePiPParticipants.ts), so this key survives the cleanup loop.
+      var pinnedIds = { local: true };
       var isPillMode = false;
       var DRAG_THRESHOLD = 5;
       var AUDIO_LEVEL_DOTS = 5;
