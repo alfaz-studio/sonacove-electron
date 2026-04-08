@@ -26,11 +26,12 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
-const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/sonacove/analytics');
+const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
+const { initI18n, t } = require('./app/features/i18n');
 const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
-} = require('./app/features/sonacove/in-app-dialogs');
-const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/sonacove/paths');
+} = require('./app/features/in-app-dialogs');
+const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/paths');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -47,15 +48,14 @@ if (process.platform === 'win32') {
 }
 
 const config = require('./app/features/config');
-const sonacoveConfig = require('./app/features/sonacove/config');
 const {
     registerProtocol,
     navigateDeepLink
-} = require('./app/features/sonacove/deep-link');
-const { setupSonacoveIPC } = require('./app/features/sonacove/ipc');
-const { closeOverlay } = require('./app/features/sonacove/overlay/overlay-window');
-const { setupScreenshotIPC } = require('./app/features/sonacove/screenshot');
-const { openExternalLink } = require('./app/features/utils/openExternalLink');
+} = require('./app/features/deep-link');
+const { setupSonacoveIPC } = require('./app/features/ipc');
+const { closeOverlay } = require('./app/features/overlay/overlay-window');
+const { setupScreenshotIPC } = require('./app/features/screenshot');
+const { openExternalLink } = require('./app/features/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
 // Check case-insensitively since app.name may return name or productName.
@@ -65,8 +65,8 @@ if (!isStaging) {
     registerProtocol();
 }
 
-// For enabling remote control, please change the ENABLE_REMOTE_CONTROL flag in
-// app/features/conference/components/Conference.js to true as well
+// Remote control is disabled. The feature requires renderer-side integration
+// that was removed with the local renderer app.
 const ENABLE_REMOTE_CONTROL = false;
 
 // Fix screen-sharing thumbnails being missing sometimes.
@@ -143,7 +143,7 @@ let webrtcInternalsWindow = null;
 /**
  * Add protocol data
  */
-const appProtocolSurplus = `${config.default.appProtocolPrefix}://`;
+const appProtocolSurplus = `${config.appProtocolPrefix}://`;
 let pendingStartupDeepLink = null;
 
 /**
@@ -160,6 +160,14 @@ function showAboutDialog() {
         chromeVersion: process.versions.chrome,
         nodeVersion: process.versions.node,
         platform: `${process.platform} ${process.arch}`
+    }, {
+        version: t('aboutPanel.version', { version: app.getVersion() }),
+        electron: t('aboutPanel.electron'),
+        chrome: t('aboutPanel.chrome'),
+        node: t('aboutPanel.node'),
+        platform: t('aboutPanel.platform'),
+        copyright: t('aboutPanel.copyright', { year: new Date().getFullYear() }),
+        ok: t('aboutPanel.ok')
     });
 }
 
@@ -173,26 +181,31 @@ function checkForUpdatesManually() {
 
     const wc = mainWindow.webContents;
 
+    const okLabel = t('infoToast.ok');
+
     if (isStaging) {
         showInfoToast(wc, {
-            title: 'Staging Build',
-            message: 'Staging builds do not receive auto-updates.'
+            title: t('update.stagingTitle'),
+            message: t('update.stagingMessage'),
+            okLabel
         });
 
         return;
     }
 
     showInfoToast(wc, {
-        title: 'Checking for Updates\u2026',
-        message: 'Looking for a newer version.'
+        title: t('update.checkingTitle'),
+        message: t('update.checkingMessage'),
+        okLabel
     });
 
     autoUpdater.checkForUpdates()
         .then(result => {
             if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
                 showInfoToast(wc, {
-                    title: 'No Updates Available',
-                    message: `You're on the latest version (${app.getVersion()}).`
+                    title: t('update.noUpdatesTitle'),
+                    message: t('update.noUpdatesMessage', { version: app.getVersion() }),
+                    okLabel
                 });
             }
 
@@ -202,9 +215,10 @@ function checkForUpdatesManually() {
         .catch(err => {
             console.error('Manual update check failed:', err);
             showInfoToast(wc, {
-                title: 'Update Check Failed',
-                message: 'Could not check for updates. Please try again later.',
-                type: 'error'
+                title: t('update.checkFailedTitle'),
+                message: t('update.checkFailedMessage'),
+                type: 'error',
+                okLabel
             });
         });
 
@@ -230,9 +244,9 @@ function setApplicationMenu() {
         {
             label: app.name,
             submenu: [
-                { label: `About ${app.name}`, click: showAboutDialog },
+                { label: t('menu.about', { appName: app.name }), click: showAboutDialog },
                 { type: 'separator' },
-                { label: 'Check for Updates…', click: checkForUpdatesManually },
+                { label: t('menu.checkForUpdates'), click: checkForUpdatesManually },
                 { type: 'separator' },
                 { role: 'services', submenu: [] },
                 { type: 'separator' },
@@ -244,14 +258,14 @@ function setApplicationMenu() {
             ]
         },
         {
-            label: 'Edit',
+            label: t('menu.edit'),
             submenu: [ {
-                label: 'Undo',
+                label: t('menu.undo'),
                 accelerator: 'CmdOrCtrl+Z',
                 selector: 'undo:'
             },
             {
-                label: 'Redo',
+                label: t('menu.redo'),
                 accelerator: 'Shift+CmdOrCtrl+Z',
                 selector: 'redo:'
             },
@@ -259,28 +273,28 @@ function setApplicationMenu() {
                 type: 'separator'
             },
             {
-                label: 'Cut',
+                label: t('menu.cut'),
                 accelerator: 'CmdOrCtrl+X',
                 selector: 'cut:'
             },
             {
-                label: 'Copy',
+                label: t('menu.copy'),
                 accelerator: 'CmdOrCtrl+C',
                 selector: 'copy:'
             },
             {
-                label: 'Paste',
+                label: t('menu.paste'),
                 accelerator: 'CmdOrCtrl+V',
                 selector: 'paste:'
             },
             {
-                label: 'Select All',
+                label: t('menu.selectAll'),
                 accelerator: 'CmdOrCtrl+A',
                 selector: 'selectAll:'
             } ]
         },
         {
-            label: '&Window',
+            label: t('menu.window'),
             role: 'window',
             submenu: [
                 { role: 'minimize' },
@@ -288,11 +302,11 @@ function setApplicationMenu() {
             ]
         },
         {
-            label: '&Help',
+            label: t('menu.help'),
             role: 'help',
             submenu: [
                 {
-                    label: 'Guides',
+                    label: t('menu.guides'),
                     click: async () => {
                         await shell.openExternal('https://docs.sonacove.com/');
                     }
@@ -323,8 +337,10 @@ const TITLEBAR_CSS = ''
     + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
     + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
 
-const getTitlebarJS = (iconBase64 = '') => `
+const getTitlebarJS = (iconBase64 = '', strings = {}) => `
 (function() {
+    var strings = ${JSON.stringify(strings)};
+
     // Inject styles idempotently to prevent flash on re-navigation.
     var sid = 'sonacove-titlebar-styles';
     if (!document.getElementById(sid)) {
@@ -345,11 +361,11 @@ const getTitlebarJS = (iconBase64 = '') => `
     }
     bar.innerHTML =
         iconHtml +
-        '<div class="stb-title">' + (document.title || 'Sonacove Meets') + '</div>' +
+        '<div class="stb-title">' + (document.title || strings.windowTitle) + '</div>' +
         '<div class="stb-menu">' +
-            '<button class="stb-btn" id="stb-about" title="View app version and system info">About</button>' +
-            '<button class="stb-btn" id="stb-updates" title="Check for new versions">Check for Updates</button>' +
-            '<button class="stb-btn" id="stb-help" title="Open Sonacove documentation">Help</button>' +
+            '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
+            '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
+            '<button class="stb-btn" id="stb-help" title="' + strings.helpTooltip + '">' + strings.help + '</button>' +
         '</div>';
     document.body.prepend(bar);
 
@@ -395,7 +411,17 @@ function injectWindowsTitleBar() {
         return;
     }
 
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64())).catch(() => {});
+    const titlebarStrings = {
+        windowTitle: t('app.windowTitle'),
+        about: t('titlebar.about'),
+        aboutTooltip: t('titlebar.aboutTooltip'),
+        checkForUpdates: t('titlebar.checkForUpdates'),
+        checkForUpdatesTooltip: t('titlebar.checkForUpdatesTooltip'),
+        help: t('titlebar.help'),
+        helpTooltip: t('titlebar.helpTooltip')
+    };
+
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), titlebarStrings)).catch(() => {});
 }
 
 /**
@@ -424,7 +450,7 @@ function createJitsiMeetWindow() {
         y: windowState.y,
         width: windowState.width,
         height: windowState.height,
-        title: 'Sonacove Meets',
+        title: t('app.windowTitle'),
         icon: getIconPath(),
         minWidth: 800,
         minHeight: 600,
@@ -458,7 +484,7 @@ function createJitsiMeetWindow() {
         const target = getPopupTarget(url, frameName);
 
         // Allow URLs on allowed hosts to open inside Electron instead of the browser
-        const allowedHosts = sonacoveConfig.currentConfig.allowedHosts || [];
+        const allowedHosts = config.currentConfig.allowedHosts || [];
 
         try {
             const parsedUrl = new URL(url);
@@ -516,7 +542,12 @@ function createJitsiMeetWindow() {
             pendingUpdateVersion = info.version;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
-                showUpdateToast(mainWindow.webContents, info.version);
+                showUpdateToast(mainWindow.webContents, info.version, {
+                    title: t('updateToast.title'),
+                    message: t('updateToast.message', { version: info.version }),
+                    later: t('updateToast.later'),
+                    installNow: t('updateToast.installNow')
+                });
             }
         });
 
@@ -547,19 +578,26 @@ function createJitsiMeetWindow() {
     // Not calling event.preventDefault() keeps the page open (prevents unload).
     // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
     mainWindow.webContents.on('will-prevent-unload', () => {
-        showLeaveModal(mainWindow.webContents);
+        showLeaveModal(mainWindow.webContents, {
+            title: t('leaveModal.title'),
+            message: t('leaveModal.message'),
+            confirm: t('leaveModal.confirm'),
+            cancel: t('leaveModal.cancel')
+        });
     });
 
-    ipcMain.on('leave-modal-action', (event, data) => {
+    const onLeaveModal = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.destroy();
         }
-    });
+    };
+
+    ipcMain.on('leave-modal-action', onLeaveModal);
 
     // Handle update toast responses (placed here with other IPC handlers
     // rather than inside the updater block for consistent cleanup).
-    ipcMain.on('update-toast-action', (event, data) => {
+    const onUpdateToast = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'install') {
             capture('update_install_clicked', { new_version: pendingUpdateVersion });
@@ -567,7 +605,9 @@ function createJitsiMeetWindow() {
         } else {
             capture('update_deferred', { new_version: pendingUpdateVersion });
         }
-    });
+    };
+
+    ipcMain.on('update-toast-action', onUpdateToast);
 
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
@@ -631,7 +671,7 @@ function createJitsiMeetWindow() {
             if (event) {
                 event.preventDefault();
             }
-            const landingUrl = new URL(sonacoveConfig.currentConfig.landing);
+            const landingUrl = new URL(config.currentConfig.landing);
 
             // Remove trailing slash if present on landing pathname
             const basePath = landingUrl.pathname.endsWith('/')
@@ -650,7 +690,7 @@ function createJitsiMeetWindow() {
         }
 
         if (parsedUrl.pathname.startsWith('/meet')) {
-            const meetRootUrl = new URL(sonacoveConfig.currentConfig.meetRoot);
+            const meetRootUrl = new URL(config.currentConfig.meetRoot);
 
             if (parsedUrl.origin !== meetRootUrl.origin) {
                 event.preventDefault();
@@ -658,7 +698,7 @@ function createJitsiMeetWindow() {
                 // Strip the /meet prefix from pathname — meetRoot already
                 // includes it, so we'd otherwise get /meet/meet/room.
                 const roomPath = parsedUrl.pathname.replace(/^\/meet/, '');
-                const targetUrl = `${sonacoveConfig.currentConfig.meetRoot}${roomPath}${parsedUrl.search}`;
+                const targetUrl = `${config.currentConfig.meetRoot}${roomPath}${parsedUrl.search}`;
 
                 setImmediate(() => {
                     mainWindow.loadURL(targetUrl);
@@ -834,12 +874,14 @@ function createJitsiMeetWindow() {
                     opacity: 0.8;
                 }
             `).catch(() => {});
+            const bannerText = t('staging.banner', { version: app.getVersion() });
+
             mainWindow.webContents.executeJavaScript(`
                 (function() {
                     if (document.getElementById('sonacove-staging-banner')) return;
                     var banner = document.createElement('div');
                     banner.id = 'sonacove-staging-banner';
-                    banner.textContent = 'STAGING BUILD \u2014 ' + ${JSON.stringify(app.getVersion())};
+                    banner.textContent = ${JSON.stringify(bannerText)};
                     document.body.appendChild(banner);
                 })();
             `).catch(() => {});
@@ -864,17 +906,34 @@ function createJitsiMeetWindow() {
         console.warn(`Page load failed: ${errorDescription} (${errorCode}) — ${validatedURL}`);
 
         mainWindow.loadFile(getErrorPath(), {
-            query: { code: String(errorCode), desc: errorDescription }
+            query: {
+                code: String(errorCode),
+                desc: errorDescription,
+                strings: JSON.stringify({
+                    heading: t('errorPage.heading'),
+                    subtitle: t('errorPage.subtitle'),
+                    retryButton: t('errorPage.retryButton'),
+                    offlineHeading: t('errorPage.offlineHeading'),
+                    offlineSubtitle: t('errorPage.offlineSubtitle'),
+                    serverHeading: t('errorPage.serverHeading'),
+                    serverSubtitle: t('errorPage.serverSubtitle'),
+                    securityHeading: t('errorPage.securityHeading'),
+                    securitySubtitle: t('errorPage.securitySubtitle'),
+                    connecting: t('errorPage.connecting')
+                })
+            }
         });
     });
 
     // Allow the error page to trigger a reload of the remote dashboard.
-    ipcMain.on('retry-load', (event) => {
+    const onRetryLoad = (event) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+            mainWindow.loadURL(config.currentConfig.landing);
         }
-    });
+    };
+
+    ipcMain.on('retry-load', onRetryLoad);
 
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
@@ -883,13 +942,9 @@ function createJitsiMeetWindow() {
         // Close the annotation overlay if it is open
         closeOverlay();
 
-        // Safe to use removeAllListeners here because each channel has exactly
-        // one listener registered during this window's lifecycle. If additional
-        // listeners are ever added elsewhere, switch to storing handler refs and
-        // calling ipcMain.removeListener() instead.
-        ipcMain.removeAllListeners('retry-load');
-        ipcMain.removeAllListeners('update-toast-action');
-        ipcMain.removeAllListeners('leave-modal-action');
+        ipcMain.removeListener('retry-load', onRetryLoad);
+        ipcMain.removeListener('update-toast-action', onUpdateToast);
+        ipcMain.removeListener('leave-modal-action', onLeaveModal);
         ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
         mainWindow = null;
     });
@@ -897,7 +952,7 @@ function createJitsiMeetWindow() {
         mainWindow.show();
 
         // Splash is now visible — load the remote dashboard.
-        mainWindow.loadURL(sonacoveConfig.currentConfig.landing);
+        mainWindow.loadURL(config.currentConfig.landing);
 
         // Try pending startup deeplink if we have one
         if (pendingStartupDeepLink) {
@@ -928,11 +983,6 @@ const setupChildWindowIcon = () => {
                     show: true
                 }
             };
-        });
-
-        // Listen for window creation on this webContents
-        contents.on('new-window', (event, url, frameName, disposition, options) => {
-            options.icon = iconPath;
         });
     });
 };
@@ -1016,6 +1066,7 @@ app.on('certificate-error',
 );
 
 app.on('ready', () => {
+    initI18n();
     initAnalytics();
     capture('app_launched');
 
@@ -1086,19 +1137,19 @@ app.on('before-quit', event => {
 // that would hijack deeplinks from the production install.
 if (!isStaging) {
     // remove so we can register each time as we run the app.
-    app.removeAsDefaultProtocolClient(config.default.appProtocolPrefix);
+    app.removeAsDefaultProtocolClient(config.appProtocolPrefix);
 
     // If we are running a non-packaged version of the app && on windows
     if (isDev && process.platform === 'win32') {
         // Set the path of electron.exe and your app.
         // These two additional parameters are only available on windows.
         app.setAsDefaultProtocolClient(
-            config.default.appProtocolPrefix,
+            config.appProtocolPrefix,
             process.execPath,
             [ path.resolve(process.argv[1]) ]
         );
     } else {
-        app.setAsDefaultProtocolClient(config.default.appProtocolPrefix);
+        app.setAsDefaultProtocolClient(config.appProtocolPrefix);
     }
 }
 
