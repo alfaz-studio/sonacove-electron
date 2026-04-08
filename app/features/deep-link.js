@@ -79,6 +79,9 @@ async function navigateDeepLink(deepLink) {
                 const currentUrl = new URL(win.webContents.getURL());
 
                 if (currentUrl.pathname.startsWith('/meet')) {
+                    // Remove any stale listener from a previous deep link
+                    ipcMain.removeAllListeners('deeplink-modal-action');
+
                     showDeeplinkModal(win.webContents, {
                         title: t('deeplinkModal.title'),
                         message: t('deeplinkModal.message'),
@@ -86,8 +89,15 @@ async function navigateDeepLink(deepLink) {
                         cancel: t('deeplinkModal.cancel')
                     });
 
+                    const TIMEOUT_MS = 60000;
                     const action = await new Promise(resolve => {
+                        const timer = setTimeout(() => {
+                            ipcMain.removeAllListeners('deeplink-modal-action');
+                            resolve('cancel');
+                        }, TIMEOUT_MS);
+
                         ipcMain.once('deeplink-modal-action', (_event, data) => {
+                            clearTimeout(timer);
                             resolve(data?.action);
                         });
                     });

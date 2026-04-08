@@ -1,6 +1,6 @@
-const { shell } = require('electron');
-const url = require('url');
+'use strict';
 
+const { shell } = require('electron');
 
 /**
  * Opens the given link in an external browser.
@@ -8,19 +8,18 @@ const url = require('url');
  * @param {string} link - The link (URL) that should be opened in the external browser.
  * @returns {void}
  */
-export function openExternalLink(link) {
+function openExternalLink(link) {
     let u;
 
     try {
-        u = url.parse(link);
+        u = new URL(link);
     } catch (e) {
         return;
     }
 
-    const proto = u.protocol;
-    const href = u.href;
-
-    if (proto === 'http:' || proto === 'https:' || proto === 'mailto:') {
-        shell.openExternal(href);
+    if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') {
+        shell.openExternal(u.href);
     }
 }
+
+module.exports = { openExternalLink };

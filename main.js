@@ -27,7 +27,7 @@ const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
-const { initI18n, t, getTranslations } = require('./app/features/i18n');
+const { initI18n, t } = require('./app/features/i18n');
 const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
 } = require('./app/features/in-app-dialogs');
@@ -65,8 +65,8 @@ if (!isStaging) {
     registerProtocol();
 }
 
-// For enabling remote control, please change the ENABLE_REMOTE_CONTROL flag in
-// app/features/conference/components/Conference.js to true as well
+// Remote control is disabled. The feature requires renderer-side integration
+// that was removed with the local renderer app.
 const ENABLE_REMOTE_CONTROL = false;
 
 // Fix screen-sharing thumbnails being missing sometimes.
@@ -586,16 +586,18 @@ function createJitsiMeetWindow() {
         });
     });
 
-    ipcMain.on('leave-modal-action', (event, data) => {
+    const onLeaveModal = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.destroy();
         }
-    });
+    };
+
+    ipcMain.on('leave-modal-action', onLeaveModal);
 
     // Handle update toast responses (placed here with other IPC handlers
     // rather than inside the updater block for consistent cleanup).
-    ipcMain.on('update-toast-action', (event, data) => {
+    const onUpdateToast = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'install') {
             capture('update_install_clicked', { new_version: pendingUpdateVersion });
@@ -603,7 +605,9 @@ function createJitsiMeetWindow() {
         } else {
             capture('update_deferred', { new_version: pendingUpdateVersion });
         }
-    });
+    };
+
+    ipcMain.on('update-toast-action', onUpdateToast);
 
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
@@ -922,12 +926,14 @@ function createJitsiMeetWindow() {
     });
 
     // Allow the error page to trigger a reload of the remote dashboard.
-    ipcMain.on('retry-load', (event) => {
+    const onRetryLoad = (event) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.loadURL(config.currentConfig.landing);
         }
-    });
+    };
+
+    ipcMain.on('retry-load', onRetryLoad);
 
     mainWindow.on('closed', () => {
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
@@ -936,13 +942,9 @@ function createJitsiMeetWindow() {
         // Close the annotation overlay if it is open
         closeOverlay();
 
-        // Safe to use removeAllListeners here because each channel has exactly
-        // one listener registered during this window's lifecycle. If additional
-        // listeners are ever added elsewhere, switch to storing handler refs and
-        // calling ipcMain.removeListener() instead.
-        ipcMain.removeAllListeners('retry-load');
-        ipcMain.removeAllListeners('update-toast-action');
-        ipcMain.removeAllListeners('leave-modal-action');
+        ipcMain.removeListener('retry-load', onRetryLoad);
+        ipcMain.removeListener('update-toast-action', onUpdateToast);
+        ipcMain.removeListener('leave-modal-action', onLeaveModal);
         ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
         mainWindow = null;
     });
@@ -981,11 +983,6 @@ const setupChildWindowIcon = () => {
                     show: true
                 }
             };
-        });
-
-        // Listen for window creation on this webContents
-        contents.on('new-window', (event, url, frameName, disposition, options) => {
-            options.icon = iconPath;
         });
     });
 };
