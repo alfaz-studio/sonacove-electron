@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
@@ -17,20 +18,23 @@ module.exports = {
         __dirname: true
     },
     plugins: [
+        new webpack.IgnorePlugin({ resourceRegExp: /^supports-color$/ }),
         new CopyPlugin({
             patterns: [
                 { from: 'app/splash.html', to: 'splash.html' },
                 { from: 'app/error.html', to: 'error.html' },
                 { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' },
-                { from: 'app/features/pip/participant-panel.css', to: 'participant-panel.css' }
+                { from: 'app/features/pip/participant-panel.css', to: 'participant-panel.css' },
+                { from: 'app/locales', to: 'locales' }
             ]
         })
     ],
     externals: [ {
         '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
-        'electron-debug': 'require(\'electron-debug\')',
+        'electron-context-menu': 'require(\'electron-context-menu\')',
         'electron-reload': 'require(\'electron-reload\')',
-        'posthog-node': 'require(\'posthog-node\')'
+        'posthog-node': 'require(\'posthog-node\')',
+        'rosetta': 'require(\'rosetta\')'
     } ],
     resolve: {
         modules: [
