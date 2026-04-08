@@ -97,8 +97,8 @@ jobs:
           path: |
             ~/Library/Caches/electron
             ~/Library/Caches/electron-builder
-            ~\AppData\Local\electron\Cache
-            ~\AppData\Local\electron-builder\Cache
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
           key: electron-${{ matrix.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             electron-${{ matrix.os }}-
