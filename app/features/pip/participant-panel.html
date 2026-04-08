@@ -406,17 +406,19 @@
       window.panelAPI.onParticipantsUpdate(function (data) {
         participants = data.participants || [];
 
+        // Send initial pin state (local pinned by default) on first update.
+        // Must run before cleanup to avoid wiping the default 'local' pin
+        // if participants haven't loaded yet.
+        if (!initialPinSent && participants.length > 0) {
+          initialPinSent = true;
+          window.panelAPI.updatePinState(pinnedIds);
+        }
+
         // Clean up pins for participants who left.
         var currentIds = {};
         for (var i = 0; i < participants.length; i++) currentIds[participants[i].id] = true;
         for (var pid in pinnedIds) {
           if (!currentIds[pid]) delete pinnedIds[pid];
-        }
-
-        // Send initial pin state (local pinned by default) on first update.
-        if (!initialPinSent && participants.length > 0) {
-          initialPinSent = true;
-          window.panelAPI.updatePinState(pinnedIds);
         }
 
         renderTiles();

@@ -144,6 +144,8 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // If the window already exists in pill mode, expand it back to full panel.
     register('pip-screenshare-start', () => {
         try {
+            // Inline requires to avoid circular dependency — pill.js and
+            // participant-window.js both depend on modules that ipc.js imports.
             const { isPillMode, expandFromPill } = require('./pip/pill');
             const { getParticipantWindow, getCurrentState } = require('./pip/participant-window');
 

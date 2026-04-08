@@ -172,7 +172,8 @@ contextBridge.exposeInMainWorld('panelAPI', {
      */
     updatePinState(pinned) {
         if (pinned && typeof pinned === 'object' && !Array.isArray(pinned)) {
-            ipcRenderer.send('pp-pin-state-changed', pinned); // IPC.PIN_STATE_CHANGED
+            // Keep in sync with IPC.PIN_STATE_CHANGED in constants.js
+            ipcRenderer.send('pp-pin-state-changed', pinned);
         }
     },
 

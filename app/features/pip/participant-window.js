@@ -308,9 +308,8 @@ function getParticipantWindow() {
     return participantWindow;
 }
 
-function getCurrentState() {
-    return { count: currentParticipantCount, orientation: currentOrientation };
-}
+// Re-export the local getState helper for use by ipc.js.
+const getCurrentState = getState;
 
 module.exports = {
     openParticipantWindow,
