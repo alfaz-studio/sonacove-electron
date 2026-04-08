@@ -893,7 +893,9 @@ function createJitsiMeetWindow() {
 
         mainWindow.on('page-title-updated', (event, title) => {
             event.preventDefault();
-            mainWindow.setTitle(`${title} — v${patchVersion}`);
+            if (title) {
+                mainWindow.setTitle(`${title} — v${patchVersion}`);
+            }
         });
     }
 

@@ -9,6 +9,8 @@ const {
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
+    getParticipantWindow,
+    getCurrentState,
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
 
@@ -144,11 +146,8 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // If the window already exists in pill mode, expand it back to full panel.
     register('pip-screenshare-start', () => {
         try {
-            // Lazy require — pill.js is only needed for this conditional path,
-            // and getParticipantWindow/getCurrentState are re-imported here to
-            // avoid loading pill.js at module level.
+            // Lazy require — pill.js is only needed for this conditional path.
             const { isPillMode, expandFromPill } = require('./pip/pill');
-            const { getParticipantWindow, getCurrentState } = require('./pip/participant-window');
 
             if (getParticipantWindow() && isPillMode()) {
                 const { count, orientation } = getCurrentState();
@@ -174,7 +173,10 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     // Renderer signals screenshare ended — shrink to pill instead of
     // destroying the window, so the user can reopen it without re-minimizing.
+    // shrinkToPill() has an internal null-window guard, so this is safe even
+    // if the PiP window was never opened or creation failed.
     register('pip-screenshare-stop', () => {
+        // Lazy require — pill.js only needed here.
         const { isPillMode } = require('./pip/pill');
 
         if (!isPillMode()) {

@@ -308,9 +308,6 @@ function getParticipantWindow() {
     return participantWindow;
 }
 
-// Re-export the local getState helper for use by ipc.js.
-const getCurrentState = getState;
-
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
@@ -318,5 +315,5 @@ module.exports = {
     closeParticipantWindow,
     shrinkToPill,
     getParticipantWindow,
-    getCurrentState,
+    getCurrentState: getState,
 };

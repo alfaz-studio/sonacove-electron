@@ -80,6 +80,7 @@
       // { participantId: true } — local pinned by default.
       // The jitsi-meet renderer uses 'local' as the local participant's ID
       // (see usePiPParticipants.ts), so this key survives the cleanup loop.
+      // ⚠️ If jitsi-meet changes the local ID from 'local', this default breaks.
       var pinnedIds = { local: true };
       var isPillMode = false;
       var DRAG_THRESHOLD = 5;
