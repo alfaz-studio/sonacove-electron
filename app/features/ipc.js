@@ -136,6 +136,35 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         shell.openExternal('https://docs.sonacove.com/');
     });
 
+    // Custom window controls (frame:false on Windows)
+    register('titlebar-minimize', () => {
+        const mw = getMainWindow();
+
+        if (mw && !mw.isDestroyed()) {
+            mw.minimize();
+        }
+    });
+
+    register('titlebar-maximize', () => {
+        const mw = getMainWindow();
+
+        if (mw && !mw.isDestroyed()) {
+            if (mw.isMaximized()) {
+                mw.unmaximize();
+            } else {
+                mw.maximize();
+            }
+        }
+    });
+
+    register('titlebar-close', () => {
+        const mw = getMainWindow();
+
+        if (mw && !mw.isDestroyed()) {
+            mw.close();
+        }
+    });
+
     // ── Participant PiP panel ─────────────────────────────────────────────────
 
     // Renderer signals that local screenshare started and there are remote

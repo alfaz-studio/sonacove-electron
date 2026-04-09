@@ -330,13 +330,26 @@ const TITLEBAR_CSS = ''
     + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
     + 'background-repeat:no-repeat;background-position:center;}'
     + '#sonacove-titlebar .stb-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
-    + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;margin-right:140px;}'
+    + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;}'
     + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
     + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
     + 'transition:background 0.15s ease,color 0.15s ease;}'
     + '#sonacove-titlebar .stb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}'
     + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
-    + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
+    + '#sonacove-titlebar .stb-wc{display:flex;-webkit-app-region:no-drag;margin-left:8px;}'
+    + '#sonacove-titlebar .stb-wc-btn{background:transparent;border:none;color:#9090A0;cursor:pointer;'
+    + 'width:46px;height:30px;display:flex;align-items:center;justify-content:center;'
+    + '-webkit-app-region:no-drag;transition:background 0.15s ease,color 0.15s ease;}'
+    + '#sonacove-titlebar .stb-wc-btn svg{pointer-events:none;}'
+    + '#sonacove-titlebar .stb-wc-btn:hover{background:rgba(255,255,255,0.08);color:#D0D0DA;}'
+    + '#sonacove-titlebar .stb-wc-btn:active{background:rgba(255,255,255,0.14);color:#E0E0E6;}'
+    + '#sonacove-titlebar .stb-wc-btn.stb-close:hover{background:#e81123;color:#fff;}'
+    + 'html{box-sizing:border-box!important;padding-top:34px!important;overflow:hidden!important;}'
+    + 'body{height:calc(100vh - 34px)!important;overflow-y:auto!important;}'
+    + 'body::-webkit-scrollbar{width:8px;}'
+    + 'body::-webkit-scrollbar-track{background:transparent;}'
+    + 'body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:4px;}'
+    + 'body::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3);}';
 
 const getTitlebarJS = (iconBase64 = '', strings = {}) => `
 (function() {
@@ -360,6 +373,9 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     if ('${iconBase64}') {
         iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
     }
+    var minSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    var maxSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
+    var closeSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     bar.innerHTML =
         iconHtml +
         '<div class="stb-title">' + (document.title || strings.windowTitle) + '</div>' +
@@ -367,6 +383,11 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
             '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
             '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
             '<button class="stb-btn" id="stb-help" title="' + strings.helpTooltip + '">' + strings.help + '</button>' +
+        '</div>' +
+        '<div class="stb-wc">' +
+            '<button class="stb-wc-btn" id="stb-minimize" title="Minimize">' + minSvg + '</button>' +
+            '<button class="stb-wc-btn" id="stb-maximize" title="Restore">' + maxSvg + '</button>' +
+            '<button class="stb-wc-btn stb-close" id="stb-close" title="Close">' + closeSvg + '</button>' +
         '</div>';
     document.body.prepend(bar);
 
@@ -379,6 +400,30 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     document.getElementById('stb-help').addEventListener('click', function() {
         window.sonacoveElectronAPI.ipc.send('open-help-docs');
     });
+    document.getElementById('stb-minimize').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('titlebar-minimize');
+    });
+    document.getElementById('stb-maximize').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('titlebar-maximize');
+    });
+    document.getElementById('stb-close').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('titlebar-close');
+    });
+
+    // Swap maximize/restore icon when window state changes.
+    var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="#1A1A1A"/></svg>';
+    if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
+        window.sonacoveElectronAPI.ipc.on('titlebar-maximized', function() {
+            var btn = document.getElementById('stb-maximize');
+            btn.innerHTML = restoreSvg;
+            btn.title = 'Restore';
+        });
+        window.sonacoveElectronAPI.ipc.on('titlebar-unmaximized', function() {
+            var btn = document.getElementById('stb-maximize');
+            btn.innerHTML = maxSvg;
+            btn.title = 'Restore';
+        });
+    }
 
     // Keep the displayed title in sync with document.title changes.
     var titleTarget = document.querySelector('title');
@@ -458,16 +503,12 @@ function createJitsiMeetWindow() {
         show: false,
         backgroundColor: '#1A1A1A',
 
-        // On Windows, hide the native menu bar row and show native window
-        // controls as an overlay. A custom in-page title bar is injected via
-        // injectWindowsTitleBar() on each page load.
+        // On Windows, remove the native frame entirely. A fully custom in-page
+        // title bar (with window controls) is injected via injectWindowsTitleBar().
+        // thickFrame keeps the native resize borders and window shadow.
         ...(process.platform !== 'darwin' ? {
-            titleBarStyle: 'hidden',
-            titleBarOverlay: {
-                color: '#1A1A1A',
-                symbolColor: '#e0e0e0',
-                height: 32
-            }
+            frame: false,
+            thickFrame: true
         } : {}),
 
         webPreferences: {
@@ -629,6 +670,18 @@ function createJitsiMeetWindow() {
     mainWindow.on('focus', () => {
         if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
             mainWindow.webContents.send('pip-window-restored');
+        }
+    });
+
+    // Notify renderer of maximize/unmaximize for window control icon swap.
+    mainWindow.on('maximize', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('titlebar-maximized');
+        }
+    });
+    mainWindow.on('unmaximize', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('titlebar-unmaximized');
         }
     });
 
@@ -843,15 +896,13 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
-    // Inject the custom in-page title bar on Windows after each page load.
+    // Inject the custom in-page title bar on Windows on every page load
+    // (including splash/error pages so the frameless window always has controls).
+    // dom-ready fires before did-finish-load for faster appearance.
     if (process.platform !== 'darwin') {
-        mainWindow.webContents.on('did-finish-load', () => {
-            // Skip local pages (splash, error) — title bar is only for the remote dashboard.
-            const url = mainWindow.webContents.getURL();
-
-            if (!url.startsWith('file://')) {
-                injectWindowsTitleBar();
-            }
+        mainWindow.webContents.on('dom-ready', () => {
+            mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
+            injectWindowsTitleBar();
         });
     }
 
