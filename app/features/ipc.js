@@ -137,31 +137,31 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     });
 
     // Custom window controls (frame:false on Windows)
-    register('titlebar-minimize', () => {
-        const mw = getMainWindow();
+    register('titlebar-minimize', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
 
-        if (mw && !mw.isDestroyed()) {
-            mw.minimize();
+        if (win && !win.isDestroyed()) {
+            win.minimize();
         }
     });
 
-    register('titlebar-maximize', () => {
-        const mw = getMainWindow();
+    register('titlebar-maximize', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
 
-        if (mw && !mw.isDestroyed()) {
-            if (mw.isMaximized()) {
-                mw.unmaximize();
+        if (win && !win.isDestroyed()) {
+            if (win.isMaximized()) {
+                win.unmaximize();
             } else {
-                mw.maximize();
+                win.maximize();
             }
         }
     });
 
-    register('titlebar-close', () => {
-        const mw = getMainWindow();
+    register('titlebar-close', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
 
-        if (mw && !mw.isDestroyed()) {
-            mw.close();
+        if (win && !win.isDestroyed()) {
+            win.close();
         }
     });
 
