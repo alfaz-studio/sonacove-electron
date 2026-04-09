@@ -44,6 +44,8 @@ const whitelistedIpcChannels = [
     'titlebar-minimize',
     'titlebar-maximize',
     'titlebar-close',
+    'titlebar-maximized',
+    'titlebar-unmaximized',
     'titlebar-update-available',
     'posthog-capture',
     'retry-load',

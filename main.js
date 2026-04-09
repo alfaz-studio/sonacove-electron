@@ -317,7 +317,7 @@ function setApplicationMenu() {
 }
 
 // ── Windows: in-page title bar ─────────────────────────────────────────────
-// Because we use titleBarStyle:'hidden' on Windows, the native menu bar is
+// Because we use frame:false on Windows, the native frame and menu bar are
 // gone. We inject a slim custom title bar into each loaded page so the user
 // still has About / Check for Updates without pressing Alt.
 
@@ -382,10 +382,12 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     var minSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     var maxSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
     var closeSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    // Build innerHTML with safe static content only — dynamic text is set
+    // via textContent below to prevent XSS from document.title or version strings.
     bar.innerHTML =
         iconHtml +
-        '<div class="stb-title">' + (document.title || strings.windowTitle) + '</div>' +
-        '<span class="stb-ver" id="stb-ver" style="margin-right:auto;">v' + strings.appVersion + '</span>' +
+        '<div class="stb-title"></div>' +
+        '<span class="stb-ver" id="stb-ver" style="margin-right:auto;"></span>' +
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
             '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
@@ -396,6 +398,8 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
             '<button class="stb-wc-btn" id="stb-maximize" title="Restore">' + maxSvg + '</button>' +
             '<button class="stb-wc-btn stb-close" id="stb-close" title="Close">' + closeSvg + '</button>' +
         '</div>';
+    bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
+    document.getElementById('stb-ver').textContent = 'v' + strings.appVersion;
     document.body.prepend(bar);
 
     document.getElementById('stb-about').addEventListener('click', function() {
@@ -419,32 +423,48 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
 
     // Swap maximize/restore icon when window state changes.
     var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="#1A1A1A"/></svg>';
-    if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
-        window.sonacoveElectronAPI.ipc.on('titlebar-maximized', function() {
-            var btn = document.getElementById('stb-maximize');
-            btn.innerHTML = restoreSvg;
-            btn.title = 'Restore';
-        });
-        window.sonacoveElectronAPI.ipc.on('titlebar-unmaximized', function() {
-            var btn = document.getElementById('stb-maximize');
-            btn.innerHTML = maxSvg;
-            btn.title = 'Restore';
-        });
-    }
 
-    // Update available indicator — replaces version with "v2.0.0 available" + dot.
+    // Clean up any IPC listeners from a previous titlebar injection (e.g. navigation)
+    // to prevent accumulation. Store cleanup refs on window.
+    if (window._stbCleanup) {
+        window._stbCleanup.forEach(function(fn) { fn(); });
+    }
+    window._stbCleanup = [];
+
     if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
-        window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
-            var ver = document.getElementById('stb-ver');
-            if (ver) {
-                ver.innerHTML = '<span class="stb-update-dot"></span>v' + version + ' available';
-                ver.className = 'stb-ver stb-update';
-                ver.title = 'Click to install update';
-                ver.addEventListener('click', function() {
-                    window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
-                });
-            }
-        });
+        window._stbCleanup.push(
+            window.sonacoveElectronAPI.ipc.on('titlebar-maximized', function() {
+                var btn = document.getElementById('stb-maximize');
+                if (btn) {
+                    btn.innerHTML = restoreSvg;
+                    btn.title = 'Restore';
+                }
+            }),
+            window.sonacoveElectronAPI.ipc.on('titlebar-unmaximized', function() {
+                var btn = document.getElementById('stb-maximize');
+                if (btn) {
+                    btn.innerHTML = maxSvg;
+                    btn.title = 'Restore';
+                }
+            }),
+            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
+                var ver = document.getElementById('stb-ver');
+                if (ver && !ver._updateBound) {
+                    ver._updateBound = true;
+                    // Use DOM nodes instead of innerHTML to prevent XSS from version string.
+                    ver.textContent = '';
+                    var dot = document.createElement('span');
+                    dot.className = 'stb-update-dot';
+                    ver.appendChild(dot);
+                    ver.appendChild(document.createTextNode('v' + version + ' available'));
+                    ver.className = 'stb-ver stb-update';
+                    ver.title = 'Click to install update';
+                    ver.addEventListener('click', function() {
+                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
+                    });
+                }
+            })
+        );
     }
 
     // Keep the displayed title in sync with document.title changes.
@@ -629,7 +649,6 @@ function createJitsiMeetWindow() {
             autoUpdater.checkForUpdates();
         }
     }
-
 
 
     mainWindow = new BrowserWindow(options);
@@ -929,7 +948,6 @@ function createJitsiMeetWindow() {
     // dom-ready fires before did-finish-load for faster appearance.
     if (process.platform !== 'darwin') {
         mainWindow.webContents.on('dom-ready', () => {
-            mainWindow.webContents.insertCSS(TITLEBAR_CSS).catch(() => {});
             injectWindowsTitleBar();
         });
     }
