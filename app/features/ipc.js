@@ -9,7 +9,10 @@ const {
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
+    getParticipantWindow,
+    getCurrentState,
 } = require('./pip/participant-window');
+const { IPC } = require('./pip/constants');
 
 /**
  * Previously registered listeners, keyed by channel.
@@ -169,9 +172,19 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     // Renderer signals that local screenshare started and there are remote
     // participants to show — open the floating participant overlay window.
+    // If the window already exists in pill mode, expand it back to full panel.
     register('pip-screenshare-start', () => {
         try {
-            openParticipantWindow();
+            // Lazy require — pill.js is only needed for this conditional path.
+            const { isPillMode, expandFromPill } = require('./pip/pill');
+
+            if (getParticipantWindow() && isPillMode()) {
+                const { count, orientation } = getCurrentState();
+
+                expandFromPill(count, orientation);
+            } else {
+                openParticipantWindow();
+            }
         } catch (err) {
             console.error('❌ ParticipantPiP: Failed to open window:', err);
         }
@@ -187,13 +200,24 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         sendParticipantsUpdate(participants);
     });
 
-    // Renderer signals screenshare ended — close the overlay window unless
-    // we're in pill mode (user minimised the panel but the window stays alive).
+    // Renderer signals screenshare ended — shrink to pill instead of
+    // destroying the window, so the user can reopen it without re-minimizing.
+    // shrinkToPill() has an internal null-window guard, so this is safe even
+    // if the PiP window was never opened or creation failed.
     register('pip-screenshare-stop', () => {
+        // Lazy require — pill.js only needed here.
         const { isPillMode } = require('./pip/pill');
 
         if (!isPillMode()) {
-            closeParticipantWindow(false);
+            shrinkToPill();
+        }
+    });
+
+    // User toggled pin state in the PiP panel — forward to main renderer
+    // so jitsi-meet can protect pinned participants from dominant speaker swapping.
+    register(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC.PIN_STATE_CHANGED_RENDERER, pinnedIds);
         }
     });
 

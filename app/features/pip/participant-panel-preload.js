@@ -164,6 +164,20 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Notify the main process that pin state changed.
+     * Forwarded to jitsi-meet renderer so it can protect pinned
+     * participants from dominant speaker swapping.
+     *
+     * @param {Object} pinned - { participantId: true } map.
+     */
+    updatePinState(pinned) {
+        if (pinned && typeof pinned === 'object' && !Array.isArray(pinned)) {
+            // Keep in sync with IPC.PIN_STATE_CHANGED in constants.js
+            ipcRenderer.send('pp-pin-state-changed', pinned);
+        }
+    },
+
+    /**
      * Tell the main process to start an edge resize.
      *
      * @param {string} edge - 'left' | 'right' | 'top' | 'bottom'

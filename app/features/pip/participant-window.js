@@ -6,7 +6,7 @@
  * mode to dedicated modules.
  */
 
-const { BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
 const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindow, resolveFile } = require('./helpers');
@@ -135,10 +135,16 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
 ipcMain.on(IPC.FOCUS_MAIN, () => {
     const mw = getMainWindow();
 
-    if (mw) {
+    if (process.platform === 'darwin') {
+        app.dock.show();
+        app.focus({ steal: true });
+    }
+
+    if (mw && !mw.isDestroyed()) {
         if (mw.isMinimized()) {
             mw.restore();
         }
+        mw.show();
         mw.focus();
     }
 });
@@ -309,4 +315,5 @@ module.exports = {
     closeParticipantWindow,
     shrinkToPill,
     getParticipantWindow,
+    getCurrentState: getState,
 };

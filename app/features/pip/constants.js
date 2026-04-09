@@ -34,6 +34,7 @@ const IPC = {
     RESIZE: 'pip-resize',
 
     // Panel renderer → main (sent from participant-panel.html via preload)
+    PIN_STATE_CHANGED: 'pp-pin-state-changed',
     START_DRAG: 'pp-start-window-drag',
     STOP_DRAG: 'pp-stop-window-drag',
     TOGGLE_ORIENTATION: 'pip-toggle-orientation',
@@ -55,6 +56,7 @@ const IPC = {
     ENTER_PANEL_MODE: 'pp-enter-panel-mode',
 
     // Main → jitsi-meet renderer
+    PIN_STATE_CHANGED_RENDERER: 'pip-pin-state-changed',
     PANEL_CLOSED: 'pip-panel-closed',
     PANEL_REOPENED: 'pip-panel-reopened',
     ORIENTATION_CHANGED_RENDERER: 'pip-orientation-changed',
