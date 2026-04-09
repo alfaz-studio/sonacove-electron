@@ -37,7 +37,16 @@ function injectTitlebar(mainWindow) {
  */
 function setupTitlebar(mainWindow) {
     if (process.platform === 'darwin') {
-        // macOS titlebar — to be implemented.
+        // macOS: keep native frame, just append version to the window title.
+        const patchVersion = app.getVersion().split('.').pop();
+
+        mainWindow.on('page-title-updated', (event, title) => {
+            event.preventDefault();
+            mainWindow.setTitle(title
+                ? `${title} — v${patchVersion}`
+                : `Sonacove Meets — v${patchVersion}`);
+        });
+
         return;
     }
 
