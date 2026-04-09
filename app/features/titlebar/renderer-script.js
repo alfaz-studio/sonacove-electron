@@ -1,0 +1,132 @@
+const { TITLEBAR_CSS } = require('./styles');
+
+/**
+ * Returns a JS string to be injected into the renderer via executeJavaScript.
+ * Builds the custom in-page title bar DOM, event listeners, and IPC wiring.
+ *
+ * @param {string} iconBase64 - Base64-encoded app icon.
+ * @param {Object} strings - i18n strings for button labels and tooltips.
+ * @returns {string} JavaScript source to execute in the renderer.
+ */
+const getTitlebarJS = (iconBase64 = '', strings = {}) => `
+(function() {
+    var strings = ${JSON.stringify(strings)};
+
+    // Inject styles idempotently to prevent flash on re-navigation.
+    var sid = 'sonacove-titlebar-styles';
+    if (!document.getElementById(sid)) {
+        var s = document.createElement('style');
+        s.id = sid;
+        s.textContent = ${JSON.stringify(TITLEBAR_CSS)};
+        document.head.appendChild(s);
+    }
+
+    // Guard against duplicate injection.
+    if (document.getElementById('sonacove-titlebar')) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'sonacove-titlebar';
+    var iconHtml = '';
+    if ('${iconBase64}') {
+        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
+    }
+    var minSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    var maxSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
+    var closeSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    // Build innerHTML with safe static content only — dynamic text is set
+    // via textContent below to prevent XSS from document.title or version strings.
+    bar.innerHTML =
+        iconHtml +
+        '<div class="stb-title"></div>' +
+        '<span class="stb-ver" id="stb-ver" style="margin-right:auto;"></span>' +
+        '<div class="stb-menu">' +
+            '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
+            '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
+            '<button class="stb-btn" id="stb-help" title="' + strings.helpTooltip + '">' + strings.help + '</button>' +
+        '</div>' +
+        '<div class="stb-wc">' +
+            '<button class="stb-wc-btn" id="stb-minimize" title="Minimize">' + minSvg + '</button>' +
+            '<button class="stb-wc-btn" id="stb-maximize" title="Restore">' + maxSvg + '</button>' +
+            '<button class="stb-wc-btn stb-close" id="stb-close" title="Close">' + closeSvg + '</button>' +
+        '</div>';
+    bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
+    bar.querySelector('#stb-ver').textContent = 'v' + strings.appVersion;
+    document.body.prepend(bar);
+
+    document.getElementById('stb-about').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('show-about-dialog');
+    });
+    document.getElementById('stb-updates').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('check-for-updates');
+    });
+    document.getElementById('stb-help').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('open-help-docs');
+    });
+    document.getElementById('stb-minimize').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('titlebar-minimize');
+    });
+    document.getElementById('stb-maximize').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('titlebar-maximize');
+    });
+    document.getElementById('stb-close').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('titlebar-close');
+    });
+
+    // Swap maximize/restore icon when window state changes.
+    var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="#1A1A1A"/></svg>';
+
+    // Clean up any IPC listeners from a previous titlebar injection (e.g. navigation)
+    // to prevent accumulation. Store cleanup refs on window.
+    if (window._stbCleanup) {
+        window._stbCleanup.forEach(function(fn) { fn(); });
+    }
+    window._stbCleanup = [];
+
+    if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
+        window._stbCleanup.push(
+            window.sonacoveElectronAPI.ipc.on('titlebar-maximized', function() {
+                var btn = document.getElementById('stb-maximize');
+                if (btn) {
+                    btn.innerHTML = restoreSvg;
+                    btn.title = 'Restore';
+                }
+            }),
+            window.sonacoveElectronAPI.ipc.on('titlebar-unmaximized', function() {
+                var btn = document.getElementById('stb-maximize');
+                if (btn) {
+                    btn.innerHTML = maxSvg;
+                    btn.title = 'Restore';
+                }
+            }),
+            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
+                var ver = document.getElementById('stb-ver');
+                if (ver && !ver._updateBound) {
+                    ver._updateBound = true;
+                    // Use DOM nodes instead of innerHTML to prevent XSS from version string.
+                    ver.textContent = '';
+                    var dot = document.createElement('span');
+                    dot.className = 'stb-update-dot';
+                    ver.appendChild(dot);
+                    ver.appendChild(document.createTextNode('v' + version + ' available'));
+                    ver.className = 'stb-ver stb-update';
+                    ver.title = 'Click to install update';
+                    ver.addEventListener('click', function() {
+                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
+                    });
+                }
+            })
+        );
+    }
+
+    // Keep the displayed title in sync with document.title changes.
+    var titleTarget = document.querySelector('title');
+    if (titleTarget) {
+        new MutationObserver(function() {
+            var el = document.querySelector('#sonacove-titlebar .stb-title');
+            if (el) el.textContent = document.title;
+        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
+    }
+})();
+`.trim();
+
+module.exports = { getTitlebarJS };

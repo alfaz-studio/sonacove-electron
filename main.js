@@ -32,6 +32,7 @@ const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
 } = require('./app/features/in-app-dialogs');
 const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/paths');
+const { setupTitlebar, notifyUpdateAvailable } = require('./app/features/titlebar/main');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -316,202 +317,6 @@ function setApplicationMenu() {
     ]));
 }
 
-// ── Windows: in-page title bar ─────────────────────────────────────────────
-// Because we use frame:false on Windows, the native frame and menu bar are
-// gone. We inject a slim custom title bar into each loaded page so the user
-// still has About / Check for Updates without pressing Alt.
-
-const TITLEBAR_CSS = ''
-    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1A1A1A;'
-    + 'border-bottom:2px solid;border-image:linear-gradient(90deg,#E8613C,#F59E0B) 1;'
-    + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
-    + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
-    + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
-    + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
-    + 'background-repeat:no-repeat;background-position:center;}'
-    + '#sonacove-titlebar .stb-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
-    + '#sonacove-titlebar .stb-ver{font-size:10px;color:#555566;margin-left:4px;}'
-    + '#sonacove-titlebar .stb-ver.stb-update{color:#E8613C;font-weight:600;cursor:pointer;-webkit-app-region:no-drag;'
-    + 'background:#2A2A35;border:1px solid #E8613C;border-radius:10px;padding:2px 8px;font-size:10px;'
-    + 'transition:background 0.15s ease,color 0.15s ease;margin-left:8px;}'
-    + '#sonacove-titlebar .stb-ver.stb-update:hover{background:#3A2A2A;color:#F59E0B;border-color:#F59E0B;}'
-    + '#sonacove-titlebar .stb-update-dot{width:5px;height:5px;border-radius:50%;background:#E8613C;display:inline-block;margin-right:4px;vertical-align:middle;}'
-    + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;}'
-    + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
-    + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
-    + 'transition:background 0.15s ease,color 0.15s ease;}'
-    + '#sonacove-titlebar .stb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}'
-    + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
-    + '#sonacove-titlebar .stb-wc{display:flex;-webkit-app-region:no-drag;margin-left:8px;}'
-    + '#sonacove-titlebar .stb-wc-btn{background:transparent;border:none;color:#9090A0;cursor:pointer;'
-    + 'width:46px;height:30px;display:flex;align-items:center;justify-content:center;'
-    + '-webkit-app-region:no-drag;transition:background 0.15s ease,color 0.15s ease;}'
-    + '#sonacove-titlebar .stb-wc-btn svg{pointer-events:none;}'
-    + '#sonacove-titlebar .stb-wc-btn:hover{background:rgba(255,255,255,0.08);color:#D0D0DA;}'
-    + '#sonacove-titlebar .stb-wc-btn:active{background:rgba(255,255,255,0.14);color:#E0E0E6;}'
-    + '#sonacove-titlebar .stb-wc-btn.stb-close:hover{background:#e81123;color:#fff;}'
-    + 'html{box-sizing:border-box!important;padding-top:34px!important;overflow:hidden!important;}'
-    + 'body{height:calc(100vh - 34px)!important;overflow-y:auto!important;}'
-    + 'body::-webkit-scrollbar{width:8px;}'
-    + 'body::-webkit-scrollbar-track{background:transparent;}'
-    + 'body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:4px;}'
-    + 'body::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3);}';
-
-const getTitlebarJS = (iconBase64 = '', strings = {}) => `
-(function() {
-    var strings = ${JSON.stringify(strings)};
-
-    // Inject styles idempotently to prevent flash on re-navigation.
-    var sid = 'sonacove-titlebar-styles';
-    if (!document.getElementById(sid)) {
-        var s = document.createElement('style');
-        s.id = sid;
-        s.textContent = ${JSON.stringify(TITLEBAR_CSS)};
-        document.head.appendChild(s);
-    }
-
-    // Guard against duplicate injection.
-    if (document.getElementById('sonacove-titlebar')) return;
-
-    var bar = document.createElement('div');
-    bar.id = 'sonacove-titlebar';
-    var iconHtml = '';
-    if ('${iconBase64}') {
-        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
-    }
-    var minSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-    var maxSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
-    var closeSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-    // Build innerHTML with safe static content only — dynamic text is set
-    // via textContent below to prevent XSS from document.title or version strings.
-    bar.innerHTML =
-        iconHtml +
-        '<div class="stb-title"></div>' +
-        '<span class="stb-ver" id="stb-ver" style="margin-right:auto;"></span>' +
-        '<div class="stb-menu">' +
-            '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
-            '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
-            '<button class="stb-btn" id="stb-help" title="' + strings.helpTooltip + '">' + strings.help + '</button>' +
-        '</div>' +
-        '<div class="stb-wc">' +
-            '<button class="stb-wc-btn" id="stb-minimize" title="Minimize">' + minSvg + '</button>' +
-            '<button class="stb-wc-btn" id="stb-maximize" title="Restore">' + maxSvg + '</button>' +
-            '<button class="stb-wc-btn stb-close" id="stb-close" title="Close">' + closeSvg + '</button>' +
-        '</div>';
-    bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
-    document.getElementById('stb-ver').textContent = 'v' + strings.appVersion;
-    document.body.prepend(bar);
-
-    document.getElementById('stb-about').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('show-about-dialog');
-    });
-    document.getElementById('stb-updates').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('check-for-updates');
-    });
-    document.getElementById('stb-help').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('open-help-docs');
-    });
-    document.getElementById('stb-minimize').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('titlebar-minimize');
-    });
-    document.getElementById('stb-maximize').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('titlebar-maximize');
-    });
-    document.getElementById('stb-close').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('titlebar-close');
-    });
-
-    // Swap maximize/restore icon when window state changes.
-    var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="#1A1A1A"/></svg>';
-
-    // Clean up any IPC listeners from a previous titlebar injection (e.g. navigation)
-    // to prevent accumulation. Store cleanup refs on window.
-    if (window._stbCleanup) {
-        window._stbCleanup.forEach(function(fn) { fn(); });
-    }
-    window._stbCleanup = [];
-
-    if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
-        window._stbCleanup.push(
-            window.sonacoveElectronAPI.ipc.on('titlebar-maximized', function() {
-                var btn = document.getElementById('stb-maximize');
-                if (btn) {
-                    btn.innerHTML = restoreSvg;
-                    btn.title = 'Restore';
-                }
-            }),
-            window.sonacoveElectronAPI.ipc.on('titlebar-unmaximized', function() {
-                var btn = document.getElementById('stb-maximize');
-                if (btn) {
-                    btn.innerHTML = maxSvg;
-                    btn.title = 'Restore';
-                }
-            }),
-            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
-                var ver = document.getElementById('stb-ver');
-                if (ver && !ver._updateBound) {
-                    ver._updateBound = true;
-                    // Use DOM nodes instead of innerHTML to prevent XSS from version string.
-                    ver.textContent = '';
-                    var dot = document.createElement('span');
-                    dot.className = 'stb-update-dot';
-                    ver.appendChild(dot);
-                    ver.appendChild(document.createTextNode('v' + version + ' available'));
-                    ver.className = 'stb-ver stb-update';
-                    ver.title = 'Click to install update';
-                    ver.addEventListener('click', function() {
-                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
-                    });
-                }
-            })
-        );
-    }
-
-    // Keep the displayed title in sync with document.title changes.
-    var titleTarget = document.querySelector('title');
-    if (titleTarget) {
-        new MutationObserver(function() {
-            var el = document.querySelector('#sonacove-titlebar .stb-title');
-            if (el) el.textContent = document.title;
-        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
-    }
-})();
-`.trim();
-
-/**
- * Injects the custom title bar into the currently loaded page (Windows only).
- */
-// Cache the icon base64 at startup rather than re-reading from disk on every navigation.
-let _cachedIconBase64 = null;
-function getIconBase64() {
-    if (_cachedIconBase64 !== null) return _cachedIconBase64;
-    try {
-        const iconPath = getIconPath('png');
-        _cachedIconBase64 = fs.existsSync(iconPath) ? fs.readFileSync(iconPath).toString('base64') : '';
-    } catch (e) {
-        _cachedIconBase64 = '';
-    }
-    return _cachedIconBase64;
-}
-
-function injectWindowsTitleBar() {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
-    }
-
-    const titlebarStrings = {
-        appVersion: app.getVersion(),
-        windowTitle: t('app.windowTitle'),
-        about: t('titlebar.about'),
-        aboutTooltip: t('titlebar.aboutTooltip'),
-        checkForUpdates: t('titlebar.checkForUpdates'),
-        checkForUpdatesTooltip: t('titlebar.checkForUpdatesTooltip'),
-        help: t('titlebar.help'),
-        helpTooltip: t('titlebar.helpTooltip')
-    };
-
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), titlebarStrings)).catch(() => {});
-}
 
 /**
  * Opens new window with index.html(Jitsi Meet is loaded in iframe there).
@@ -547,7 +352,7 @@ function createJitsiMeetWindow() {
         backgroundColor: '#1A1A1A',
 
         // On Windows, remove the native frame entirely. A fully custom in-page
-        // title bar (with window controls) is injected via injectWindowsTitleBar().
+        // title bar (with window controls) is injected via setupTitlebar().
         // thickFrame keeps the native resize borders and window shadow.
         ...(process.platform !== 'darwin' ? {
             frame: false,
@@ -635,7 +440,7 @@ function createJitsiMeetWindow() {
                 });
 
                 // Update the titlebar version indicator (Windows custom titlebar).
-                mainWindow.webContents.send('titlebar-update-available', info.version);
+                notifyUpdateAvailable(mainWindow, info.version);
             }
         });
 
@@ -720,17 +525,6 @@ function createJitsiMeetWindow() {
         }
     });
 
-    // Notify renderer of maximize/unmaximize for window control icon swap.
-    mainWindow.on('maximize', () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('titlebar-maximized');
-        }
-    });
-    mainWindow.on('unmaximize', () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('titlebar-unmaximized');
-        }
-    });
 
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
@@ -943,14 +737,8 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
-    // Inject the custom in-page title bar on Windows on every page load
-    // (including splash/error pages so the frameless window always has controls).
-    // dom-ready fires before did-finish-load for faster appearance.
-    if (process.platform !== 'darwin') {
-        mainWindow.webContents.on('dom-ready', () => {
-            injectWindowsTitleBar();
-        });
-    }
+    // Set up the custom in-page title bar (Windows; no-ops on macOS for now).
+    setupTitlebar(mainWindow);
 
     // Inject a visible staging banner so testers know they're on a PR build.
     if (isStaging) {
