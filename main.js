@@ -654,12 +654,17 @@ function createJitsiMeetWindow() {
         }, 100);
     });
 
+    // Guard: restore fires before focus on taskbar click — skip the
+    // duplicate send in the focus handler that immediately follows.
+    let restoredSent = false;
+
     mainWindow.on('restore', () => {
         if (blurTimer) {
             clearTimeout(blurTimer);
             blurTimer = null;
         }
         pipMinimizedSent = false;
+        restoredSent = true;
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('pip-window-restored');
         }
@@ -671,6 +676,13 @@ function createJitsiMeetWindow() {
             blurTimer = null;
         }
         pipMinimizedSent = false;
+
+        // If restore already sent the event (taskbar click), skip.
+        if (restoredSent) {
+            restoredSent = false;
+
+            return;
+        }
         if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
             mainWindow.webContents.send('pip-window-restored');
         }
@@ -893,9 +905,9 @@ function createJitsiMeetWindow() {
 
         mainWindow.on('page-title-updated', (event, title) => {
             event.preventDefault();
-            if (title) {
-                mainWindow.setTitle(`${title} — v${patchVersion}`);
-            }
+            mainWindow.setTitle(title
+                ? `${title} — v${patchVersion}`
+                : `Sonacove Meets — v${patchVersion}`);
         });
     }
 
