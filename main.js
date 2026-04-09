@@ -322,7 +322,8 @@ function setApplicationMenu() {
 // still has About / Check for Updates without pressing Alt.
 
 const TITLEBAR_CSS = ''
-    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1a1a2e;'
+    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1A1A1A;'
+    + 'border-bottom:2px solid;border-image:linear-gradient(90deg,#E8613C,#F59E0B) 1;'
     + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
     + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
@@ -455,7 +456,7 @@ function createJitsiMeetWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false,
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#1A1A1A',
 
         // On Windows, hide the native menu bar row and show native window
         // controls as an overlay. A custom in-page title bar is injected via
@@ -463,7 +464,7 @@ function createJitsiMeetWindow() {
         ...(process.platform !== 'darwin' ? {
             titleBarStyle: 'hidden',
             titleBarOverlay: {
-                color: '#1a1a2e',
+                color: '#1A1A1A',
                 symbolColor: '#e0e0e0',
                 height: 32
             }
