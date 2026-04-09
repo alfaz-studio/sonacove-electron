@@ -329,7 +329,13 @@ const TITLEBAR_CSS = ''
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
     + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
     + 'background-repeat:no-repeat;background-position:center;}'
-    + '#sonacove-titlebar .stb-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-ver{font-size:10px;color:#555566;margin-left:4px;}'
+    + '#sonacove-titlebar .stb-ver.stb-update{color:#E8613C;font-weight:600;cursor:pointer;-webkit-app-region:no-drag;'
+    + 'background:#2A2A35;border:1px solid #E8613C;border-radius:10px;padding:2px 8px;font-size:10px;'
+    + 'transition:background 0.15s ease,color 0.15s ease;margin-left:8px;}'
+    + '#sonacove-titlebar .stb-ver.stb-update:hover{background:#3A2A2A;color:#F59E0B;border-color:#F59E0B;}'
+    + '#sonacove-titlebar .stb-update-dot{width:5px;height:5px;border-radius:50%;background:#E8613C;display:inline-block;margin-right:4px;vertical-align:middle;}'
     + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;}'
     + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
     + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
@@ -379,6 +385,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     bar.innerHTML =
         iconHtml +
         '<div class="stb-title">' + (document.title || strings.windowTitle) + '</div>' +
+        '<span class="stb-ver" id="stb-ver" style="margin-right:auto;">v' + strings.appVersion + '</span>' +
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
             '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
@@ -425,6 +432,21 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
         });
     }
 
+    // Update available indicator — replaces version with "v2.0.0 available" + dot.
+    if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
+        window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
+            var ver = document.getElementById('stb-ver');
+            if (ver) {
+                ver.innerHTML = '<span class="stb-update-dot"></span>v' + version + ' available';
+                ver.className = 'stb-ver stb-update';
+                ver.title = 'Click to install update';
+                ver.addEventListener('click', function() {
+                    window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
+                });
+            }
+        });
+    }
+
     // Keep the displayed title in sync with document.title changes.
     var titleTarget = document.querySelector('title');
     if (titleTarget) {
@@ -458,6 +480,7 @@ function injectWindowsTitleBar() {
     }
 
     const titlebarStrings = {
+        appVersion: app.getVersion(),
         windowTitle: t('app.windowTitle'),
         about: t('titlebar.about'),
         aboutTooltip: t('titlebar.aboutTooltip'),
@@ -590,6 +613,9 @@ function createJitsiMeetWindow() {
                     later: t('updateToast.later'),
                     installNow: t('updateToast.installNow')
                 });
+
+                // Update the titlebar version indicator (Windows custom titlebar).
+                mainWindow.webContents.send('titlebar-update-available', info.version);
             }
         });
 
@@ -603,6 +629,8 @@ function createJitsiMeetWindow() {
             autoUpdater.checkForUpdates();
         }
     }
+
+
 
     mainWindow = new BrowserWindow(options);
 
