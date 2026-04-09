@@ -1,4 +1,4 @@
-const { TITLEBAR_CSS } = require('./styles');
+const { TITLEBAR_CSS, MAC_TITLEBAR_CSS } = require('./styles');
 
 /**
  * Returns a JS string to be injected into the renderer via executeJavaScript.
@@ -129,4 +129,80 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
 })();
 `.trim();
 
-module.exports = { getTitlebarJS };
+/**
+ * Returns a JS string for the macOS titlebar content (hiddenInset mode).
+ * Injects branding (icon, title, version) and the update-available pill
+ * into the space left by the hidden native title text.
+ *
+ * @param {string} iconBase64 - Base64-encoded app icon.
+ * @param {Object} strings - i18n strings (appVersion, windowTitle).
+ * @returns {string} JavaScript source to execute in the renderer.
+ */
+const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
+(function() {
+    var strings = ${JSON.stringify(strings)};
+
+    // Inject styles idempotently.
+    var sid = 'sonacove-mac-titlebar-styles';
+    if (!document.getElementById(sid)) {
+        var s = document.createElement('style');
+        s.id = sid;
+        s.textContent = ${JSON.stringify(MAC_TITLEBAR_CSS)};
+        document.head.appendChild(s);
+    }
+
+    // Guard against duplicate injection.
+    if (document.getElementById('sonacove-mac-titlebar')) return;
+
+    var bar = document.createElement('div');
+    bar.id = 'sonacove-mac-titlebar';
+    var iconHtml = '';
+    if ('${iconBase64}') {
+        iconHtml = '<div class="stb-icon" style="background-image: url(\\\\'data:image/png;base64,${iconBase64}\\\\')"></div>';
+    }
+    bar.innerHTML = iconHtml
+        + '<span class="stb-title"></span>'
+        + '<span class="stb-ver" id="stb-mac-ver"></span>';
+    bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
+    bar.querySelector('#stb-mac-ver').textContent = 'v' + strings.appVersion;
+    document.body.prepend(bar);
+
+    // Clean up previous IPC listeners (re-navigation).
+    if (window._stbMacCleanup) {
+        window._stbMacCleanup.forEach(function(fn) { fn(); });
+    }
+    window._stbMacCleanup = [];
+
+    if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
+        window._stbMacCleanup.push(
+            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
+                var ver = document.getElementById('stb-mac-ver');
+                if (ver && !ver._updateBound) {
+                    ver._updateBound = true;
+                    ver.textContent = '';
+                    var dot = document.createElement('span');
+                    dot.className = 'stb-update-dot';
+                    ver.appendChild(dot);
+                    ver.appendChild(document.createTextNode('v' + version + ' available'));
+                    ver.className = 'stb-ver stb-update';
+                    ver.title = 'Click to install update';
+                    ver.addEventListener('click', function() {
+                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
+                    });
+                }
+            })
+        );
+    }
+
+    // Keep title in sync.
+    var titleTarget = document.querySelector('title');
+    if (titleTarget) {
+        new MutationObserver(function() {
+            var el = document.querySelector('#sonacove-mac-titlebar .stb-title');
+            if (el) el.textContent = document.title;
+        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
+    }
+})();
+`.trim();
+
+module.exports = { getTitlebarJS, getMacTitlebarJS };

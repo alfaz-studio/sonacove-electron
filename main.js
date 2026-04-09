@@ -352,13 +352,16 @@ function createJitsiMeetWindow() {
         show: false,
         backgroundColor: '#1A1A1A',
 
-        // On Windows, remove the native frame entirely. A fully custom in-page
-        // title bar (with window controls) is injected via setupTitlebar().
-        // thickFrame keeps the native resize borders and window shadow.
-        ...(process.platform !== 'darwin' ? {
+        // Windows: frameless window with custom in-page title bar (setupTitlebar).
+        // macOS: hiddenInset keeps native traffic lights but removes the title
+        //        text, giving us space to inject branding + update pill.
+        ...(process.platform === 'darwin' ? {
+            titleBarStyle: 'hiddenInset',
+            trafficLightPosition: { x: 12, y: 8 }
+        } : {
             frame: false,
             thickFrame: true
-        } : {}),
+        }),
 
         webPreferences: {
             enableBlinkFeatures: 'WebAssemblyCSP',

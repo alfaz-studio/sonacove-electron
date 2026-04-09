@@ -3,19 +3,15 @@ const { app } = require('electron');
 const { t } = require('../i18n');
 
 const { getIconBase64 } = require('./icon');
-const { getTitlebarJS } = require('./renderer-script');
+const { getTitlebarJS, getMacTitlebarJS } = require('./renderer-script');
 
 /**
- * Injects the custom title bar into the currently loaded page.
+ * Shared titlebar strings used by both platforms.
  *
- * @param {import('electron').BrowserWindow} mainWindow
+ * @returns {Object}
  */
-function injectTitlebar(mainWindow) {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
-    }
-
-    const titlebarStrings = {
+function getTitlebarStrings() {
+    return {
         appVersion: app.getVersion(),
         windowTitle: t('app.windowTitle'),
         about: t('titlebar.about'),
@@ -25,8 +21,38 @@ function injectTitlebar(mainWindow) {
         help: t('titlebar.help'),
         helpTooltip: t('titlebar.helpTooltip')
     };
+}
 
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), titlebarStrings)).catch(() => {});
+/**
+ * Injects the custom title bar into the currently loaded page (Windows).
+ *
+ * @param {import('electron').BrowserWindow} mainWindow
+ */
+function injectTitlebar(mainWindow) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), getTitlebarStrings())).catch(() => {});
+}
+
+/**
+ * Injects the macOS titlebar content (branding + update pill) into the
+ * hiddenInset title bar area.
+ *
+ * @param {import('electron').BrowserWindow} mainWindow
+ */
+function injectMacTitlebar(mainWindow) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    const strings = {
+        appVersion: app.getVersion(),
+        windowTitle: t('app.windowTitle')
+    };
+
+    mainWindow.webContents.executeJavaScript(getMacTitlebarJS(getIconBase64(), strings)).catch(() => {});
 }
 
 /**
@@ -37,14 +63,10 @@ function injectTitlebar(mainWindow) {
  */
 function setupTitlebar(mainWindow) {
     if (process.platform === 'darwin') {
-        // macOS: keep native frame, just append version to the window title.
-        const patchVersion = app.getVersion().split('.').pop();
-
-        mainWindow.on('page-title-updated', (event, title) => {
-            event.preventDefault();
-            mainWindow.setTitle(title
-                ? `${title} — v${patchVersion}`
-                : `Sonacove Meets — v${patchVersion}`);
+        // macOS: hiddenInset keeps native traffic lights. We inject branding
+        // (icon, title, version) and the update pill into the empty title area.
+        mainWindow.webContents.on('dom-ready', () => {
+            injectMacTitlebar(mainWindow);
         });
 
         return;
