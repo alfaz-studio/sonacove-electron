@@ -6,12 +6,16 @@ const { getIconBase64 } = require('./icon');
 const { getTitlebarJS, getMacTitlebarJS } = require('./renderer-script');
 
 /**
- * Shared titlebar strings used by both platforms.
+ * Injects the Windows custom title bar into the currently loaded page.
  *
- * @returns {Object}
+ * @param {import('electron').BrowserWindow} mainWindow
  */
-function getTitlebarStrings() {
-    return {
+function injectTitlebar(mainWindow) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    const strings = {
         appVersion: app.getVersion(),
         windowTitle: t('app.windowTitle'),
         about: t('titlebar.about'),
@@ -21,19 +25,8 @@ function getTitlebarStrings() {
         help: t('titlebar.help'),
         helpTooltip: t('titlebar.helpTooltip')
     };
-}
 
-/**
- * Injects the custom title bar into the currently loaded page (Windows).
- *
- * @param {import('electron').BrowserWindow} mainWindow
- */
-function injectTitlebar(mainWindow) {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
-    }
-
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), getTitlebarStrings())).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), strings)).catch(() => {});
 }
 
 /**
@@ -57,7 +50,8 @@ function injectMacTitlebar(mainWindow) {
 
 /**
  * Sets up the custom in-page title bar for the given window.
- * Currently Windows-only (no-ops on macOS). macOS support can be added here later.
+ * Windows: full custom titlebar with window controls, menu, and branding.
+ * macOS: hiddenInset with branding (icon, title, version) and update pill.
  *
  * @param {import('electron').BrowserWindow} mainWindow
  */

@@ -443,7 +443,7 @@ function createJitsiMeetWindow() {
                     installNow: t('updateToast.installNow')
                 });
 
-                // Update the titlebar version indicator (Windows custom titlebar).
+                // Update the titlebar version indicator (both platforms).
                 notifyUpdateAvailable(mainWindow, info.version);
             }
         });
@@ -458,7 +458,6 @@ function createJitsiMeetWindow() {
             autoUpdater.checkForUpdates();
         }
     }
-
 
     mainWindow = new BrowserWindow(options);
 
@@ -580,7 +579,6 @@ function createJitsiMeetWindow() {
             mainWindow.webContents.send('pip-window-restored');
         }
     });
-
 
     // Enable Screen Sharing
     ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {

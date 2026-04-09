@@ -1,6 +1,54 @@
 const { TITLEBAR_CSS, MAC_TITLEBAR_CSS } = require('./styles');
 
 /**
+ * Returns inline JS that sets up the update-available IPC listener for
+ * a given version element ID. Shared between Windows and macOS titlebars.
+ *
+ * @param {string} verId - DOM id of the version element.
+ * @returns {string}
+ */
+function updateAvailableListenerJS(verId) {
+    return `
+            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
+                var ver = document.getElementById('${verId}');
+                if (ver && !ver._updateBound) {
+                    ver._updateBound = true;
+                    ver.textContent = '';
+                    var dot = document.createElement('span');
+                    dot.className = 'stb-update-dot';
+                    ver.appendChild(dot);
+                    ver.appendChild(document.createTextNode('v' + version + ' available'));
+                    ver.className = 'stb-ver stb-update';
+                    ver.title = 'Click to install update';
+                    ver.addEventListener('click', function() {
+                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
+                    });
+                }
+            })`;
+}
+
+/**
+ * Returns inline JS that observes <title> changes and syncs them to a
+ * titlebar element. Adds the observer's disconnect to the cleanup array.
+ *
+ * @param {string} selector - CSS selector for the title element to update.
+ * @param {string} cleanupVar - Name of the window cleanup array variable.
+ * @returns {string}
+ */
+function titleObserverJS(selector, cleanupVar) {
+    return `
+    var titleTarget = document.querySelector('title');
+    if (titleTarget) {
+        var _obs = new MutationObserver(function() {
+            var el = document.querySelector('${selector}');
+            if (el) el.textContent = document.title;
+        });
+        _obs.observe(titleTarget, { childList: true, characterData: true, subtree: true });
+        ${cleanupVar}.push(function() { _obs.disconnect(); });
+    }`;
+}
+
+/**
  * Returns a JS string to be injected into the renderer via executeJavaScript.
  * Builds the custom in-page title bar DOM, event listeners, and IPC wiring.
  *
@@ -75,8 +123,8 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     // Swap maximize/restore icon when window state changes.
     var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="#1A1A1A"/></svg>';
 
-    // Clean up any IPC listeners from a previous titlebar injection (e.g. navigation)
-    // to prevent accumulation. Store cleanup refs on window.
+    // Clean up any IPC listeners and observers from a previous injection
+    // (e.g. navigation) to prevent accumulation.
     if (window._stbCleanup) {
         window._stbCleanup.forEach(function(fn) { fn(); });
     }
@@ -97,35 +145,10 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
                     btn.innerHTML = maxSvg;
                     btn.title = 'Restore';
                 }
-            }),
-            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
-                var ver = document.getElementById('stb-ver');
-                if (ver && !ver._updateBound) {
-                    ver._updateBound = true;
-                    // Use DOM nodes instead of innerHTML to prevent XSS from version string.
-                    ver.textContent = '';
-                    var dot = document.createElement('span');
-                    dot.className = 'stb-update-dot';
-                    ver.appendChild(dot);
-                    ver.appendChild(document.createTextNode('v' + version + ' available'));
-                    ver.className = 'stb-ver stb-update';
-                    ver.title = 'Click to install update';
-                    ver.addEventListener('click', function() {
-                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
-                    });
-                }
-            })
+            }),${updateAvailableListenerJS('stb-ver')}
         );
     }
-
-    // Keep the displayed title in sync with document.title changes.
-    var titleTarget = document.querySelector('title');
-    if (titleTarget) {
-        new MutationObserver(function() {
-            var el = document.querySelector('#sonacove-titlebar .stb-title');
-            if (el) el.textContent = document.title;
-        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
-    }
+${titleObserverJS('#sonacove-titlebar .stb-title', 'window._stbCleanup')}
 })();
 `.trim();
 
@@ -158,7 +181,7 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
     bar.id = 'sonacove-mac-titlebar';
     var iconHtml = '';
     if ('${iconBase64}') {
-        iconHtml = '<div class="stb-icon" style="background-image: url(\\\\'data:image/png;base64,${iconBase64}\\\\')"></div>';
+        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
     }
     bar.innerHTML = iconHtml
         + '<span class="stb-title"></span>'
@@ -167,41 +190,17 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
     bar.querySelector('#stb-mac-ver').textContent = 'v' + strings.appVersion;
     document.body.prepend(bar);
 
-    // Clean up previous IPC listeners (re-navigation).
+    // Clean up previous IPC listeners and observers (re-navigation).
     if (window._stbMacCleanup) {
         window._stbMacCleanup.forEach(function(fn) { fn(); });
     }
     window._stbMacCleanup = [];
 
     if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc && window.sonacoveElectronAPI.ipc.on) {
-        window._stbMacCleanup.push(
-            window.sonacoveElectronAPI.ipc.on('titlebar-update-available', function(version) {
-                var ver = document.getElementById('stb-mac-ver');
-                if (ver && !ver._updateBound) {
-                    ver._updateBound = true;
-                    ver.textContent = '';
-                    var dot = document.createElement('span');
-                    dot.className = 'stb-update-dot';
-                    ver.appendChild(dot);
-                    ver.appendChild(document.createTextNode('v' + version + ' available'));
-                    ver.className = 'stb-ver stb-update';
-                    ver.title = 'Click to install update';
-                    ver.addEventListener('click', function() {
-                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
-                    });
-                }
-            })
+        window._stbMacCleanup.push(${updateAvailableListenerJS('stb-mac-ver')}
         );
     }
-
-    // Keep title in sync.
-    var titleTarget = document.querySelector('title');
-    if (titleTarget) {
-        new MutationObserver(function() {
-            var el = document.querySelector('#sonacove-mac-titlebar .stb-title');
-            if (el) el.textContent = document.title;
-        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
-    }
+${titleObserverJS('#sonacove-mac-titlebar .stb-title', 'window._stbMacCleanup')}
 })();
 `.trim();
 
