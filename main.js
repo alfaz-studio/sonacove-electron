@@ -26,6 +26,7 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupPictureInPicture } = require('./app/features/pip/main');
+const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
 const { initI18n, t } = require('./app/features/i18n');
 const {
@@ -328,7 +329,9 @@ const TITLEBAR_CSS = ''
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
     + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
     + 'background-repeat:no-repeat;background-position:center;}'
-    + '#sonacove-titlebar .stb-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#sonacove-titlebar .stb-version{color:#666680;font-size:11px;margin-left:8px;}'
+    + '#sonacove-titlebar .stb-spacer{flex:1;}'
     + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;margin-right:140px;}'
     + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
     + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
@@ -337,7 +340,7 @@ const TITLEBAR_CSS = ''
     + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
     + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
 
-const getTitlebarJS = (iconBase64 = '', strings = {}) => `
+const getTitlebarJS = (iconBase64 = '', strings = {}, appVersion = '') => `
 (function() {
     var strings = ${JSON.stringify(strings)};
 
@@ -362,6 +365,8 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     bar.innerHTML =
         iconHtml +
         '<div class="stb-title">' + (document.title || strings.windowTitle) + '</div>' +
+        ('${appVersion}' ? '<span class="stb-version">v' + '${appVersion}'.split('.').pop() + '</span>' : '') +
+        '<div class="stb-spacer"></div>' +
         '<div class="stb-menu">' +
             '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
             '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
@@ -384,7 +389,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     if (titleTarget) {
         new MutationObserver(function() {
             var el = document.querySelector('#sonacove-titlebar .stb-title');
-            if (el) el.textContent = document.title;
+            if (el) el.textContent = document.title || 'Sonacove Meets';
         }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
     }
 })();
@@ -421,7 +426,7 @@ function injectWindowsTitleBar() {
         helpTooltip: t('titlebar.helpTooltip')
     };
 
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), titlebarStrings)).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), titlebarStrings, app.getVersion())).catch(() => {});
 }
 
 /**
@@ -612,20 +617,72 @@ function createJitsiMeetWindow() {
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
 
-    // Participant PiP — open overlay when the main window is minimized
+    // Participant PiP — open overlay when the main window loses focus
+    // (minimize, alt-tab, click another app, etc.)
+    let pipMinimizedSent = false;  // idempotency guard — prevents repeated pip-window-minimized
+    let blurTimer = null;          // timer ref so focus/restore can cancel pending blur
+
     mainWindow.on('minimize', () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow && !mainWindow.isDestroyed() && !pipMinimizedSent) {
+            pipMinimizedSent = true;
             mainWindow.webContents.send('pip-window-minimized');
         }
     });
 
+    mainWindow.on('blur', () => {
+        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || pipMinimizedSent) {
+            return;
+        }
+
+        // Short delay to check if focus moved to one of our own windows
+        // (e.g. the PIP panel or an overlay) — don't trigger PIP in that case.
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+        }
+        blurTimer = setTimeout(() => {
+            blurTimer = null;
+            if (!mainWindow || mainWindow.isDestroyed() || pipMinimizedSent) {
+                return;
+            }
+            const focused = BrowserWindow.getFocusedWindow();
+
+            if (!focused) {
+                // Focus left the app entirely — trigger PIP.
+                pipMinimizedSent = true;
+                mainWindow.webContents.send('pip-window-minimized');
+            }
+        }, 100);
+    });
+
+    // Guard: restore fires before focus on taskbar click — skip the
+    // duplicate send in the focus handler that immediately follows.
+    let restoredSent = false;
+
     mainWindow.on('restore', () => {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+        pipMinimizedSent = false;
+        restoredSent = true;
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('pip-window-restored');
         }
     });
 
     mainWindow.on('focus', () => {
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+        pipMinimizedSent = false;
+
+        // If restore already sent the event (taskbar click), skip.
+        if (restoredSent) {
+            restoredSent = false;
+
+            return;
+        }
         if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isMinimized()) {
             mainWindow.webContents.send('pip-window-restored');
         }
@@ -842,6 +899,18 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
+    // On macOS, append the version patch number to the native title bar.
+    if (process.platform === 'darwin') {
+        const patchVersion = app.getVersion().split('.').pop();
+
+        mainWindow.on('page-title-updated', (event, title) => {
+            event.preventDefault();
+            mainWindow.setTitle(title
+                ? `${title} — v${patchVersion}`
+                : `Sonacove Meets — v${patchVersion}`);
+        });
+    }
+
     // Inject the custom in-page title bar on Windows after each page load.
     if (process.platform !== 'darwin') {
         mainWindow.webContents.on('did-finish-load', () => {
@@ -936,8 +1005,17 @@ function createJitsiMeetWindow() {
     ipcMain.on('retry-load', onRetryLoad);
 
     mainWindow.on('closed', () => {
+        // Cancel any pending blur timer.
+        if (blurTimer) {
+            clearTimeout(blurTimer);
+            blurTimer = null;
+        }
+
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
+
+        // Destroy the participant PiP panel (may still be alive in pill mode).
+        closeParticipantWindow(false);
 
         // Close the annotation overlay if it is open
         closeOverlay();
@@ -1078,10 +1156,6 @@ app.on('ready', () => {
     createJitsiMeetWindow();
 });
 
-if (isDev) {
-    app.on('ready', createWebRTCInternalsWindow);
-}
-
 app.on('second-instance', (event, commandLine) => {
     /**
      * If someone creates second instance of the application, set focus on
@@ -1099,6 +1173,10 @@ app.on('second-instance', (event, commandLine) => {
         handleProtocolCall(commandLine.pop());
     }
 });
+
+if (isDev) {
+    app.on('ready', createWebRTCInternalsWindow);
+}
 
 app.on('window-all-closed', () => {
     app.quit();
