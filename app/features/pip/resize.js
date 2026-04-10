@@ -115,6 +115,9 @@ function startEdgeResize(edge) {
         clearInterval(_pollInterval);
     }
 
+    let lastCursorX = -1;
+    let lastCursorY = -1;
+
     _pollInterval = setInterval(() => {
         if (!win || win.isDestroyed()) {
             stopEdgeResize();
@@ -123,6 +126,14 @@ function startEdgeResize(edge) {
         }
 
         const pos = screen.getCursorScreenPoint();
+
+        // Skip redundant computation when the cursor hasn't moved.
+        if (pos.x === lastCursorX && pos.y === lastCursorY) {
+            return;
+        }
+        lastCursorX = pos.x;
+        lastCursorY = pos.y;
+
         const { count, orientation } = _getState();
 
         let proposedWidth = _startWindowSize;

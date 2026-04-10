@@ -51,6 +51,9 @@ function setupDragHandlers(getWindow) {
             clearInterval(_pollInterval);
         }
 
+        let lastCursorX = -1;
+        let lastCursorY = -1;
+
         _pollInterval = setInterval(() => {
             if (!win || win.isDestroyed()) {
                 clearInterval(_pollInterval);
@@ -60,6 +63,13 @@ function setupDragHandlers(getWindow) {
             }
 
             const pos = screen.getCursorScreenPoint();
+
+            // Skip redundant setBounds when the cursor hasn't moved.
+            if (pos.x === lastCursorX && pos.y === lastCursorY) {
+                return;
+            }
+            lastCursorX = pos.x;
+            lastCursorY = pos.y;
 
             win.setBounds({
                 x: Math.round(pos.x - _offsetX),
