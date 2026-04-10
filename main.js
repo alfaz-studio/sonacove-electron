@@ -1041,9 +1041,13 @@ function createJitsiMeetWindow() {
 const setupChildWindowIcon = () => {
     const iconPath = getIconPath();
 
-    // Listen for all new BrowserWindow creations
+    // Set the app icon on child windows opened via window.open().
+    // Skip the main window — it has its own windowOpenHandler with
+    // URL-based allow/deny logic that this would override.
     app.on('web-contents-created', (event, contents) => {
-        // This handles windows opened via window.open()
+        if (mainWindow && contents === mainWindow.webContents) {
+            return;
+        }
         contents.setWindowOpenHandler(({ url }) => {
             return {
                 action: 'allow',
