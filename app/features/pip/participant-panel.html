@@ -86,6 +86,7 @@
       var DRAG_THRESHOLD = 5;
       var AUDIO_LEVEL_DOTS = 5;
       var AUDIO_LEVEL_SENSITIVITY = 1.2;
+      var i18n = { participant: 'participant', participants: 'participants', of: 'of' };
 
       // ── DOM refs ───────────────────────────────────────────────────────────
 
@@ -378,9 +379,9 @@
         var shown = Math.min(visibleTileCount, total);
 
         if (shown < total) {
-          participantCountEl.textContent = shown + ' of ' + total;
+          participantCountEl.textContent = shown + ' ' + i18n.of + ' ' + total;
         } else {
-          participantCountEl.textContent = total + (total === 1 ? ' participant' : ' participants');
+          participantCountEl.textContent = total + ' ' + (total === 1 ? i18n.participant : i18n.participants);
         }
 
         if (total > 0) {
@@ -403,6 +404,11 @@
       // ── Panel API event wiring ─────────────────────────────────────────────
 
       var initialPinSent = false;
+
+      window.panelAPI.onStrings(function (strings) {
+        i18n = strings;
+        updateParticipantCount();
+      });
 
       window.panelAPI.onParticipantsUpdate(function (data) {
         participants = data.participants || [];

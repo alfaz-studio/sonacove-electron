@@ -8,6 +8,8 @@
 
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
+const { t } = require('../i18n');
+
 const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindow, resolveFile } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
@@ -245,6 +247,11 @@ function openParticipantWindow() {
 
     participantWindow.webContents.on('did-finish-load', () => {
         if (participantWindow && !participantWindow.isDestroyed()) {
+            participantWindow.webContents.send('pp-strings', {
+                participant: t('pip.participant'),
+                participants: t('pip.participants'),
+                of: t('pip.of'),
+            });
             participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
 
             if (lastParticipantsData) {

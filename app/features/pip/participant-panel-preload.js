@@ -93,6 +93,16 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Register a callback that fires when i18n strings are received.
+     *
+     * @param {function(Object): void} cb - Called with { participant, participants, ofTotal }.
+     * @returns {void}
+     */
+    onStrings(cb) {
+        ipcRenderer.on('pp-strings', (_event, data) => cb(data));
+    },
+
+    /**
      * Register a callback that fires when the main process wants the panel
      * to switch to pill (minimised) mode.
      *

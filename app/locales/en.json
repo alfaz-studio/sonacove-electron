@@ -87,6 +87,12 @@
         "connecting": "Connecting\u2026"
     },
 
+    "pip": {
+        "participant": "participant",
+        "participants": "participants",
+        "of": "of"
+    },
+
     "staging": {
         "banner": "STAGING BUILD \u2014 {{version}}"
     }
