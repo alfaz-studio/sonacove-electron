@@ -125,6 +125,11 @@
     if (window.sonacoveElectronAPI && window.sonacoveElectronAPI.ipc) {
       window.sonacoveElectronAPI.ipc.send('retry-load');
     }
+    // Re-enable the button after 10s in case the retry silently fails.
+    setTimeout(function() {
+      retryBtn.textContent = i18n.retryButton || 'Try Again';
+      retryBtn.classList.remove('loading');
+    }, 10000);
   }
 </script>
 </body>
