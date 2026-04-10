@@ -11,23 +11,20 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindow, resolveFile } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
-const { setupDragHandlers, isDragging } = require('./drag');
-const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
-const { setupResizeHandlers, isResizing, getVisibleTileCount, setVisibleTileCount } = require('./resize');
+const { setupDragHandlers, isDragging, cleanup: cleanupDrag } = require('./drag');
+const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill, cleanup: cleanupPill } = require('./pill');
+const { setupResizeHandlers, isResizing, getVisibleTileCount, setVisibleTileCount, cleanup: cleanupResize } = require('./resize');
 
 let participantWindow = null;
 let currentOrientation = 'horizontal';
 let currentParticipantCount = 1;
 let lastParticipantsData = null;
 
-// ── Wire up drag and pill subsystems ─────────────────────────────────────────
+// ── Subsystem accessors ──────────────────────────────────────────────────────
 
 const getWindow = () => participantWindow;
 const getState = () => ({ count: currentParticipantCount, orientation: currentOrientation });
-
-setupDragHandlers(getWindow);
-setupPillHandlers(getWindow, getState);
-setupResizeHandlers(getWindow, getState);
+let _subsystemsRegistered = false;
 
 // ── Orientation ──────────────────────────────────────────────────────────────
 
@@ -159,6 +156,14 @@ function openParticipantWindow() {
         return;
     }
 
+    // Register subsystem IPC handlers (first call or after cleanup on close).
+    if (!_subsystemsRegistered) {
+        setupDragHandlers(getWindow);
+        setupPillHandlers(getWindow, getState);
+        setupResizeHandlers(getWindow, getState);
+        _subsystemsRegistered = true;
+    }
+
     currentParticipantCount = 1;
     setVisibleTileCount(1);
 
@@ -229,6 +234,13 @@ function openParticipantWindow() {
         participantWindow = null;
         setParticipantWindow(null);
         resetPill();
+
+        // Clean up IPC listeners and polling intervals from subsystems.
+        // They will be re-registered on the next openParticipantWindow() call.
+        cleanupDrag();
+        cleanupPill();
+        cleanupResize();
+        _subsystemsRegistered = false;
     });
 
     participantWindow.webContents.on('did-finish-load', () => {
