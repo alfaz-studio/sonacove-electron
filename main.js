@@ -4,7 +4,6 @@ const {
     initPopupsConfigurationMain,
     getPopupTarget,
     setupPictureInPictureMain,
-    setupRemoteControlMain,
     setupPowerMonitorMain
 } = require('@jitsi/electron-sdk');
 const {
@@ -65,10 +64,6 @@ const isStaging = _appNameLower.includes('staging');
 if (!isStaging) {
     registerProtocol();
 }
-
-// Remote control is disabled. The feature requires renderer-side integration
-// that was removed with the local renderer app.
-const ENABLE_REMOTE_CONTROL = false;
 
 // Fix screen-sharing thumbnails being missing sometimes.
 // https://github.com/electron/electron/issues/44504
@@ -895,10 +890,6 @@ function createJitsiMeetWindow() {
     initPopupsConfigurationMain(mainWindow, windowOpenHandler);
     setupPictureInPictureMain(mainWindow);
     setupPowerMonitorMain(mainWindow);
-    if (ENABLE_REMOTE_CONTROL) {
-        setupRemoteControlMain(mainWindow);
-    }
-
     // On macOS, append the version patch number to the native title bar.
     if (process.platform === 'darwin') {
         const patchVersion = app.getVersion().split('.').pop();
