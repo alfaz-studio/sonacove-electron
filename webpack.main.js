@@ -25,6 +25,7 @@ module.exports = {
                 { from: 'app/error.html', to: 'error.html' },
                 { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' },
                 { from: 'app/features/pip/participant-panel.css', to: 'participant-panel.css' },
+                { from: 'app/features/pip/participant-panel.js', to: 'participant-panel.js' },
                 { from: 'app/locales', to: 'locales' }
             ]
         })

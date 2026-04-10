@@ -1,0 +1,543 @@
+(function () {
+  // ── Icons ──────────────────────────────────────────────────────────────
+
+  var GRIP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="19" r="1"/></svg>';
+  var TOGGLE_COLUMNS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>';
+  var TOGGLE_ROWS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></svg>';
+  var USER_FALLBACK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  var MIC_ON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
+  var MIC_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
+  var VIDEO_ON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>';
+  var VIDEO_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.66 5H14a2 2 0 0 1 2 2v2.34l1 1L22 7v10"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
+  var HAND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>';
+  var PIN_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+
+  // ── State ──────────────────────────────────────────────────────────────
+
+  var currentOrientation = 'horizontal';
+  var participants = [];
+  var visibleTileCount = 4;
+  var resizeEdge = null; // which edge is being dragged — determines slice direction
+  // { participantId: true } — local pinned by default.
+  // The jitsi-meet renderer uses 'local' as the local participant's ID
+  // (see usePiPParticipants.ts), so this key survives the cleanup loop.
+  // ⚠️ If jitsi-meet changes the local ID from 'local', this default breaks.
+  var pinnedIds = { local: true };
+  var isPillMode = false;
+  var DRAG_THRESHOLD = 5;
+  var AUDIO_LEVEL_DOTS = 5;
+  var AUDIO_LEVEL_SENSITIVITY = 1.2;
+  var i18n = { participant: 'participant', participants: 'participants', of: 'of' };
+
+  // ── DOM refs ───────────────────────────────────────────────────────────
+
+  var panel = document.getElementById('panel');
+  var tilesContainer = document.getElementById('tilesContainer');
+  var toggleIcon = document.getElementById('toggleIcon');
+  var gripIcon = document.getElementById('gripIcon');
+  var participantCountEl = document.getElementById('participantCount');
+  var pillOverlay = document.getElementById('pillOverlay');
+  var pillBtn = document.getElementById('pillBtn');
+  var pillBadge = document.getElementById('pillBadge');
+  var chatBadgeCount = document.getElementById('chatBadgeCount');
+
+  // ── Tile rendering ─────────────────────────────────────────────────────
+
+  function getVisibleParticipants() {
+    if (visibleTileCount >= participants.length) {
+      return participants.slice();
+    }
+
+    // Pinned participants are always shown. Fill remaining slots
+    // from unpinned, respecting the resize-edge direction.
+    var pinned = [];
+    var unpinned = [];
+    for (var i = 0; i < participants.length; i++) {
+      if (pinnedIds[participants[i].id]) {
+        pinned.push(participants[i]);
+      } else {
+        unpinned.push(participants[i]);
+      }
+    }
+
+    var slotsLeft = Math.max(0, visibleTileCount - pinned.length);
+    var hideFromStart = resizeEdge === 'left' || resizeEdge === 'top';
+    var fillers = hideFromStart
+      ? unpinned.slice(unpinned.length - slotsLeft)
+      : unpinned.slice(0, slotsLeft);
+
+    // Merge back in original order.
+    var visibleSet = {};
+    for (var j = 0; j < pinned.length; j++) visibleSet[pinned[j].id] = true;
+    for (var k = 0; k < fillers.length; k++) visibleSet[fillers[k].id] = true;
+
+    var result = [];
+    for (var m = 0; m < participants.length; m++) {
+      if (visibleSet[participants[m].id]) result.push(participants[m]);
+    }
+    return result;
+  }
+
+  function renderTiles() {
+    var visible = getVisibleParticipants();
+
+    var existingTiles = tilesContainer.querySelectorAll('.tile');
+    var existingMap = {};
+    for (var i = 0; i < existingTiles.length; i++) {
+      existingMap[existingTiles[i].getAttribute('data-participant-id')] = existingTiles[i];
+    }
+
+    var newIds = {};
+    for (var j = 0; j < visible.length; j++) {
+      newIds[visible[j].id] = true;
+    }
+
+    for (var id in existingMap) {
+      if (!newIds[id]) {
+        existingMap[id].remove();
+      }
+    }
+
+    for (var k = 0; k < visible.length; k++) {
+      var p = visible[k];
+      var tile = existingMap[p.id];
+
+      if (!tile) {
+        tile = createTile(p);
+        tilesContainer.appendChild(tile);
+      } else {
+        updateTile(tile, p);
+      }
+    }
+  }
+
+  function createTile(p) {
+    var tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.setAttribute('data-participant-id', p.id);
+
+    var videoImg = document.createElement('img');
+    videoImg.className = 'tile-video';
+    videoImg.draggable = false;
+    videoImg.alt = '';
+    tile.appendChild(videoImg);
+
+    var avatarDiv = document.createElement('div');
+    avatarDiv.className = 'tile-avatar';
+    tile.appendChild(avatarDiv);
+
+    // Audio level dots.
+    var audioIndicator = document.createElement('div');
+    audioIndicator.className = 'tile-audio-indicator';
+    for (var d = 0; d < AUDIO_LEVEL_DOTS; d++) {
+      var dot = document.createElement('span');
+      dot.className = 'tile-audio-dot';
+      audioIndicator.appendChild(dot);
+    }
+    tile.appendChild(audioIndicator);
+
+    // Pin button — top-left.
+    var pinBtn = document.createElement('button');
+    pinBtn.className = 'tile-pin-btn' + (pinnedIds[p.id] ? ' pinned' : '');
+    pinBtn.title = pinnedIds[p.id] ? 'Unpin' : 'Pin';
+    pinBtn.setAttribute('data-id', p.id);
+    pinBtn.innerHTML = PIN_ICON;
+    pinBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var pid = this.getAttribute('data-id');
+      if (pinnedIds[pid]) {
+        delete pinnedIds[pid];
+      } else {
+        pinnedIds[pid] = true;
+      }
+      window.panelAPI.updatePinState(pinnedIds);
+      renderTiles();
+    });
+    tile.appendChild(pinBtn);
+
+    var nameBar = document.createElement('div');
+    nameBar.className = 'tile-name-bar';
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'tile-name';
+    nameBar.appendChild(nameSpan);
+    var statusIcons = document.createElement('div');
+    statusIcons.className = 'tile-status-icons';
+    nameBar.appendChild(statusIcons);
+    tile.appendChild(nameBar);
+
+    updateTile(tile, p);
+    return tile;
+  }
+
+  function updateTile(tile, p) {
+    var videoImg = tile.querySelector('.tile-video');
+    var avatarDiv = tile.querySelector('.tile-avatar');
+    var nameSpan = tile.querySelector('.tile-name');
+    var statusIcons = tile.querySelector('.tile-status-icons');
+
+    nameSpan.textContent = p.name || '';
+
+    if (!p.hasVideo) {
+      videoImg.style.display = 'none';
+      avatarDiv.style.display = 'flex';
+    }
+
+    renderAvatar(avatarDiv, p);
+
+    // Status icons — local gets clickable buttons, remote gets static icons.
+    statusIcons.innerHTML = '';
+    if (p.id === 'local') {
+      var micBtn = document.createElement('button');
+      micBtn.className = 'tile-status-btn';
+      micBtn.title = p.hasAudio ? 'Mute microphone' : 'Unmute microphone';
+      micBtn.innerHTML = p.hasAudio ? MIC_ON : MIC_OFF;
+      micBtn.addEventListener('click', function () {
+        window.panelAPI.toggleAudio();
+      });
+      statusIcons.appendChild(micBtn);
+
+      var camBtn = document.createElement('button');
+      camBtn.className = 'tile-status-btn';
+      camBtn.title = p.hasVideo ? 'Turn off camera' : 'Turn on camera';
+      camBtn.innerHTML = p.hasVideo ? VIDEO_ON : VIDEO_OFF;
+      camBtn.addEventListener('click', function () {
+        window.panelAPI.toggleVideo();
+      });
+      statusIcons.appendChild(camBtn);
+    } else {
+      statusIcons.insertAdjacentHTML('beforeend', p.hasAudio ? MIC_ON : MIC_OFF);
+      statusIcons.insertAdjacentHTML('beforeend', p.hasVideo ? VIDEO_ON : VIDEO_OFF);
+    }
+
+    // Speaking indicator.
+    if (p.dominantSpeaker) {
+      tile.classList.add('speaking');
+    } else {
+      tile.classList.remove('speaking');
+    }
+
+    // Raised hand indicator.
+    var existingBadge = tile.querySelector('.tile-hand-badge');
+    if (p.raisedHand) {
+      tile.classList.add('raised-hand');
+      if (!existingBadge) {
+        var badge = document.createElement('div');
+        badge.className = 'tile-hand-badge';
+        badge.innerHTML = HAND_ICON;
+        tile.appendChild(badge);
+      }
+    } else {
+      tile.classList.remove('raised-hand');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+    }
+
+    // Audio level dots — same logic as AudioLevelIndicator.tsx.
+    var audioDots = tile.querySelectorAll('.tile-audio-dot');
+    if (audioDots.length) {
+      var rawLevel = p.audioLevel || 0;
+      var capped = Math.min(1, rawLevel * AUDIO_LEVEL_SENSITIVITY);
+      var stretched = capped * AUDIO_LEVEL_DOTS;
+      for (var di = 0; di < audioDots.length; di++) {
+        var dist = Math.abs(di - 2);
+        audioDots[di].style.opacity = Math.min(1, Math.max(0, stretched - dist));
+      }
+    }
+
+    // Pin indicator.
+    var pinBtn = tile.querySelector('.tile-pin-btn');
+    if (pinBtn) {
+      if (pinnedIds[p.id]) {
+        pinBtn.classList.add('pinned');
+        pinBtn.title = 'Unpin';
+      } else {
+        pinBtn.classList.remove('pinned');
+        pinBtn.title = 'Pin';
+      }
+    }
+  }
+
+  function renderAvatar(container, p) {
+    container.innerHTML = '';
+
+    if (p.avatarURL) {
+      var img = document.createElement('img');
+      img.className = 'tile-avatar-img';
+      img.src = p.avatarURL;
+      img.alt = p.name || '';
+      img.onerror = function () {
+        container.innerHTML = '';
+        appendInitialsOrFallback(container, p);
+      };
+      container.appendChild(img);
+    } else {
+      appendInitialsOrFallback(container, p);
+    }
+  }
+
+  function appendInitialsOrFallback(container, p) {
+    if (p.initials) {
+      var initialsDiv = document.createElement('div');
+      initialsDiv.className = 'tile-avatar-initials';
+      initialsDiv.textContent = p.initials;
+      initialsDiv.style.backgroundColor = p.avatarColor || '#555';
+      container.appendChild(initialsDiv);
+    } else {
+      var fallback = document.createElement('div');
+      fallback.className = 'tile-avatar-fallback';
+      fallback.innerHTML = USER_FALLBACK;
+      container.appendChild(fallback);
+    }
+  }
+
+  // ── UI updaters ────────────────────────────────────────────────────────
+
+  function applyOrientation() {
+    if (currentOrientation === 'vertical') {
+      tilesContainer.classList.add('vertical');
+      panel.classList.remove('resize-horizontal');
+      panel.classList.add('resize-vertical');
+    } else {
+      tilesContainer.classList.remove('vertical');
+      panel.classList.remove('resize-vertical');
+      panel.classList.add('resize-horizontal');
+    }
+
+    gripIcon.innerHTML = GRIP_ICON;
+
+    if (currentOrientation === 'horizontal') {
+      toggleIcon.innerHTML = TOGGLE_COLUMNS;
+      document.getElementById('toggleBtn').title = 'Switch to vertical layout';
+    } else {
+      toggleIcon.innerHTML = TOGGLE_ROWS;
+      document.getElementById('toggleBtn').title = 'Switch to horizontal layout';
+    }
+  }
+
+  function updateParticipantCount() {
+    var total = participants.length;
+    var shown = Math.min(visibleTileCount, total);
+
+    if (shown < total) {
+      participantCountEl.textContent = shown + ' ' + i18n.of + ' ' + total;
+    } else {
+      participantCountEl.textContent = total + ' ' + (total === 1 ? i18n.participant : i18n.participants);
+    }
+
+    if (total > 0) {
+      pillBadge.textContent = total;
+      pillBadge.classList.remove('hidden');
+    } else {
+      pillBadge.classList.add('hidden');
+    }
+  }
+
+  function updateChatBadge(count) {
+    if (count > 0) {
+      chatBadgeCount.textContent = count > 99 ? '99+' : count;
+      chatBadgeCount.classList.remove('hidden');
+    } else {
+      chatBadgeCount.classList.add('hidden');
+    }
+  }
+
+  // ── Panel API event wiring ─────────────────────────────────────────────
+
+  var initialPinSent = false;
+
+  window.panelAPI.onStrings(function (strings) {
+    i18n = strings;
+    updateParticipantCount();
+  });
+
+  window.panelAPI.onParticipantsUpdate(function (data) {
+    participants = data.participants || [];
+
+    // Send initial pin state (local pinned by default) on first update.
+    // Must run before cleanup to avoid wiping the default 'local' pin
+    // if participants haven't loaded yet.
+    if (!initialPinSent && participants.length > 0) {
+      initialPinSent = true;
+      window.panelAPI.updatePinState(pinnedIds);
+    }
+
+    // Clean up pins for participants who left.
+    var currentIds = {};
+    for (var i = 0; i < participants.length; i++) currentIds[participants[i].id] = true;
+    for (var pid in pinnedIds) {
+      if (!currentIds[pid]) delete pinnedIds[pid];
+    }
+
+    renderTiles();
+    updateParticipantCount();
+    updateChatBadge(data.unreadChatCount || 0);
+  });
+
+  window.panelAPI.onFrame(function (frameData) {
+    var tile = tilesContainer.querySelector('.tile[data-participant-id="' + frameData.id + '"]');
+    if (!tile) return;
+
+    var videoImg = tile.querySelector('.tile-video');
+    var avatarDiv = tile.querySelector('.tile-avatar');
+
+    videoImg.src = frameData.data;
+    videoImg.style.display = 'block';
+    avatarDiv.style.display = 'none';
+  });
+
+  window.panelAPI.onOrientationChanged(function (orientation) {
+    currentOrientation = orientation;
+    applyOrientation();
+  });
+
+  window.panelAPI.onVisibleCountChanged(function (data) {
+    visibleTileCount = data.count;
+    resizeEdge = data.edge;
+    renderTiles();
+    updateParticipantCount();
+  });
+
+  window.panelAPI.onEnterPillMode(function () {
+    isPillMode = true;
+    panel.classList.add('hiding');
+    setTimeout(function () {
+      panel.classList.add('hidden');
+      panel.classList.remove('hiding');
+      pillOverlay.classList.add('active');
+      requestAnimationFrame(function () {
+        pillBtn.classList.add('visible');
+      });
+    }, 200);
+  });
+
+  window.panelAPI.onEnterPanelMode(function () {
+    isPillMode = false;
+    pillBtn.classList.remove('visible');
+    setTimeout(function () {
+      pillOverlay.classList.remove('active');
+      panel.classList.remove('hidden');
+      panel.classList.add('hiding');
+      requestAnimationFrame(function () {
+        panel.classList.remove('hiding');
+      });
+    }, 200);
+  });
+
+  // ── Panel drag ─────────────────────────────────────────────────────────
+
+  var panelDragPending = false;
+  var panelDragging = false;
+  var panelStartX = 0;
+  var panelStartY = 0;
+
+  document.getElementById('dragHandle').addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    panelDragPending = true;
+    panelDragging = false;
+    panelStartX = e.screenX;
+    panelStartY = e.screenY;
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', function (e) {
+    if (!panelDragPending || panelDragging) return;
+    var dx = Math.abs(e.screenX - panelStartX);
+    var dy = Math.abs(e.screenY - panelStartY);
+    if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+      panelDragging = true;
+      window.panelAPI.startWindowDrag();
+    }
+  });
+
+  window.addEventListener('mouseup', function () {
+    if (panelDragging) {
+      window.panelAPI.stopWindowDrag();
+    }
+    panelDragPending = false;
+    panelDragging = false;
+  });
+
+  // ── Pill drag ──────────────────────────────────────────────────────────
+
+  var pillDragging = false;
+  var pillStartX = 0;
+  var pillStartY = 0;
+  var pillMoved = false;
+
+  pillBtn.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    pillDragging = true;
+    pillMoved = false;
+    pillStartX = e.screenX;
+    pillStartY = e.screenY;
+    window.panelAPI.startWindowDrag();
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', function (e) {
+    if (!pillDragging || pillMoved) return;
+    var dx = Math.abs(e.screenX - pillStartX);
+    var dy = Math.abs(e.screenY - pillStartY);
+    if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+      pillMoved = true;
+    }
+  });
+
+  window.addEventListener('mouseup', function () {
+    if (!pillDragging) return;
+    pillDragging = false;
+    window.panelAPI.stopWindowDrag();
+    if (!pillMoved) {
+      window.panelAPI.reopen();
+    }
+  });
+
+  // ── Edge resize ───────────────────────────────────────────────────────
+
+  var edgeResizing = false;
+
+  document.querySelectorAll('.resize-edge').forEach(function (edgeEl) {
+    edgeEl.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      edgeResizing = true;
+      window.panelAPI.startEdgeResize(edgeEl.getAttribute('data-edge'));
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  window.addEventListener('mouseup', function () {
+    if (edgeResizing) {
+      edgeResizing = false;
+      window.panelAPI.stopEdgeResize();
+    }
+  });
+
+  // ── Button handlers ────────────────────────────────────────────────────
+
+  document.getElementById('closeBtn').addEventListener('click', function () {
+    window.panelAPI.close();
+  });
+
+  document.getElementById('toggleBtn').addEventListener('click', function () {
+    window.panelAPI.toggleOrientation();
+  });
+
+  document.getElementById('backBtn').addEventListener('click', function () {
+    window.panelAPI.focusMainWindow();
+  });
+
+  document.getElementById('chatBtn').addEventListener('click', function () {
+    window.panelAPI.openChat();
+  });
+
+  document.getElementById('endMeetingBtn').addEventListener('click', function () {
+    window.panelAPI.endMeeting();
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────
+
+  applyOrientation();
+  updateParticipantCount();
+})();
