@@ -99,7 +99,18 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
         '</div>';
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-ver').textContent = 'v' + strings.appVersion;
-    document.body.prepend(bar);
+
+    // Prepend titlebar to <html> (outside <body>) so it is not affected by
+    // body's transform or overflow — its position:fixed anchors to the viewport.
+    document.documentElement.prepend(bar);
+
+    // Transform body down to push ALL content — including position:fixed
+    // elements — below the titlebar. A transform on body creates a new
+    // containing block, so fixed children position relative to body.
+    document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('transform', 'translateY(34px)', 'important');
+    document.body.style.setProperty('height', 'calc(100vh - 34px)', 'important');
+    document.body.style.setProperty('overflow', 'auto', 'important');
 
     document.getElementById('stb-about').addEventListener('click', function() {
         window.sonacoveElectronAPI.ipc.send('show-about-dialog');
