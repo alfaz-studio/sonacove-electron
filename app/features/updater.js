@@ -128,6 +128,7 @@ function checkForUpdatesManually(webContents) {
             });
         });
 
+    // Track the user action (click), not the outcome — result is tracked in .then()/.catch().
     capture('update_check_manual');
 }
 

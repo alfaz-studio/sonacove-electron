@@ -83,7 +83,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}, appVersion = '') => `
     if (titleTarget) {
         window._stbTitleObserver = new MutationObserver(function() {
             var el = document.querySelector('#sonacove-titlebar .stb-title');
-            if (el) el.textContent = document.title || 'Sonacove Meets';
+            if (el) el.textContent = document.title || strings.windowTitle;
         });
         window._stbTitleObserver.observe(titleTarget, { childList: true, characterData: true, subtree: true });
     }

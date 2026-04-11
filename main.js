@@ -240,6 +240,8 @@ function createJitsiMeetWindow() {
         return { action: 'deny' };
     };
 
+    // Getter is called lazily (only when an update is downloaded), so
+    // it's safe to register before mainWindow is assigned below.
     setupAutoUpdater(() => mainWindow, { isStaging });
 
     mainWindow = new BrowserWindow(options);
