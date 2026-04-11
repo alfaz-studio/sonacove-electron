@@ -591,10 +591,23 @@ function createJitsiMeetWindow() {
         });
     });
 
+    let quitting = false;
+
     const onLeaveModal = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.destroy();
+            // Trigger the same leaveConference() flow the PiP hangup button uses.
+            // The renderer handles the clean XMPP leave, then navigates to
+            // /static/close — the will-navigate handler sees `quitting` and
+            // destroys the window instead of loading the dashboard.
+            quitting = true;
+            mainWindow.webContents.send('pip-end-meeting');
+
+            // Fallback: if the leave flow never triggers navigation (e.g. page
+            // is unresponsive or not in a meeting), destroy after 5s.
+            setTimeout(() => {
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+            }, 5000);
         }
     };
 
@@ -728,6 +741,17 @@ function createJitsiMeetWindow() {
             if (event) {
                 event.preventDefault();
             }
+
+            // If the user confirmed the leave-modal, destroy instead of
+            // navigating to the dashboard — the meeting was left cleanly.
+            if (quitting) {
+                setImmediate(() => {
+                    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+                });
+
+                return 'destroyed';
+            }
+
             const landingUrl = new URL(config.currentConfig.landing);
 
             // Remove trailing slash if present on landing pathname
