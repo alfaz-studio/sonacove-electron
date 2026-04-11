@@ -58,9 +58,6 @@ async function init() {
 
     await refreshPRs();
     await refreshCacheInfo();
-
-    // Auto-refresh every 2 minutes
-    setInterval(refreshPRs, 120000);
 }
 
 // ── Fetch PRs ───────────────────────────────────────────────────────────────
@@ -358,7 +355,12 @@ async function handleMainAction(action) {
         const landingInput = document.getElementById('landing-main');
         const meetInput = document.getElementById('meet-main');
         const landingUrl = landingInput ? landingInput.value.trim() : '';
-        const meetUrl = meetInput ? meetInput.value.trim() : '';
+        const meetUrl = normalizeMeetUrl(meetInput ? meetInput.value.trim() : '');
+
+        // Update the input to show the normalized URL
+        if (meetInput && meetUrl) {
+            meetInput.value = meetUrl;
+        }
 
         if (landingUrl || meetUrl) {
             prOverrides.main = { landingUrl: landingUrl || null, meetUrl: meetUrl || null };
@@ -570,7 +572,12 @@ function attachCardListeners(prNumber) {
             const landingInput = document.getElementById(`landing-${prNumber}`);
             const meetInput = document.getElementById(`meet-${prNumber}`);
             const landingUrl = landingInput ? landingInput.value.trim() : '';
-            const meetUrl = meetInput ? meetInput.value.trim() : '';
+            const meetUrl = normalizeMeetUrl(meetInput ? meetInput.value.trim() : '');
+
+            // Update the input to show the normalized URL
+            if (meetInput && meetUrl) {
+                meetInput.value = meetUrl;
+            }
 
             if (landingUrl || meetUrl) {
                 prOverrides[prNumber] = { landingUrl: landingUrl || null, meetUrl: meetUrl || null };
@@ -770,6 +777,33 @@ document.getElementById('btn-clear-cache').addEventListener('click', async () =>
     await refreshPRs(); // re-render to update cached status
 });
 
+document.getElementById('btn-clear-closed-cache').addEventListener('click', async () => {
+    const closedPRNumbers = prs
+        .filter(pr => pr.state === 'closed')
+        .map(pr => pr.prNumber);
+
+    if (closedPRNumbers.length === 0) {
+        alert('No closed/merged PR caches to clear.');
+
+        return;
+    }
+
+    if (!confirm(`Clear cached builds for ${closedPRNumbers.length} closed/merged PR(s)?`)) {
+        return;
+    }
+
+    const result = await window.stagingAPI.clearClosedCache({ closedPRNumbers });
+
+    if (result && !result.success) {
+        alert(result.error || 'Failed to clear unused cache.');
+
+        return;
+    }
+
+    await refreshCacheInfo();
+    await refreshPRs();
+});
+
 // ── Closed section toggle ────────────────────────────────────────────────────
 toggleClosedBtn.addEventListener('click', () => {
     closedExpanded = !closedExpanded;
@@ -832,6 +866,35 @@ function formatBytes(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+/**
+ * Normalize a meet URL: if the user pastes a full URL like
+ * "https://xyz.catfurr.workers.dev/meet/testroom", extract origin + /meet.
+ * If it's already just the origin or origin/meet, return as-is.
+ */
+function normalizeMeetUrl(url) {
+    if (!url) {
+        return url;
+    }
+
+    try {
+        const parsed = new URL(url);
+
+        // Extract the first path segment (should be "meet")
+        const segments = parsed.pathname.split('/').filter(Boolean);
+
+        if (segments.length >= 1 && segments[0] === 'meet') {
+            // Has /meet or /meet/room — normalize to origin/meet
+            return `${parsed.origin}/meet`;
+        }
+
+        // No /meet path — return the original URL unchanged
+        return url;
+    } catch {
+        // Not a valid URL, return as-is
+        return url;
+    }
 }
 
 function formatTimeAgo(dateStr) {

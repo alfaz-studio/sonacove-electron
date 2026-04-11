@@ -282,16 +282,24 @@ async function launchBuild({ prNumber, buildId, cacheDir, loadSettings }) {
 }
 
 /**
- * Clear cache for a specific PR or all cached builds.
+ * Clear cache for a specific PR, multiple PRs, or all cached builds.
  * Uses "rd /s /q" on Windows — Node's fs.rmSync consistently hits EPERM
  * on directories even with maxRetries and original-fs.
- * @param {{ prNumber?, buildId?, cacheDir }} opts
+ * @param {{ prNumber?, prNumbers?, buildId?, cacheDir }} opts
  */
-async function clearCache({ prNumber, buildId, cacheDir }) {
+async function clearCache({ prNumber, prNumbers, buildId, cacheDir }) {
     const targets = [];
 
     if (buildId) {
         targets.push(path.join(cacheDir, validBuildId(buildId)));
+    } else if (prNumbers) {
+        // Clear cache for a list of PRs (used by "clear unused" for closed/merged PRs)
+        if (prNumbers.length === 0) {
+            return { success: true };
+        }
+        for (const num of prNumbers) {
+            targets.push(path.join(cacheDir, `pr-${validPR(num)}`));
+        }
     } else if (prNumber) {
         const prNum = validPR(prNumber);
 

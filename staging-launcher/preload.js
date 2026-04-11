@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('stagingAPI', {
     downloadBuild: opts => ipcRenderer.invoke('download-build', opts),
     launchBuild: opts => ipcRenderer.invoke('launch-build', opts),
     clearCache: opts => ipcRenderer.invoke('clear-cache', opts),
+    clearClosedCache: opts => ipcRenderer.invoke('clear-closed-cache', opts),
     getCacheInfo: () => ipcRenderer.invoke('get-cache-info'),
     getSettings: () => ipcRenderer.invoke('get-settings'),
     saveSettings: settings => ipcRenderer.invoke('save-settings', settings),

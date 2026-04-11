@@ -80,13 +80,18 @@
                             <div class="cache-stat">
                                 <span class="cache-value" id="cache-size">Calculating...</span>
                             </div>
-                            <button id="btn-clear-cache" class="btn btn-danger btn-sm">
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:4px;vertical-align:-2px">
-                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H5.5l.5-.5h4l.5.5h2.5a1 1 0 0 1 1 1v1z"/>
-                                </svg>
-                                Clear All
-                            </button>
+                            <div class="cache-actions">
+                                <button id="btn-clear-closed-cache" class="btn btn-secondary btn-sm" title="Clear cache for merged/closed PRs only">
+                                    Clear Unused
+                                </button>
+                                <button id="btn-clear-cache" class="btn btn-danger btn-sm">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="margin-right:4px;vertical-align:-2px">
+                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H5.5l.5-.5h4l.5.5h2.5a1 1 0 0 1 1 1v1z"/>
+                                    </svg>
+                                    Clear All
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
