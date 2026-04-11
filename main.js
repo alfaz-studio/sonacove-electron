@@ -593,9 +593,14 @@ function createJitsiMeetWindow() {
     }
 
     // Inject a visible staging banner so testers know they're on a PR build.
+    // Skip file:// pages (splash, error) — banner is only for the remote app.
     if (isStaging) {
         mainWindow.webContents.on('did-finish-load', () => {
-            injectStagingBanner(mainWindow.webContents);
+            const url = mainWindow.webContents.getURL();
+
+            if (!url.startsWith('file://')) {
+                injectStagingBanner(mainWindow.webContents);
+            }
         });
     }
 

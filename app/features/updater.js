@@ -92,7 +92,7 @@ function setupAutoUpdater(getMainWindow, { isStaging }) {
 function checkForUpdatesManually(webContents) {
     const okLabel = t('infoToast.ok');
 
-    if (_isStaging) {
+    if (process.mas || _isStaging) {
         showInfoToast(webContents, {
             title: t('update.stagingTitle'),
             message: t('update.stagingMessage'),

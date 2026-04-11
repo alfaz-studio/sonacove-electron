@@ -31,13 +31,20 @@ const STAGING_BANNER_CSS = `
  * @param {Electron.WebContents} webContents
  */
 function injectStagingBanner(webContents) {
-    webContents.insertCSS(STAGING_BANNER_CSS).catch(() => {});
-
     const bannerText = t('staging.banner', { version: app.getVersion() });
 
+    // Inject both CSS and DOM in a single executeJavaScript call with an
+    // idempotency guard, avoiding insertCSS which accumulates on every navigation.
     webContents.executeJavaScript(`
         (function() {
             if (document.getElementById('sonacove-staging-banner')) return;
+            var sid = 'sonacove-staging-banner-styles';
+            if (!document.getElementById(sid)) {
+                var s = document.createElement('style');
+                s.id = sid;
+                s.textContent = ${JSON.stringify(STAGING_BANNER_CSS)};
+                document.head.appendChild(s);
+            }
             var banner = document.createElement('div');
             banner.id = 'sonacove-staging-banner';
             banner.textContent = ${JSON.stringify(bannerText)};
