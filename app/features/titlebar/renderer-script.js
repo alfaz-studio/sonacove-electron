@@ -199,7 +199,17 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
         + '<span class="stb-ver" id="stb-mac-ver"></span>';
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-mac-ver').textContent = 'v' + strings.appVersion;
-    document.body.prepend(bar);
+
+    // Prepend to <html> (outside <body>) so the bar is not affected by
+    // body's transform/overflow — position:fixed anchors to the viewport.
+    document.documentElement.prepend(bar);
+
+    // Transform body down to push ALL content — including position:fixed
+    // elements — below the titlebar (28px on macOS).
+    document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('transform', 'translateY(28px)', 'important');
+    document.body.style.setProperty('height', 'calc(100vh - 28px)', 'important');
+    document.body.style.setProperty('overflow', 'auto', 'important');
 
     // Clean up previous IPC listeners and observers (re-navigation).
     if (window._stbMacCleanup) {
