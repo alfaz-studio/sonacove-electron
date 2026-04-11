@@ -694,12 +694,10 @@ const setupChildWindowIcon = () => {
     // Skip the main window — it has its own windowOpenHandler with
     // URL-based allow/deny logic that this would override.
     app.on('web-contents-created', (event, contents) => {
-        // Skip the main window's webContents. At the time web-contents-created
-        // fires during new BrowserWindow(), mainWindow may still be null, so
-        // also check via getOwnerBrowserWindow().
-        const owner = contents.getOwnerBrowserWindow();
-
-        if (owner && mainWindow && owner === mainWindow) {
+        // Child windows opened by window.open() always have an opener.
+        // The main window's webContents does not, so this reliably skips it
+        // even when mainWindow is still null during construction.
+        if (!contents.opener) {
             return;
         }
         contents.setWindowOpenHandler(({ url }) => {

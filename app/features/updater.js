@@ -15,6 +15,7 @@ const { showUpdateToast, showInfoToast } = require('./in-app-dialogs');
 
 let _pendingUpdateVersion = null;
 let _isStaging = false;
+let _setupDone = false;
 
 /**
  * Configures and starts the auto-updater.
@@ -29,6 +30,10 @@ function setupAutoUpdater(getMainWindow, { isStaging }) {
     if (process.mas || isStaging) {
         return;
     }
+    if (_setupDone) {
+        return;
+    }
+    _setupDone = true;
 
     autoUpdater.logger = require('electron-log');
     autoUpdater.logger.transports.file.level = 'info';
