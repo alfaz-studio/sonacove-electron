@@ -788,6 +788,10 @@ document.getElementById('btn-clear-closed-cache').addEventListener('click', asyn
         return;
     }
 
+    if (!confirm(`Clear cached builds for ${closedPRNumbers.length} closed/merged PR(s)?`)) {
+        return;
+    }
+
     const result = await window.stagingAPI.clearClosedCache({ closedPRNumbers });
 
     if (result && !result.success) {
@@ -885,8 +889,8 @@ function normalizeMeetUrl(url) {
             return `${parsed.origin}/meet`;
         }
 
-        // No /meet path — return origin as-is (user may add /meet themselves)
-        return parsed.origin;
+        // No /meet path — return the original URL unchanged
+        return url;
     } catch {
         // Not a valid URL, return as-is
         return url;

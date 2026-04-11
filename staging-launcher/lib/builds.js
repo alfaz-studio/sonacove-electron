@@ -292,8 +292,11 @@ async function clearCache({ prNumber, prNumbers, buildId, cacheDir }) {
 
     if (buildId) {
         targets.push(path.join(cacheDir, validBuildId(buildId)));
-    } else if (prNumbers && prNumbers.length > 0) {
+    } else if (prNumbers) {
         // Clear cache for a list of PRs (used by "clear unused" for closed/merged PRs)
+        if (prNumbers.length === 0) {
+            return { success: true };
+        }
         for (const num of prNumbers) {
             targets.push(path.join(cacheDir, `pr-${validPR(num)}`));
         }
