@@ -10,8 +10,7 @@ const {
     BrowserWindow,
     app,
     ipcMain,
-    desktopCapturer,
-    screen
+    desktopCapturer
 } = require('electron');
 const contextMenu = require('electron-context-menu');
 const isDev = require('electron-is-dev');
@@ -695,7 +694,12 @@ const setupChildWindowIcon = () => {
     // Skip the main window — it has its own windowOpenHandler with
     // URL-based allow/deny logic that this would override.
     app.on('web-contents-created', (event, contents) => {
-        if (mainWindow && contents === mainWindow.webContents) {
+        // Skip the main window's webContents. At the time web-contents-created
+        // fires during new BrowserWindow(), mainWindow may still be null, so
+        // also check via getOwnerBrowserWindow().
+        const owner = contents.getOwnerBrowserWindow();
+
+        if (owner && mainWindow && owner === mainWindow) {
             return;
         }
         contents.setWindowOpenHandler(({ url }) => {

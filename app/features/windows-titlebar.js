@@ -75,12 +75,17 @@ const getTitlebarJS = (iconBase64 = '', strings = {}, appVersion = '') => `
     });
 
     // Keep the displayed title in sync with document.title changes.
+    // Store the observer so it can be disconnected on re-injection.
+    if (window._stbTitleObserver) {
+        window._stbTitleObserver.disconnect();
+    }
     var titleTarget = document.querySelector('title');
     if (titleTarget) {
-        new MutationObserver(function() {
+        window._stbTitleObserver = new MutationObserver(function() {
             var el = document.querySelector('#sonacove-titlebar .stb-title');
             if (el) el.textContent = document.title || 'Sonacove Meets';
-        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
+        });
+        window._stbTitleObserver.observe(titleTarget, { childList: true, characterData: true, subtree: true });
     }
 })();
 `.trim();

@@ -180,6 +180,9 @@
     if (!p.hasVideo) {
       videoImg.style.display = 'none';
       avatarDiv.style.display = 'flex';
+    } else {
+      videoImg.style.display = 'block';
+      avatarDiv.style.display = 'none';
     }
 
     renderAvatar(avatarDiv, p);

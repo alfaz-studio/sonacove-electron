@@ -95,7 +95,7 @@ contextBridge.exposeInMainWorld('panelAPI', {
     /**
      * Register a callback that fires when i18n strings are received.
      *
-     * @param {function(Object): void} cb - Called with { participant, participants, ofTotal }.
+     * @param {function(Object): void} cb - Called with { participant, participants, of }.
      * @returns {void}
      */
     onStrings(cb) {
