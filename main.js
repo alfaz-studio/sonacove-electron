@@ -355,13 +355,15 @@ function createJitsiMeetWindow() {
         // Windows: frameless window with custom in-page title bar (setupTitlebar).
         // macOS: hiddenInset keeps native traffic lights but removes the title
         //        text, giving us space to inject branding + update pill.
+        // Linux: keeps native frame — thickFrame is Windows-only and frame:false
+        //        without it breaks resize handles on Linux.
         ...(process.platform === 'darwin' ? {
             titleBarStyle: 'hiddenInset',
             trafficLightPosition: { x: 12, y: 8 }
-        } : {
+        } : process.platform === 'win32' ? {
             frame: false,
             thickFrame: true
-        }),
+        } : {}),
 
         webPreferences: {
             enableBlinkFeatures: 'WebAssemblyCSP',
@@ -791,7 +793,7 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
-    // Set up the custom in-page title bar (Windows; no-ops on macOS for now).
+    // Set up the custom in-page title bar (Windows + macOS).
     setupTitlebar(mainWindow);
 
     // Inject a visible staging banner so testers know they're on a PR build.

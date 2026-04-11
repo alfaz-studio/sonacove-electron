@@ -63,15 +63,6 @@ function setupTitlebar(mainWindow) {
             injectMacTitlebar(mainWindow);
         });
 
-        // TODO: REMOVE — temporary hardcoded update pill for visual testing
-        mainWindow.webContents.on('did-finish-load', () => {
-            const url = mainWindow.webContents.getURL();
-
-            if (!url.startsWith('file://')) {
-                setTimeout(() => notifyUpdateAvailable(mainWindow, '2.0.0'), 2000);
-            }
-        });
-
         return;
     }
 
@@ -80,15 +71,6 @@ function setupTitlebar(mainWindow) {
     // dom-ready fires before did-finish-load for faster appearance.
     mainWindow.webContents.on('dom-ready', () => {
         injectTitlebar(mainWindow);
-    });
-
-    // TODO: REMOVE — temporary hardcoded update pill for visual testing
-    mainWindow.webContents.on('did-finish-load', () => {
-        const url = mainWindow.webContents.getURL();
-
-        if (!url.startsWith('file://')) {
-            setTimeout(() => notifyUpdateAvailable(mainWindow, '2.0.0'), 2000);
-        }
     });
 
     // Notify renderer of maximize/unmaximize for window control icon swap.

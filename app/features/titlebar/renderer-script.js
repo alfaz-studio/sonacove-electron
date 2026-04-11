@@ -21,7 +21,7 @@ function updateAvailableListenerJS(verId) {
                     ver.className = 'stb-ver stb-update';
                     ver.title = 'Click to install update';
                     ver.addEventListener('click', function() {
-                        window.sonacoveElectronAPI.ipc.send('update-toast-action', 'install');
+                        window.sonacoveElectronAPI.ipc.send('update-toast-action', { action: 'install' });
                     });
                 }
             })`;
@@ -86,19 +86,28 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     bar.innerHTML =
         iconHtml +
         '<div class="stb-title"></div>' +
-        '<span class="stb-ver" id="stb-ver" style="margin-right:auto;"></span>' +
+        '<span class="stb-ver" id="stb-ver"></span>' +
         '<div class="stb-menu">' +
-            '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
-            '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
-            '<button class="stb-btn" id="stb-help" title="' + strings.helpTooltip + '">' + strings.help + '</button>' +
+            '<button class="stb-btn" id="stb-about"></button>' +
+            '<button class="stb-btn" id="stb-updates"></button>' +
+            '<button class="stb-btn" id="stb-help"></button>' +
         '</div>' +
         '<div class="stb-wc">' +
             '<button class="stb-wc-btn" id="stb-minimize" title="Minimize">' + minSvg + '</button>' +
-            '<button class="stb-wc-btn" id="stb-maximize" title="Restore">' + maxSvg + '</button>' +
+            '<button class="stb-wc-btn" id="stb-maximize" title="Maximize">' + maxSvg + '</button>' +
             '<button class="stb-wc-btn stb-close" id="stb-close" title="Close">' + closeSvg + '</button>' +
         '</div>';
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-ver').textContent = 'v' + strings.appVersion;
+    var aboutBtn = bar.querySelector('#stb-about');
+    aboutBtn.textContent = strings.about;
+    aboutBtn.title = strings.aboutTooltip;
+    var updatesBtn = bar.querySelector('#stb-updates');
+    updatesBtn.textContent = strings.checkForUpdates;
+    updatesBtn.title = strings.checkForUpdatesTooltip;
+    var helpBtn = bar.querySelector('#stb-help');
+    helpBtn.textContent = strings.help;
+    helpBtn.title = strings.helpTooltip;
 
     // Prepend titlebar to <html> (outside <body>) so it is not affected by
     // body's transform or overflow — its position:fixed anchors to the viewport.
@@ -154,7 +163,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
                 var btn = document.getElementById('stb-maximize');
                 if (btn) {
                     btn.innerHTML = maxSvg;
-                    btn.title = 'Restore';
+                    btn.title = 'Maximize';
                 }
             }),${updateAvailableListenerJS('stb-ver')}
         );
