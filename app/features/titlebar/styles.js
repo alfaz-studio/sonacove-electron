@@ -42,7 +42,8 @@ const TITLEBAR_CSS = ''
  * NOTE: left:78px depends on trafficLightPosition {x:12} in main.js — update both together.
  */
 const MAC_TITLEBAR_CSS = ''
-    + '#sonacove-mac-titlebar{position:fixed;top:0;left:78px;right:0;height:28px;'
+    + '#sonacove-mac-titlebar{position:fixed;top:0;left:0;right:0;height:28px;'
+    + 'background:#1a1a2e;padding-left:78px;'
     + '-webkit-app-region:drag;display:flex;align-items:center;gap:6px;z-index:2147483647;'
     + 'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;font-size:12px;'
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
