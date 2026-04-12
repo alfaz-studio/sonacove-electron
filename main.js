@@ -1046,21 +1046,25 @@ function createJitsiMeetWindow() {
     handleProtocolCall(process.argv.pop());
 }
 
-// Handle PiP and child window icon configuration
+// Set the app icon on child windows opened via window.open().
+// Only applies to windows from the main window's renderer — child
+// windows (PiP, WebRTC internals) don't need this handler.
 const setupChildWindowIcon = () => {
     const iconPath = getIconPath();
 
-    // Listen for all new BrowserWindow creations
     app.on('web-contents-created', (event, contents) => {
-        // This handles windows opened via window.open()
+        // Skip the main window — it has its own windowOpenHandler that
+        // decides allow/deny. Only override icon on child windows that
+        // are already allowed to open (e.g. PiP panel, allowed-host popups).
+        if (!contents.opener) return;
+
         contents.setWindowOpenHandler(({ url }) => {
-            return {
-                action: 'allow',
-                overrideBrowserWindowOptions: {
-                    icon: iconPath,
-                    show: true
-                }
-            };
+            // Child windows should open links in the external browser,
+            // not spawn another Electron window (e.g. "Go to Dashboard"
+            // on the close page).
+            openExternalLink(url);
+
+            return { action: 'deny' };
         });
     });
 };
@@ -1112,9 +1116,10 @@ function handleProtocolCall(fullProtocolCall) {
 
 /**
  * Force Single Instance Application.
- * Handle this on darwin via LSMultipleInstancesProhibited in Info.plist as below does not work on MAS
+ * MAS builds use LSMultipleInstancesProhibited in Info.plist instead,
+ * since requestSingleInstanceLock() is unreliable in the MAS sandbox.
  */
-const gotInstanceLock = process.platform === 'darwin' ? true : app.requestSingleInstanceLock();
+const gotInstanceLock = process.mas ? true : app.requestSingleInstanceLock();
 
 if (!gotInstanceLock) {
     app.quit();
