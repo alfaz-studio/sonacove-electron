@@ -581,7 +581,8 @@ function createJitsiMeetWindow() {
 
     // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
     // Not calling event.preventDefault() keeps the page open (prevents unload).
-    // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
+    // If the user confirms "Leave", the IPC handler triggers a clean XMPP leave
+    // via pip-end-meeting, then the will-navigate handler destroys the window.
     mainWindow.webContents.on('will-prevent-unload', () => {
         showLeaveModal(mainWindow.webContents, {
             title: t('leaveModal.title'),
@@ -591,10 +592,24 @@ function createJitsiMeetWindow() {
         });
     });
 
+    let quitting = false;
+    let quitFallbackTimer = null;
+
     const onLeaveModal = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.destroy();
+            // Trigger the same leaveConference() flow the PiP hangup button uses.
+            // The renderer handles the clean XMPP leave, then navigates to
+            // /static/close — the will-navigate handler sees `quitting` and
+            // destroys the window instead of loading the dashboard.
+            quitting = true;
+            mainWindow.webContents.send('pip-end-meeting');
+
+            // Fallback: if the leave flow never triggers navigation (e.g. page
+            // is unresponsive or not in a meeting), destroy after 5s.
+            quitFallbackTimer = setTimeout(() => {
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+            }, 5000);
         }
     };
 
@@ -700,8 +715,6 @@ function createJitsiMeetWindow() {
         try {
             const sources = await desktopCapturer.getSources(validOptions);
 
-            console.log(`✅ Main: Found ${sources.length} sources`);
-
             const mappedSources = sources.map(source => {
                 return {
                     id: source.id,
@@ -728,6 +741,18 @@ function createJitsiMeetWindow() {
             if (event) {
                 event.preventDefault();
             }
+
+            // If the user confirmed the leave-modal, destroy instead of
+            // navigating to the dashboard — the meeting was left cleanly.
+            if (quitting) {
+                clearTimeout(quitFallbackTimer);
+                setImmediate(() => {
+                    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+                });
+
+                return;
+            }
+
             const landingUrl = new URL(config.currentConfig.landing);
 
             // Remove trailing slash if present on landing pathname
@@ -1005,11 +1030,12 @@ function createJitsiMeetWindow() {
     ipcMain.on('retry-load', onRetryLoad);
 
     mainWindow.on('closed', () => {
-        // Cancel any pending blur timer.
+        // Cancel any pending timers.
         if (blurTimer) {
             clearTimeout(blurTimer);
             blurTimer = null;
         }
+        clearTimeout(quitFallbackTimer);
 
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
