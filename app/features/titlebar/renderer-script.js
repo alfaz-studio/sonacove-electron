@@ -206,9 +206,11 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
     if ('${iconBase64}') {
         iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
     }
-    bar.innerHTML = iconHtml
+    bar.innerHTML = '<div class="stb-content">'
+        + iconHtml
         + '<span class="stb-title"></span>'
-        + '<span class="stb-ver" id="stb-mac-ver"></span>';
+        + '<span class="stb-ver" id="stb-mac-ver"></span>'
+        + '</div>';
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-mac-ver').textContent = 'v' + strings.appVersion;
 
