@@ -75,6 +75,7 @@
 
       var currentOrientation = 'horizontal';
       var participants = [];
+      var totalParticipantCount = 0;
       var visibleTileCount = 4;
       var resizeEdge = null; // which edge is being dragged — determines slice direction
       // { participantId: true } — local pinned by default.
@@ -374,8 +375,8 @@
       }
 
       function updateParticipantCount() {
-        var total = participants.length;
-        var shown = Math.min(visibleTileCount, total);
+        var total = totalParticipantCount || participants.length;
+        var shown = Math.min(visibleTileCount, participants.length);
 
         if (shown < total) {
           participantCountEl.textContent = shown + ' of ' + total;
@@ -406,6 +407,7 @@
 
       window.panelAPI.onParticipantsUpdate(function (data) {
         participants = data.participants || [];
+        totalParticipantCount = data.totalParticipantCount || participants.length;
 
         // Send initial pin state (local pinned by default) on first update.
         // Must run before cleanup to avoid wiping the default 'local' pin
