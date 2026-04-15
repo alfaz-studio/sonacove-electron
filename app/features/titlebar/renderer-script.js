@@ -121,7 +121,8 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     document.documentElement.style.setProperty('height', '100vh', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
     document.body.style.setProperty('height', '100%', 'important');
-    document.body.style.setProperty('overflow', 'auto', 'important');
+    document.body.style.setProperty('overflow-x', 'hidden', 'important');
+    document.body.style.setProperty('overflow-y', 'auto', 'important');
 
     document.getElementById('stb-about').addEventListener('click', function() {
         window.sonacoveElectronAPI.ipc.send('show-about-dialog');
@@ -223,7 +224,8 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
     document.documentElement.style.setProperty('height', '100vh', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
     document.body.style.setProperty('height', '100%', 'important');
-    document.body.style.setProperty('overflow', 'auto', 'important');
+    document.body.style.setProperty('overflow-x', 'hidden', 'important');
+    document.body.style.setProperty('overflow-y', 'auto', 'important');
 
     // Clean up previous IPC listeners and observers (re-navigation).
     if (window._stbMacCleanup) {
