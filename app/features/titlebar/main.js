@@ -10,6 +10,14 @@ const { getTitlebarJS, getMacTitlebarJS } = require('./renderer-script');
  *
  * @param {import('electron').BrowserWindow} mainWindow
  */
+function buildIconHtml() {
+    const base64 = getIconBase64();
+
+    return base64
+        ? `<div class="stb-icon" style="background-image: url('data:image/png;base64,${base64}')"></div>`
+        : '';
+}
+
 function injectTitlebar(mainWindow) {
     if (!mainWindow || mainWindow.isDestroyed()) {
         return;
@@ -26,7 +34,8 @@ function injectTitlebar(mainWindow) {
         helpTooltip: t('titlebar.helpTooltip')
     };
 
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), strings)).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getTitlebarJS(buildIconHtml(), strings))
+        .catch(e => console.warn('Titlebar injection failed:', e.message));
 }
 
 /**
@@ -45,7 +54,8 @@ function injectMacTitlebar(mainWindow) {
         windowTitle: t('app.windowTitle')
     };
 
-    mainWindow.webContents.executeJavaScript(getMacTitlebarJS(getIconBase64(), strings)).catch(() => {});
+    mainWindow.webContents.executeJavaScript(getMacTitlebarJS(buildIconHtml(), strings))
+        .catch(e => console.warn('Mac titlebar injection failed:', e.message));
 }
 
 /**

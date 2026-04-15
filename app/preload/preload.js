@@ -50,7 +50,8 @@ const whitelistedIpcChannels = [
     'posthog-capture',
     'retry-load',
     'update-toast-action',
-    'leave-modal-action'
+    'leave-modal-action',
+    'deeplink-modal-action'
 ];
 
 // Unlimited listeners — the preload subscribes to many channels across the app

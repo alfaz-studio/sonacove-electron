@@ -52,11 +52,11 @@ function titleObserverJS(selector, cleanupVar) {
  * Returns a JS string to be injected into the renderer via executeJavaScript.
  * Builds the custom in-page title bar DOM, event listeners, and IPC wiring.
  *
- * @param {string} iconBase64 - Base64-encoded app icon.
+ * @param {string} iconHtml - Pre-built HTML for the app icon (empty string if no icon).
  * @param {Object} strings - i18n strings for button labels and tooltips.
  * @returns {string} JavaScript source to execute in the renderer.
  */
-const getTitlebarJS = (iconBase64 = '', strings = {}) => `
+const getTitlebarJS = (iconHtml = '', strings = {}) => `
 (function() {
     var strings = ${JSON.stringify(strings)};
 
@@ -74,10 +74,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
 
     var bar = document.createElement('div');
     bar.id = 'sonacove-titlebar';
-    var iconHtml = '';
-    if ('${iconBase64}') {
-        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
-    }
+    var iconHtml = ${JSON.stringify(iconHtml)};
     var minSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     var maxSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
     var closeSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
@@ -116,6 +113,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     // Reserve space for the titlebar via padding-top on <html>. The body
     // inherits the reduced content area (100vh minus padding) so page
     // content flows below the titlebar without transform hacks.
+    // 34px = 32px titlebar height + 2px gradient border (see styles.js TITLEBAR_CSS).
     document.documentElement.style.setProperty('padding-top', '34px', 'important');
     document.documentElement.style.setProperty('box-sizing', 'border-box', 'important');
     document.documentElement.style.setProperty('height', '100vh', 'important');
@@ -143,7 +141,7 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     });
 
     // Swap maximize/restore icon when window state changes.
-    var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="#1A1A1A"/></svg>';
+    var restoreSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="1.5" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="transparent"/></svg>';
 
     // Clean up any IPC listeners and observers from a previous injection
     // (e.g. navigation) to prevent accumulation.
@@ -179,11 +177,11 @@ ${titleObserverJS('#sonacove-titlebar .stb-title', 'window._stbCleanup')}
  * Injects branding (icon, title, version) and the update-available pill
  * into the space left by the hidden native title text.
  *
- * @param {string} iconBase64 - Base64-encoded app icon.
+ * @param {string} iconHtml - Pre-built HTML for the app icon (empty string if no icon).
  * @param {Object} strings - i18n strings (appVersion, windowTitle).
  * @returns {string} JavaScript source to execute in the renderer.
  */
-const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
+const getMacTitlebarJS = (iconHtml = '', strings = {}) => `
 (function() {
     var strings = ${JSON.stringify(strings)};
 
@@ -201,10 +199,7 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
 
     var bar = document.createElement('div');
     bar.id = 'sonacove-mac-titlebar';
-    var iconHtml = '';
-    if ('${iconBase64}') {
-        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
-    }
+    var iconHtml = ${JSON.stringify(iconHtml)};
     bar.innerHTML = '<div class="stb-content">'
         + iconHtml
         + '<span class="stb-title"></span>'
@@ -220,6 +215,7 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
     // Reserve space for the titlebar via padding-top on <html>. The body
     // inherits the reduced content area (100vh minus padding) so page
     // content flows below the titlebar without transform hacks.
+    // 28px = macOS titlebar height (see styles.js MAC_TITLEBAR_CSS).
     document.documentElement.style.setProperty('padding-top', '28px', 'important');
     document.documentElement.style.setProperty('box-sizing', 'border-box', 'important');
     document.documentElement.style.setProperty('height', '100vh', 'important');
