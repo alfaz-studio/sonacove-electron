@@ -147,6 +147,11 @@ ipcMain.on(IPC.FOCUS_MAIN, () => {
         mw.show();
         mw.focus();
     }
+
+    // Close PiP directly instead of relying on the indirect
+    // pip-window-restored → renderer → shrinkToPill path,
+    // which races with the blur timer on macOS.
+    closeParticipantWindow(false);
 });
 
 // ── Window lifecycle ─────────────────────────────────────────────────────────
@@ -240,6 +245,12 @@ function openParticipantWindow() {
             }
 
             participantWindow.show();
+
+            // macOS: PiP has skipTaskbar+alwaysOnTop, so macOS hides
+            // the dock icon when it's the only visible window.
+            if (process.platform === 'darwin') {
+                app.dock.show();
+            }
         }
     });
 

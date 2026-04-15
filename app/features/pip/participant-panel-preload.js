@@ -9,6 +9,8 @@ const { contextBridge, ipcRenderer } = require('electron');
  *   - Toggle between horizontal and vertical strip layouts.
  *   - Receive the current orientation from the main process.
  */
+contextBridge.exposeInMainWorld('panelPlatform', process.platform);
+
 contextBridge.exposeInMainWorld('panelAPI', {
     /**
      * Register a callback that fires whenever a new video frame arrives.
