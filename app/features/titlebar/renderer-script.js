@@ -74,14 +74,14 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
 
     var bar = document.createElement('div');
     bar.id = 'sonacove-titlebar';
-    var iconHtml = ${JSON.stringify(iconHtml)};
+    var _iconHtml = ${JSON.stringify(iconHtml)};
     var minSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     var maxSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>';
     var closeSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     // Build innerHTML with safe static content only — dynamic text is set
     // via textContent below to prevent XSS from document.title or version strings.
     bar.innerHTML =
-        iconHtml +
+        _iconHtml +
         '<div class="stb-title"></div>' +
         '<span class="stb-ver" id="stb-ver"></span>' +
         '<div class="stb-menu">' +
@@ -199,9 +199,9 @@ const getMacTitlebarJS = (iconHtml = '', strings = {}) => `
 
     var bar = document.createElement('div');
     bar.id = 'sonacove-mac-titlebar';
-    var iconHtml = ${JSON.stringify(iconHtml)};
+    var _iconHtml = ${JSON.stringify(iconHtml)};
     bar.innerHTML = '<div class="stb-content">'
-        + iconHtml
+        + _iconHtml
         + '<span class="stb-title"></span>'
         + '<span class="stb-ver" id="stb-mac-ver"></span>'
         + '</div>';

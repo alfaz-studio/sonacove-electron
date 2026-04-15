@@ -54,9 +54,9 @@ const whitelistedIpcChannels = [
     'deeplink-modal-action'
 ];
 
-// Unlimited listeners — the preload subscribes to many channels across the app
-// lifecycle and there is no memory leak concern (all on the same ipcRenderer singleton).
-ipcRenderer.setMaxListeners(0);
+// Raise the listener cap — the preload subscribes to many channels across the app
+// lifecycle. 50 is generous enough to avoid false positives while still catching leaks.
+ipcRenderer.setMaxListeners(50);
 
 /**
  * Open an external URL.

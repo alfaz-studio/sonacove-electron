@@ -62,6 +62,7 @@ function injectMacTitlebar(mainWindow) {
  * Sets up the custom in-page title bar for the given window.
  * Windows: full custom titlebar with window controls, menu, and branding.
  * macOS: hiddenInset with branding (icon, title, version) and update pill.
+ * Linux: no-op (uses native window frame).
  *
  * @param {import('electron').BrowserWindow} mainWindow
  */
@@ -73,6 +74,11 @@ function setupTitlebar(mainWindow) {
             injectMacTitlebar(mainWindow);
         });
 
+        return;
+    }
+
+    // Linux uses native window frame — no custom titlebar needed.
+    if (process.platform !== 'win32') {
         return;
     }
 

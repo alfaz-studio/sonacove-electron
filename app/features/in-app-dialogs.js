@@ -153,7 +153,6 @@ function dismissOtherToastsJS() {
  * @param {string} version - The new version number.
  */
 function showUpdateToast(webContents, version, strings = {}) {
-    const v = esc(version);
     const titleText = esc(strings.title);
     const messageText = esc(strings.message);
     const laterText = esc(strings.later);

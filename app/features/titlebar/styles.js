@@ -38,8 +38,9 @@ const TITLEBAR_CSS = ''
 
 /**
  * CSS for the macOS titlebar content area.
- * Positioned to the right of native traffic lights (hiddenInset mode).
- * NOTE: left:78px depends on trafficLightPosition {x:12} in main.js — update both together.
+ * Branding (icon, title, version) is centered via .stb-content with
+ * position:absolute + translate(-50%,-50%). Native traffic lights are
+ * handled by titleBarStyle:'hiddenInset' in main.js.
  */
 const MAC_TITLEBAR_CSS = ''
     + '#sonacove-mac-titlebar{position:fixed;top:0;left:0;right:0;height:28px;'
