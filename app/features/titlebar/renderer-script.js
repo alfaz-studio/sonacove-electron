@@ -109,16 +109,18 @@ const getTitlebarJS = (iconBase64 = '', strings = {}) => `
     helpBtn.textContent = strings.help;
     helpBtn.title = strings.helpTooltip;
 
-    // Prepend titlebar to <html> (outside <body>) so it is not affected by
-    // body's transform or overflow — its position:fixed anchors to the viewport.
+    // Prepend titlebar to <html> (outside <body>) — position:fixed anchors
+    // it to the viewport regardless of body scroll or overflow.
     document.documentElement.prepend(bar);
 
-    // Transform body down to push ALL content — including position:fixed
-    // elements — below the titlebar. A transform on body creates a new
-    // containing block, so fixed children position relative to body.
+    // Reserve space for the titlebar via padding-top on <html>. The body
+    // inherits the reduced content area (100vh minus padding) so page
+    // content flows below the titlebar without transform hacks.
+    document.documentElement.style.setProperty('padding-top', '34px', 'important');
+    document.documentElement.style.setProperty('box-sizing', 'border-box', 'important');
+    document.documentElement.style.setProperty('height', '100vh', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
-    document.body.style.setProperty('transform', 'translateY(34px)', 'important');
-    document.body.style.setProperty('height', 'calc(100vh - 34px)', 'important');
+    document.body.style.setProperty('height', '100%', 'important');
     document.body.style.setProperty('overflow', 'auto', 'important');
 
     document.getElementById('stb-about').addEventListener('click', function() {
@@ -209,15 +211,18 @@ const getMacTitlebarJS = (iconBase64 = '', strings = {}) => `
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-mac-ver').textContent = 'v' + strings.appVersion;
 
-    // Prepend to <html> (outside <body>) so the bar is not affected by
-    // body's transform/overflow — position:fixed anchors to the viewport.
+    // Prepend titlebar to <html> (outside <body>) — position:fixed anchors
+    // it to the viewport regardless of body scroll or overflow.
     document.documentElement.prepend(bar);
 
-    // Transform body down to push ALL content — including position:fixed
-    // elements — below the titlebar (28px on macOS).
+    // Reserve space for the titlebar via padding-top on <html>. The body
+    // inherits the reduced content area (100vh minus padding) so page
+    // content flows below the titlebar without transform hacks.
+    document.documentElement.style.setProperty('padding-top', '28px', 'important');
+    document.documentElement.style.setProperty('box-sizing', 'border-box', 'important');
+    document.documentElement.style.setProperty('height', '100vh', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
-    document.body.style.setProperty('transform', 'translateY(28px)', 'important');
-    document.body.style.setProperty('height', 'calc(100vh - 28px)', 'important');
+    document.body.style.setProperty('height', '100%', 'important');
     document.body.style.setProperty('overflow', 'auto', 'important');
 
     // Clean up previous IPC listeners and observers (re-navigation).
