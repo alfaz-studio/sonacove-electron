@@ -419,6 +419,12 @@ html, body {
   position: relative;
 }
 
+/* macOS shows a rounded-square window background behind transparent windows;
+   match the pill shape to that native corner radius so there's no gap. */
+.pill-btn.macos {
+  border-radius: 12px;
+}
+
 .pill-btn.visible {
   opacity: 1;
   transform: scale(1);

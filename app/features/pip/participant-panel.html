@@ -99,6 +99,11 @@
       var pillBadge = document.getElementById('pillBadge');
       var chatBadgeCount = document.getElementById('chatBadgeCount');
 
+      // macOS: match pill shape to the native rounded-square window background.
+      if (window.panelPlatform === 'darwin') {
+        pillBtn.classList.add('macos');
+      }
+
       // ── Tile rendering ─────────────────────────────────────────────────────
 
       function getVisibleParticipants() {
