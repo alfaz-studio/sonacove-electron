@@ -488,7 +488,14 @@ function createJitsiMeetWindow() {
     const onLeaveModal = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.destroy();
+            // Notify the renderer so it can send XMPP presence-unavailable
+            // for a graceful leave before we destroy the window.
+            mainWindow.webContents.send('pip-end-meeting');
+            setTimeout(() => {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.destroy();
+                }
+            }, 500);
         }
     };
 
@@ -593,8 +600,6 @@ function createJitsiMeetWindow() {
 
         try {
             const sources = await desktopCapturer.getSources(validOptions);
-
-            console.log(`✅ Main: Found ${sources.length} sources`);
 
             const mappedSources = sources.map(source => {
                 return {
@@ -922,21 +927,18 @@ function createJitsiMeetWindow() {
     handleProtocolCall(process.argv.pop());
 }
 
-// Handle PiP and child window icon configuration
+// Route window.open() calls from child windows (PiP, popups) to the OS
+// browser instead of spawning new Electron windows. Only applies to child
+// windows (those with an opener) — the main window has its own handler.
 const setupChildWindowIcon = () => {
-    const iconPath = getIconPath();
-
-    // Listen for all new BrowserWindow creations
     app.on('web-contents-created', (event, contents) => {
-        // This handles windows opened via window.open()
+        if (!contents.opener) {
+            return;
+        }
         contents.setWindowOpenHandler(({ url }) => {
-            return {
-                action: 'allow',
-                overrideBrowserWindowOptions: {
-                    icon: iconPath,
-                    show: true
-                }
-            };
+            openExternalLink(url);
+
+            return { action: 'deny' };
         });
     });
 };
@@ -988,9 +990,10 @@ function handleProtocolCall(fullProtocolCall) {
 
 /**
  * Force Single Instance Application.
- * Handle this on darwin via LSMultipleInstancesProhibited in Info.plist as below does not work on MAS
+ * Bypass on MAS only — requestSingleInstanceLock is unreliable in the
+ * Mac App Store sandbox. Standard .dmg builds use the lock normally.
  */
-const gotInstanceLock = process.platform === 'darwin' ? true : app.requestSingleInstanceLock();
+const gotInstanceLock = process.mas ? true : app.requestSingleInstanceLock();
 
 if (!gotInstanceLock) {
     app.quit();
