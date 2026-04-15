@@ -475,7 +475,8 @@ function createJitsiMeetWindow() {
 
     // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
     // Not calling event.preventDefault() keeps the page open (prevents unload).
-    // If the user confirms "Leave", the IPC handler calls mainWindow.destroy().
+    // If the user confirms "Leave", the IPC handler triggers a clean XMPP leave
+    // via pip-end-meeting, then the will-navigate handler destroys the window.
     mainWindow.webContents.on('will-prevent-unload', () => {
         showLeaveModal(mainWindow.webContents, {
             title: t('leaveModal.title'),
@@ -485,17 +486,24 @@ function createJitsiMeetWindow() {
         });
     });
 
+    let quitting = false;
+    let quitFallbackTimer = null;
+
     const onLeaveModal = (event, data) => {
         if (event.sender !== mainWindow?.webContents) return;
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
-            // Notify the renderer so it can send XMPP presence-unavailable
-            // for a graceful leave before we destroy the window.
+            // Trigger the same leaveConference() flow the PiP hangup button uses.
+            // The renderer handles the clean XMPP leave, then navigates to
+            // /static/close — the will-navigate handler sees `quitting` and
+            // destroys the window instead of loading the dashboard.
+            quitting = true;
             mainWindow.webContents.send('pip-end-meeting');
-            setTimeout(() => {
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.destroy();
-                }
-            }, 500);
+
+            // Fallback: if the leave flow never triggers navigation (e.g. page
+            // is unresponsive or not in a meeting), destroy after 5s.
+            quitFallbackTimer = setTimeout(() => {
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+            }, 5000);
         }
     };
 
@@ -627,6 +635,18 @@ function createJitsiMeetWindow() {
             if (event) {
                 event.preventDefault();
             }
+
+            // If the user confirmed the leave-modal, destroy instead of
+            // navigating to the dashboard — the meeting was left cleanly.
+            if (quitting) {
+                clearTimeout(quitFallbackTimer);
+                setImmediate(() => {
+                    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+                });
+
+                return;
+            }
+
             const landingUrl = new URL(config.currentConfig.landing);
 
             // Remove trailing slash if present on landing pathname
@@ -886,11 +906,12 @@ function createJitsiMeetWindow() {
     ipcMain.on('retry-load', onRetryLoad);
 
     mainWindow.on('closed', () => {
-        // Cancel any pending blur timer.
+        // Cancel any pending timers.
         if (blurTimer) {
             clearTimeout(blurTimer);
             blurTimer = null;
         }
+        clearTimeout(quitFallbackTimer);
 
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
@@ -927,15 +948,20 @@ function createJitsiMeetWindow() {
     handleProtocolCall(process.argv.pop());
 }
 
-// Route window.open() calls from child windows (PiP, popups) to the OS
-// browser instead of spawning new Electron windows. Only applies to child
-// windows (those with an opener) — the main window has its own handler.
+// Set the app icon on child windows opened via window.open().
+// Only applies to windows from the main window's renderer — child
+// windows (PiP, WebRTC internals) don't need this handler.
 const setupChildWindowIcon = () => {
     app.on('web-contents-created', (event, contents) => {
-        if (!contents.opener) {
-            return;
-        }
+        // Skip the main window — it has its own windowOpenHandler that
+        // decides allow/deny. Only override icon on child windows that
+        // are already allowed to open (e.g. PiP panel, allowed-host popups).
+        if (!contents.opener) return;
+
         contents.setWindowOpenHandler(({ url }) => {
+            // Child windows should open links in the external browser,
+            // not spawn another Electron window (e.g. "Go to Dashboard"
+            // on the close page).
             openExternalLink(url);
 
             return { action: 'deny' };
@@ -990,8 +1016,8 @@ function handleProtocolCall(fullProtocolCall) {
 
 /**
  * Force Single Instance Application.
- * Bypass on MAS only — requestSingleInstanceLock is unreliable in the
- * Mac App Store sandbox. Standard .dmg builds use the lock normally.
+ * MAS builds use LSMultipleInstancesProhibited in Info.plist instead,
+ * since requestSingleInstanceLock() is unreliable in the MAS sandbox.
  */
 const gotInstanceLock = process.mas ? true : app.requestSingleInstanceLock();
 

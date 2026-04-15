@@ -93,25 +93,25 @@ async function fetchStagingPRs(token, { owner, repo, cacheDir }) {
 
     const prMap = new Map(prs.map(pr => [ pr.number, pr ]));
 
-    // 3. Fetch latest commit message for each PR's head SHA
-    const shasToPrs = new Map();
+    // 3. Fetch latest commit message for each OPEN PR's head SHA.
+    //    Skip closed/merged PRs to reduce API calls — their commit
+    //    messages are nice-to-have but not worth the rate-limit cost.
+    const commitMap = new Map();
+    const openShas = [];
 
     for (const release of stagingReleases) {
         const prNum = parseInt(release.tag_name.replace('staging-pr-', ''), 10);
         const pr = prMap.get(prNum);
 
-        if (pr && pr.head && pr.head.sha) {
-            shasToPrs.set(pr.head.sha, prNum);
+        if (pr && pr.head && pr.head.sha && pr.state === 'open') {
+            openShas.push(pr.head.sha);
         }
     }
-
-    const commitMap = new Map();
-    const shas = [ ...shasToPrs.keys() ];
 
     // Fetch commit messages — parallel when authenticated, sequential without
     // a token to avoid exhausting the 60 req/hr unauthenticated rate limit.
     if (token) {
-        await Promise.all(shas.map(async sha => {
+        await Promise.all(openShas.map(async sha => {
             try {
                 const { data } = await githubApi(
                     `/repos/${owner}/${repo}/commits/${sha}`,
@@ -124,7 +124,7 @@ async function fetchStagingPRs(token, { owner, repo, cacheDir }) {
             }
         }));
     } else {
-        for (const sha of shas) {
+        for (const sha of openShas) {
             try {
                 const { data } = await githubApi(
                     `/repos/${owner}/${repo}/commits/${sha}`,

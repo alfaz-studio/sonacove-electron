@@ -34,6 +34,11 @@ function registerIpcHandlers({ getMainWindow }) {
         clearCache({ ...opts, cacheDir: CACHE_DIR })
     );
 
+    // Clear cache only for closed/merged PRs
+    ipcMain.handle('clear-closed-cache', (_event, { closedPRNumbers }) =>
+        clearCache({ prNumbers: closedPRNumbers, cacheDir: CACHE_DIR })
+    );
+
     // Get cache info
     ipcMain.handle('get-cache-info', () => getCacheInfo(CACHE_DIR));
 
