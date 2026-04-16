@@ -171,16 +171,16 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         sendParticipantsUpdate(participants);
     });
 
-    // Renderer signals screenshare ended — shrink to pill instead of
-    // destroying the window, so the user can reopen it without re-minimizing.
-    // shrinkToPill() has an internal null-window guard, so this is safe even
-    // if the PiP window was never opened or creation failed.
+    // Renderer signals screenshare stopped (main window restored, or panel
+    // closed notification echoed back). Only close the PiP if we're not
+    // already in pill mode — shrinkToPill() triggers this same event.
+    // Guard: if shrinkToPill() just fired, the renderer sends pip-screenshare-stop
+    // in response to pip-panel-closed — don't destroy the window in that case.
     register('pip-screenshare-stop', () => {
-        // Lazy require — pill.js only needed here.
         const { isPillMode } = require('./pip/pill');
 
         if (!isPillMode()) {
-            shrinkToPill();
+            closeParticipantWindow();
         }
     });
 
