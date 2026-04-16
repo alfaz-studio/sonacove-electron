@@ -41,15 +41,22 @@ const whitelistedIpcChannels = [
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',
+    'titlebar-minimize',
+    'titlebar-maximize',
+    'titlebar-close',
+    'titlebar-maximized',
+    'titlebar-unmaximized',
+    'titlebar-update-available',
     'posthog-capture',
     'retry-load',
     'update-toast-action',
-    'leave-modal-action'
+    'leave-modal-action',
+    'deeplink-modal-action'
 ];
 
-// Unlimited listeners — the preload subscribes to many channels across the app
-// lifecycle and there is no memory leak concern (all on the same ipcRenderer singleton).
-ipcRenderer.setMaxListeners(0);
+// Raise the listener cap — the preload subscribes to many channels across the app
+// lifecycle. 50 is generous enough to avoid false positives while still catching leaks.
+ipcRenderer.setMaxListeners(50);
 
 /**
  * Open an external URL.
