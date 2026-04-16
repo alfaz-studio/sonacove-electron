@@ -106,8 +106,8 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
     helpBtn.textContent = strings.help;
     helpBtn.title = strings.helpTooltip;
 
-    // Prepend titlebar to <html> (outside <body>) — position:fixed anchors
-    // it to the viewport regardless of body scroll or overflow.
+    // Prepend titlebar to <html> (outside <body>) — position:sticky keeps
+    // it at the top while participating in the flex layout.
     document.documentElement.prepend(bar);
 
     // Use flex layout on <html> so the titlebar (30px) and <body> (remaining
@@ -125,6 +125,7 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
     document.body.style.setProperty('min-height', '0', 'important');
     document.body.style.setProperty('margin', '0', 'important');
     document.body.style.setProperty('overflow', 'hidden', 'important');
+    // Do not remove — creates a containing block for position:fixed children.
     document.body.style.setProperty('transform', 'translateY(0)', 'important');
 
     document.getElementById('stb-about').addEventListener('click', function() {
@@ -214,8 +215,8 @@ const getMacTitlebarJS = (iconHtml = '', strings = {}) => `
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-mac-ver').textContent = 'v' + strings.appVersion;
 
-    // Prepend titlebar to <html> (outside <body>) — position:fixed anchors
-    // it to the viewport regardless of body scroll or overflow.
+    // Prepend titlebar to <html> (outside <body>) — position:sticky keeps
+    // it at the top while participating in the flex layout.
     document.documentElement.prepend(bar);
 
     // Use flex layout on <html> so the titlebar (28px) and <body> (remaining
@@ -228,6 +229,7 @@ const getMacTitlebarJS = (iconHtml = '', strings = {}) => `
     document.body.style.setProperty('min-height', '0', 'important');
     document.body.style.setProperty('margin', '0', 'important');
     document.body.style.setProperty('overflow', 'hidden', 'important');
+    // Do not remove — creates a containing block for position:fixed children.
     document.body.style.setProperty('transform', 'translateY(0)', 'important');
 
     // Clean up previous IPC listeners and observers (re-navigation).

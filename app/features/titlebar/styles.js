@@ -3,8 +3,8 @@
  */
 /* eslint-disable max-len */
 const TITLEBAR_CSS = ''
-    + '#sonacove-titlebar{position:sticky;top:0;left:0;right:0;height:30px;flex-shrink:0;background:#1A1A1A;'
-    + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
+    + '#sonacove-titlebar{position:sticky;top:0;height:30px;flex-shrink:0;background:#1A1A1A;'
+    + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:999999;'
     + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
     + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
@@ -42,9 +42,9 @@ const TITLEBAR_CSS = ''
  * handled by titleBarStyle:'hiddenInset' in main.js.
  */
 const MAC_TITLEBAR_CSS = ''
-    + '#sonacove-mac-titlebar{position:fixed;top:0;left:0;right:0;height:28px;'
+    + '#sonacove-mac-titlebar{position:sticky;top:0;height:28px;flex-shrink:0;'
     + 'background:#1A1A1A;'
-    + '-webkit-app-region:drag;z-index:2147483647;'
+    + '-webkit-app-region:drag;z-index:999999;'
     + 'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;font-size:12px;'
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
     + '#sonacove-mac-titlebar .stb-content{position:absolute;left:50%;top:50%;'
