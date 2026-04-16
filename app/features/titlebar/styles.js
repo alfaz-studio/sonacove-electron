@@ -3,8 +3,7 @@
  */
 /* eslint-disable max-len */
 const TITLEBAR_CSS = ''
-    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1A1A1A;'
-    + 'border-bottom:2px solid;border-image:linear-gradient(90deg,#E8613C,#F59E0B) 1;'
+    + '#sonacove-titlebar{position:sticky;top:0;left:0;right:0;height:30px;flex-shrink:0;background:#1A1A1A;'
     + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
     + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
     + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'

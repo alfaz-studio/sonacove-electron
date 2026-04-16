@@ -110,16 +110,22 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
     // it to the viewport regardless of body scroll or overflow.
     document.documentElement.prepend(bar);
 
-    // Reserve space for the titlebar via padding-top on <html>. The body
-    // inherits the reduced content area (100vh minus padding) so page
-    // content flows below the titlebar without transform hacks.
-    // 34px = 32px titlebar height + 2px gradient border (see styles.js TITLEBAR_CSS).
-    document.documentElement.style.setProperty('padding-top', '34px', 'important');
-    document.documentElement.style.setProperty('box-sizing', 'border-box', 'important');
+    // Use flex layout on <html> so the titlebar (30px) and <body> (remaining
+    // space) stack vertically. This avoids padding/margin hacks and gives body
+    // an exact computed height of (100vh - 30px).
+    // The identity transform on body creates a new containing block so that
+    // position:fixed children (e.g. dashboard sidebar) are positioned relative
+    // to body instead of the viewport — preventing overlap with the titlebar.
+    // overflow:hidden on body clips any content that still uses 100vh internally.
+    document.documentElement.style.setProperty('display', 'flex', 'important');
+    document.documentElement.style.setProperty('flex-direction', 'column', 'important');
     document.documentElement.style.setProperty('height', '100vh', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
-    document.body.style.setProperty('height', '100%', 'important');
+    document.body.style.setProperty('flex', '1', 'important');
+    document.body.style.setProperty('min-height', '0', 'important');
+    document.body.style.setProperty('margin', '0', 'important');
     document.body.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('transform', 'translateY(0)', 'important');
 
     document.getElementById('stb-about').addEventListener('click', function() {
         window.sonacoveElectronAPI.ipc.send('show-about-dialog');
@@ -212,16 +218,17 @@ const getMacTitlebarJS = (iconHtml = '', strings = {}) => `
     // it to the viewport regardless of body scroll or overflow.
     document.documentElement.prepend(bar);
 
-    // Reserve space for the titlebar via padding-top on <html>. The body
-    // inherits the reduced content area (100vh minus padding) so page
-    // content flows below the titlebar without transform hacks.
-    // 28px = macOS titlebar height (see styles.js MAC_TITLEBAR_CSS).
-    document.documentElement.style.setProperty('padding-top', '28px', 'important');
-    document.documentElement.style.setProperty('box-sizing', 'border-box', 'important');
+    // Use flex layout on <html> so the titlebar (28px) and <body> (remaining
+    // space) stack vertically. Same approach as Windows — see comments there.
+    document.documentElement.style.setProperty('display', 'flex', 'important');
+    document.documentElement.style.setProperty('flex-direction', 'column', 'important');
     document.documentElement.style.setProperty('height', '100vh', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
-    document.body.style.setProperty('height', '100%', 'important');
+    document.body.style.setProperty('flex', '1', 'important');
+    document.body.style.setProperty('min-height', '0', 'important');
+    document.body.style.setProperty('margin', '0', 'important');
     document.body.style.setProperty('overflow', 'hidden', 'important');
+    document.body.style.setProperty('transform', 'translateY(0)', 'important');
 
     // Clean up previous IPC listeners and observers (re-navigation).
     if (window._stbMacCleanup) {
