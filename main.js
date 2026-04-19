@@ -33,7 +33,7 @@ const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
 } = require('./app/features/in-app-dialogs');
 const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/paths');
-const { setupTitlebar, notifyUpdateAvailable, fakeUpdateNotification } = require('./app/features/titlebar/main');
+const { setupTitlebar, notifyUpdateAvailable } = require('./app/features/titlebar/main');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -820,9 +820,6 @@ function createJitsiMeetWindow() {
 
     // Set up the custom in-page title bar (Windows + macOS).
     setupTitlebar(mainWindow);
-
-    // TODO: REMOVE — fake update notification for visual testing
-    fakeUpdateNotification(mainWindow);
 
     // Inject a visible staging banner so testers know they're on a PR build.
     if (isStaging) {

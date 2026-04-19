@@ -114,13 +114,4 @@ function notifyUpdateAvailable(mainWindow, version) {
     }
 }
 
-// TODO: REMOVE — temporary fake update notification for visual testing
-function fakeUpdateNotification(mainWindow) {
-    mainWindow.webContents.on('did-finish-load', () => {
-        setTimeout(() => {
-            notifyUpdateAvailable(mainWindow, '2025.16.0');
-        }, 2000);
-    });
-}
-
-module.exports = { setupTitlebar, notifyUpdateAvailable, fakeUpdateNotification };
+module.exports = { setupTitlebar, notifyUpdateAvailable };
