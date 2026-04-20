@@ -127,6 +127,23 @@ function injectStylesJS() {
         + `document.head.appendChild(_s);}`;
 }
 
+// ── Mutual Exclusion ────────────────────────────────────────────────────
+// Only one toast/panel should be visible at a time (About, Info, Update).
+// Modals (leave, deeplink) are excluded — they're user-blocking and critical.
+
+const TOAST_PANEL_IDS = ['sonacove-update-toast', 'sonacove-info-toast', 'sonacove-about-panel'];
+
+/**
+ * Returns JS code that removes all existing toast/panel elements.
+ * Called at the start of each toast/panel injection.
+ *
+ * @returns {string} JS code block.
+ */
+function dismissOtherToastsJS() {
+    return `${JSON.stringify(TOAST_PANEL_IDS)}.forEach(function(id){`
+        + `var el=document.getElementById(id);if(el)el.remove();});`;
+}
+
 // ── Toast: Update Ready ─────────────────────────────────────────────────
 
 /**
@@ -136,7 +153,6 @@ function injectStylesJS() {
  * @param {string} version - The new version number.
  */
 function showUpdateToast(webContents, version, strings = {}) {
-    const v = esc(version);
     const titleText = esc(strings.title);
     const messageText = esc(strings.message);
     const laterText = esc(strings.later);
@@ -144,7 +160,7 @@ function showUpdateToast(webContents, version, strings = {}) {
     const icon = svgIcon(18, ACCENT, SVG_DOWNLOAD);
 
     const js = `(function(){
-var old=document.getElementById('sonacove-update-toast');if(old)old.remove();
+${dismissOtherToastsJS()}
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-update-toast';
@@ -290,7 +306,7 @@ function showInfoToast(webContents, opts) {
     const icon = svgIcon(18, iconColor, isError ? SVG_WARNING : SVG_INFO);
 
     const js = `(function(){
-var old=document.getElementById('sonacove-info-toast');if(old)old.remove();
+${dismissOtherToastsJS()}
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-info-toast';
@@ -341,7 +357,7 @@ function showAboutPanel(webContents, info, strings = {}) {
     const icon = svgIcon(24, '#fff', SVG_INFO);
 
     const js = `(function(){
-var old=document.getElementById('sonacove-about-panel');if(old)old.remove();
+${dismissOtherToastsJS()}
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-about-panel';

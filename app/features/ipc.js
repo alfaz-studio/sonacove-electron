@@ -15,10 +15,10 @@ const {
 const { IPC } = require('./pip/constants');
 
 /**
- * Previously registered listeners, keyed by channel.
+ * Previously registered listeners as [channel, fn] pairs.
  * Used to remove only our own listeners when re-registering.
  */
-let registeredListeners = {};
+let registeredListeners = [];
 
 /**
  * Registers all Sonacove-specific IPC listeners.
@@ -30,10 +30,10 @@ let registeredListeners = {};
  */
 function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Remove only our own previously registered listeners
-    for (const [ channel, listener ] of Object.entries(registeredListeners)) {
+    for (const [ channel, listener ] of registeredListeners) {
         ipcMain.removeListener(channel, listener);
     }
-    registeredListeners = {};
+    registeredListeners = [];
 
     /**
      * Registers a listener and tracks it for later cleanup.
@@ -42,7 +42,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
      * @param {Function} listener - The listener function.
      */
     function register(channel, listener) {
-        registeredListeners[channel] = listener;
+        registeredListeners.push([ channel, listener ]);
         ipcMain.on(channel, listener);
     }
 
@@ -137,6 +137,35 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
     register('open-help-docs', () => {
         shell.openExternal('https://docs.sonacove.com/');
+    });
+
+    // Custom window controls (frame:false on Windows)
+    register('titlebar-minimize', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        if (win && !win.isDestroyed()) {
+            win.minimize();
+        }
+    });
+
+    register('titlebar-maximize', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        if (win && !win.isDestroyed()) {
+            if (win.isMaximized()) {
+                win.unmaximize();
+            } else {
+                win.maximize();
+            }
+        }
+    });
+
+    register('titlebar-close', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        if (win && !win.isDestroyed()) {
+            win.close();
+        }
     });
 
     // ── Participant PiP panel ─────────────────────────────────────────────────

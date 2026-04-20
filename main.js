@@ -33,6 +33,7 @@ const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
 } = require('./app/features/in-app-dialogs');
 const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/paths');
+const { setupTitlebar, notifyUpdateAvailable } = require('./app/features/titlebar/main');
 
 // Track the time the app process started for session duration calculation.
 const appLaunchTime = Date.now();
@@ -317,117 +318,6 @@ function setApplicationMenu() {
     ]));
 }
 
-// ── Windows: in-page title bar ─────────────────────────────────────────────
-// Because we use titleBarStyle:'hidden' on Windows, the native menu bar is
-// gone. We inject a slim custom title bar into each loaded page so the user
-// still has About / Check for Updates without pressing Alt.
-
-const TITLEBAR_CSS = ''
-    + '#sonacove-titlebar{position:fixed;top:0;left:0;right:0;height:32px;background:#1a1a2e;'
-    + '-webkit-app-region:drag;display:flex;align-items:center;padding:0 12px;z-index:2147483647;'
-    + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;'
-    + 'color:#c0c0c0;user-select:none;box-sizing:border-box;}'
-    + '#sonacove-titlebar .stb-icon{width:20px;height:20px;margin-right:8px;background-size:contain;'
-    + 'background-repeat:no-repeat;background-position:center;}'
-    + '#sonacove-titlebar .stb-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
-    + '#sonacove-titlebar .stb-version{color:#666680;font-size:11px;margin-left:8px;}'
-    + '#sonacove-titlebar .stb-spacer{flex:1;}'
-    + '#sonacove-titlebar .stb-menu{display:flex;gap:2px;-webkit-app-region:no-drag;margin-right:140px;}'
-    + '#sonacove-titlebar .stb-btn{background:transparent;border:none;color:#a0a0a0;cursor:pointer;'
-    + 'padding:4px 10px;border-radius:4px;font-size:12px;font-family:inherit;line-height:1;'
-    + 'transition:background 0.15s ease,color 0.15s ease;}'
-    + '#sonacove-titlebar .stb-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}'
-    + '#sonacove-titlebar .stb-btn:active{background:rgba(255,255,255,0.18);color:#fff;}'
-    + 'html{box-sizing:border-box!important;padding-top:32px!important;}';
-
-const getTitlebarJS = (iconBase64 = '', strings = {}, appVersion = '') => `
-(function() {
-    var strings = ${JSON.stringify(strings)};
-
-    // Inject styles idempotently to prevent flash on re-navigation.
-    var sid = 'sonacove-titlebar-styles';
-    if (!document.getElementById(sid)) {
-        var s = document.createElement('style');
-        s.id = sid;
-        s.textContent = ${JSON.stringify(TITLEBAR_CSS)};
-        document.head.appendChild(s);
-    }
-
-    // Guard against duplicate injection.
-    if (document.getElementById('sonacove-titlebar')) return;
-
-    var bar = document.createElement('div');
-    bar.id = 'sonacove-titlebar';
-    var iconHtml = '';
-    if ('${iconBase64}') {
-        iconHtml = '<div class="stb-icon" style="background-image: url(\\'data:image/png;base64,${iconBase64}\\')"></div>';
-    }
-    bar.innerHTML =
-        iconHtml +
-        '<div class="stb-title">' + (document.title || strings.windowTitle) + '</div>' +
-        ('${appVersion}' ? '<span class="stb-version">v' + '${appVersion}'.split('.').pop() + '</span>' : '') +
-        '<div class="stb-spacer"></div>' +
-        '<div class="stb-menu">' +
-            '<button class="stb-btn" id="stb-about" title="' + strings.aboutTooltip + '">' + strings.about + '</button>' +
-            '<button class="stb-btn" id="stb-updates" title="' + strings.checkForUpdatesTooltip + '">' + strings.checkForUpdates + '</button>' +
-            '<button class="stb-btn" id="stb-help" title="' + strings.helpTooltip + '">' + strings.help + '</button>' +
-        '</div>';
-    document.body.prepend(bar);
-
-    document.getElementById('stb-about').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('show-about-dialog');
-    });
-    document.getElementById('stb-updates').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('check-for-updates');
-    });
-    document.getElementById('stb-help').addEventListener('click', function() {
-        window.sonacoveElectronAPI.ipc.send('open-help-docs');
-    });
-
-    // Keep the displayed title in sync with document.title changes.
-    var titleTarget = document.querySelector('title');
-    if (titleTarget) {
-        new MutationObserver(function() {
-            var el = document.querySelector('#sonacove-titlebar .stb-title');
-            if (el) el.textContent = document.title || 'Sonacove Meets';
-        }).observe(titleTarget, { childList: true, characterData: true, subtree: true });
-    }
-})();
-`.trim();
-
-/**
- * Injects the custom title bar into the currently loaded page (Windows only).
- */
-// Cache the icon base64 at startup rather than re-reading from disk on every navigation.
-let _cachedIconBase64 = null;
-function getIconBase64() {
-    if (_cachedIconBase64 !== null) return _cachedIconBase64;
-    try {
-        const iconPath = getIconPath('png');
-        _cachedIconBase64 = fs.existsSync(iconPath) ? fs.readFileSync(iconPath).toString('base64') : '';
-    } catch (e) {
-        _cachedIconBase64 = '';
-    }
-    return _cachedIconBase64;
-}
-
-function injectWindowsTitleBar() {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
-    }
-
-    const titlebarStrings = {
-        windowTitle: t('app.windowTitle'),
-        about: t('titlebar.about'),
-        aboutTooltip: t('titlebar.aboutTooltip'),
-        checkForUpdates: t('titlebar.checkForUpdates'),
-        checkForUpdatesTooltip: t('titlebar.checkForUpdatesTooltip'),
-        help: t('titlebar.help'),
-        helpTooltip: t('titlebar.helpTooltip')
-    };
-
-    mainWindow.webContents.executeJavaScript(getTitlebarJS(getIconBase64(), titlebarStrings, app.getVersion())).catch(() => {});
-}
 
 /**
  * Opens new window with index.html(Jitsi Meet is loaded in iframe there).
@@ -460,18 +350,19 @@ function createJitsiMeetWindow() {
         minWidth: 800,
         minHeight: 600,
         show: false,
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#1A1A1A',
 
-        // On Windows, hide the native menu bar row and show native window
-        // controls as an overlay. A custom in-page title bar is injected via
-        // injectWindowsTitleBar() on each page load.
-        ...(process.platform !== 'darwin' ? {
-            titleBarStyle: 'hidden',
-            titleBarOverlay: {
-                color: '#1a1a2e',
-                symbolColor: '#e0e0e0',
-                height: 32
-            }
+        // Windows: frameless window with custom in-page title bar (setupTitlebar).
+        // macOS: hiddenInset keeps native traffic lights but removes the title
+        //        text, giving us space to inject branding + update pill.
+        // Linux: keeps native frame — thickFrame is Windows-only and frame:false
+        //        without it breaks resize handles on Linux.
+        ...(process.platform === 'darwin' ? {
+            titleBarStyle: 'hiddenInset',
+            trafficLightPosition: { x: 12, y: 8 }
+        } : process.platform === 'win32' ? {
+            frame: false,
+            thickFrame: true
         } : {}),
 
         webPreferences: {
@@ -553,6 +444,9 @@ function createJitsiMeetWindow() {
                     later: t('updateToast.later'),
                     installNow: t('updateToast.installNow')
                 });
+
+                // Update the titlebar version indicator (both platforms).
+                notifyUpdateAvailable(mainWindow, info.version);
             }
         });
 
@@ -924,29 +818,8 @@ function createJitsiMeetWindow() {
         setupRemoteControlMain(mainWindow);
     }
 
-    // On macOS, append the version patch number to the native title bar.
-    if (process.platform === 'darwin') {
-        const patchVersion = app.getVersion().split('.').pop();
-
-        mainWindow.on('page-title-updated', (event, title) => {
-            event.preventDefault();
-            mainWindow.setTitle(title
-                ? `${title} — v${patchVersion}`
-                : `Sonacove Meets — v${patchVersion}`);
-        });
-    }
-
-    // Inject the custom in-page title bar on Windows after each page load.
-    if (process.platform !== 'darwin') {
-        mainWindow.webContents.on('did-finish-load', () => {
-            // Skip local pages (splash, error) — title bar is only for the remote dashboard.
-            const url = mainWindow.webContents.getURL();
-
-            if (!url.startsWith('file://')) {
-                injectWindowsTitleBar();
-            }
-        });
-    }
+    // Set up the custom in-page title bar (Windows + macOS).
+    setupTitlebar(mainWindow);
 
     // Inject a visible staging banner so testers know they're on a PR build.
     if (isStaging) {
@@ -1076,8 +949,6 @@ function createJitsiMeetWindow() {
 // Only applies to windows from the main window's renderer — child
 // windows (PiP, WebRTC internals) don't need this handler.
 const setupChildWindowIcon = () => {
-    const iconPath = getIconPath();
-
     app.on('web-contents-created', (event, contents) => {
         // Skip the main window — it has its own windowOpenHandler that
         // decides allow/deny. Only override icon on child windows that
