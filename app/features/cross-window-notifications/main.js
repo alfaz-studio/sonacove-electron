@@ -9,6 +9,7 @@ const MAX_TITLE_LEN = 100;
 const MAX_BODY_LEN = 250;
 const PAYLOAD_MAX_AGE_MS = 10_000;
 const DEDUP_TTL_MS = 3_000;
+const MAX_RECENT_KEYS = 50;
 
 /**
  * Sets up native OS notifications for jitsi in-meeting events when the app window is unfocused.
@@ -26,6 +27,7 @@ const DEDUP_TTL_MS = 3_000;
  */
 function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
     const capture = typeof options.capture === 'function' ? options.capture : null;
+    const notificationIcon = getIconPath('png');
 
     // uid -> timestamp (ms). Drops duplicate sends within DEDUP_TTL_MS.
     const recentUids = new Map();
@@ -37,11 +39,11 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
 
     // eslint-disable-next-line require-jsdoc
     function clearAttentionSignals() {
-        if (mainWindow && !mainWindow.isDestroyed()) {
+        if (process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed()) {
             try {
                 mainWindow.flashFrame(false);
             } catch {
-                // Platform may not support it.
+                // Platform doesn't support it.
             }
         }
         if (process.platform === 'darwin' && app.dock && bounceId !== null) {
@@ -82,7 +84,12 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         if (typeof payload.title !== 'string' || payload.title.trim() === '') {
             return false;
         }
-        if (typeof payload.timestamp !== 'number' || Date.now() - payload.timestamp > PAYLOAD_MAX_AGE_MS) {
+        if (typeof payload.timestamp !== 'number') {
+            return false;
+        }
+        const age = Date.now() - payload.timestamp;
+
+        if (age < 0 || age > PAYLOAD_MAX_AGE_MS) {
             return false;
         }
 
@@ -111,8 +118,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
 
         // Hard cap — trim oldest entries if the Map has somehow grown large
         // (e.g. a burst of distinct UIDs arrived and hasn't been cleaned yet).
-        const MAX_RECENT_KEYS = 50;
-
         while (recentUids.size > MAX_RECENT_KEYS) {
             const oldest = recentUids.keys().next().value;
 
@@ -152,7 +157,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         const notification = new Notification({
             title,
             body,
-            icon: getIconPath('png')
+            icon: notificationIcon
         });
 
         notification.on('click', () => {
