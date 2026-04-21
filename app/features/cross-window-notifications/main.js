@@ -1,9 +1,11 @@
+/* eslint-disable require-jsdoc */
 'use strict';
 
 const { BrowserWindow, Notification, app } = require('electron');
 
 const { getIconPath } = require('../paths');
 
+const IPC_CHANNEL = 'cross-window-notification';
 const MAX_TITLE_LEN = 100;
 const MAX_BODY_LEN = 250;
 const PAYLOAD_MAX_AGE_MS = 10_000;
@@ -32,25 +34,21 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
     // macOS dock bounce id — stored so focus handler can cancel it.
     let bounceId = null;
 
-    // Unread count for setBadgeCount. Reset on focus.
     let unread = 0;
 
-    /**
-     * Clears taskbar flash, dock bounce, and badge count.
-     */
     function clearAttentionSignals() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             try {
                 mainWindow.flashFrame(false);
             } catch {
-                // Platform may not support it — ignore.
+                // Platform may not support it.
             }
         }
         if (process.platform === 'darwin' && app.dock && bounceId !== null) {
             try {
                 app.dock.cancelBounce(bounceId);
             } catch {
-                // Bounce already finished — ignore.
+                // Bounce already finished.
             }
             bounceId = null;
         }
@@ -59,14 +57,11 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
             try {
                 app.setBadgeCount(0);
             } catch {
-                // Unsupported platform — ignore.
+                // Unsupported platform.
             }
         }
     }
 
-    /**
-     * Restores, shows and focuses the main window.
-     */
     function focusMainWindow() {
         if (!mainWindow || mainWindow.isDestroyed()) {
             return;
@@ -78,12 +73,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         mainWindow.focus();
     }
 
-    /**
-     * Validates the IPC payload shape and freshness.
-     *
-     * @param {object} payload
-     * @returns {boolean}
-     */
     function isPayloadValid(payload) {
         if (!payload || typeof payload !== 'object') {
             return false;
@@ -98,12 +87,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         return true;
     }
 
-    /**
-     * Returns true if the given uid was seen within DEDUP_TTL_MS, otherwise records it.
-     *
-     * @param {string|undefined} uid
-     * @returns {boolean}
-     */
     function isDuplicate(uid) {
         if (!uid) {
             return false;
@@ -126,13 +109,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         return false;
     }
 
-    /**
-     * IPC listener for 'cross-window-notification'. Pops a native OS toast
-     * + flash/bounce/badge when no app window is focused.
-     *
-     * @param {Electron.IpcMainEvent} _event
-     * @param {object} payload
-     */
     function onNotification(_event, payload) {
         if (!mainWindow || mainWindow.isDestroyed()) {
             return;
@@ -143,11 +119,11 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
             return;
         }
 
-        if (!isPayloadValid(payload)) {
+        if (!isPayloadValid(payload) || isDuplicate(payload.uid)) {
             return;
         }
 
-        if (isDuplicate(payload.uid)) {
+        if (!Notification.isSupported()) {
             return;
         }
 
@@ -155,10 +131,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         const body = typeof payload.body === 'string'
             ? payload.body.slice(0, MAX_BODY_LEN)
             : '';
-
-        if (!Notification.isSupported()) {
-            return;
-        }
 
         const notification = new Notification({
             title,
@@ -174,16 +146,12 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
 
         notification.show();
 
-        // Taskbar flash (Windows; no-op elsewhere).
-        if (process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed()) {
+        if (process.platform === 'win32') {
             try {
                 mainWindow.flashFrame(true);
-            } catch {
-                // Ignore.
-            }
+            } catch { /* empty */ }
         }
 
-        // Dock bounce (macOS).
         if (process.platform === 'darwin' && app.dock) {
             try {
                 // Cancel any previous bounce so we don't stack.
@@ -191,18 +159,14 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
                     app.dock.cancelBounce(bounceId);
                 }
                 bounceId = app.dock.bounce('informational');
-            } catch {
-                // Ignore.
-            }
+            } catch { /* empty */ }
         }
 
         // Badge count — works on macOS dock, no-op on Windows (non-Unity Linux too).
         unread += 1;
         try {
             app.setBadgeCount(unread);
-        } catch {
-            // Ignore.
-        }
+        } catch { /* empty */ }
 
         if (capture) {
             capture('cross_window_notification_shown', {
@@ -212,22 +176,15 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         }
     }
 
-    /**
-     * Window 'focus' handler — clears flash/bounce/badge when user returns.
-     */
     function onFocus() {
         clearAttentionSignals();
     }
 
-    ipcMain.on('cross-window-notification', onNotification);
+    ipcMain.on(IPC_CHANNEL, onNotification);
+    mainWindow.on('focus', onFocus);
 
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.on('focus', onFocus);
-    }
-
-    // eslint-disable-next-line require-jsdoc
     return function cleanup() {
-        ipcMain.removeListener('cross-window-notification', onNotification);
+        ipcMain.removeListener(IPC_CHANNEL, onNotification);
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.removeListener('focus', onFocus);
         }
