@@ -1,4 +1,3 @@
-/* eslint-disable require-jsdoc */
 'use strict';
 
 const { BrowserWindow, Notification, app } = require('electron');
@@ -36,6 +35,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
 
     let unread = 0;
 
+    // eslint-disable-next-line require-jsdoc
     function clearAttentionSignals() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             try {
@@ -62,6 +62,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         }
     }
 
+    // eslint-disable-next-line require-jsdoc
     function focusMainWindow() {
         if (!mainWindow || mainWindow.isDestroyed()) {
             return;
@@ -73,6 +74,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         mainWindow.focus();
     }
 
+    // eslint-disable-next-line require-jsdoc
     function isPayloadValid(payload) {
         if (!payload || typeof payload !== 'object') {
             return false;
@@ -87,8 +89,9 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         return true;
     }
 
+    // eslint-disable-next-line require-jsdoc
     function isDuplicate(uid) {
-        if (!uid) {
+        if (uid === undefined || uid === null) {
             return false;
         }
         const now = Date.now();
@@ -106,9 +109,23 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
             }
         }
 
+        // Hard cap — trim oldest entries if the Map has somehow grown large
+        // (e.g. a burst of distinct UIDs arrived and hasn't been cleaned yet).
+        const MAX_RECENT_KEYS = 50;
+
+        while (recentUids.size > MAX_RECENT_KEYS) {
+            const oldest = recentUids.keys().next().value;
+
+            if (oldest === undefined) {
+                break;
+            }
+            recentUids.delete(oldest);
+        }
+
         return false;
     }
 
+    // eslint-disable-next-line require-jsdoc
     function onNotification(_event, payload) {
         if (!mainWindow || mainWindow.isDestroyed()) {
             return;
@@ -135,8 +152,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         const notification = new Notification({
             title,
             body,
-            icon: getIconPath('png'),
-            silent: false
+            icon: getIconPath('png')
         });
 
         notification.on('click', () => {
@@ -176,6 +192,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         }
     }
 
+    // eslint-disable-next-line require-jsdoc
     function onFocus() {
         clearAttentionSignals();
     }
@@ -183,6 +200,7 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
     ipcMain.on(IPC_CHANNEL, onNotification);
     mainWindow.on('focus', onFocus);
 
+    // eslint-disable-next-line require-jsdoc
     return function cleanup() {
         ipcMain.removeListener(IPC_CHANNEL, onNotification);
         if (mainWindow && !mainWindow.isDestroyed()) {
