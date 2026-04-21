@@ -1,3 +1,4 @@
+/* eslint-disable require-jsdoc */
 'use strict';
 
 const { BrowserWindow, Notification, app } = require('electron');
@@ -37,7 +38,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
 
     let unread = 0;
 
-    // eslint-disable-next-line require-jsdoc
     function clearAttentionSignals() {
         if (process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed()) {
             try {
@@ -64,7 +64,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         }
     }
 
-    // eslint-disable-next-line require-jsdoc
     function focusMainWindow() {
         if (!mainWindow || mainWindow.isDestroyed()) {
             return;
@@ -76,7 +75,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         mainWindow.focus();
     }
 
-    // eslint-disable-next-line require-jsdoc
     function isPayloadValid(payload) {
         if (!payload || typeof payload !== 'object') {
             return false;
@@ -96,7 +94,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         return true;
     }
 
-    // eslint-disable-next-line require-jsdoc
     function isDuplicate(uid) {
         if (uid === undefined || uid === null) {
             return false;
@@ -130,9 +127,14 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
         return false;
     }
 
-    // eslint-disable-next-line require-jsdoc
-    function onNotification(_event, payload) {
+    function onNotification(event, payload) {
         if (!mainWindow || mainWindow.isDestroyed()) {
+            return;
+        }
+
+        // Only accept messages from the main window's renderer, matching the
+        // pattern used by other IPC handlers in main.js (onLeaveModal, etc).
+        if (event.sender !== mainWindow.webContents) {
             return;
         }
 
@@ -191,13 +193,12 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
 
         if (capture) {
             capture('cross_window_notification_shown', {
-                uid: payload.uid || null,
-                appearance: payload.appearance || null
+                uid: payload.uid ?? null,
+                appearance: payload.appearance ?? null
             });
         }
     }
 
-    // eslint-disable-next-line require-jsdoc
     function onFocus() {
         clearAttentionSignals();
     }
@@ -205,7 +206,6 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
     ipcMain.on(IPC_CHANNEL, onNotification);
     mainWindow.on('focus', onFocus);
 
-    // eslint-disable-next-line require-jsdoc
     return function cleanup() {
         ipcMain.removeListener(IPC_CHANNEL, onNotification);
         if (mainWindow && !mainWindow.isDestroyed()) {
