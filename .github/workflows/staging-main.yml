@@ -34,13 +34,20 @@ jobs:
             --field ref="refs/tags/${TAG}" \
             --field sha="${SHA}"
 
-          # Create release if it doesn't exist, or update its title
+          # Create release if it doesn't exist, or update it in place.
+          # --draft=false on edit unsticks any release that got flipped to
+          # draft (manual edit via the GitHub UI, or older workflow runs):
+          # the launcher's /releases/tags/<tag> fetch 404s on drafts and
+          # the main-build card stays hidden. --prerelease on edit keeps
+          # that flag stable across title/notes updates.
           if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
             gh release edit "${TAG}" \
               --repo "${{ github.repository }}" \
               --target "${SHA}" \
               --title "${TITLE}" \
-              --notes "Staging build from main branch (commit ${SHORT_SHA})"
+              --notes "Staging build from main branch (commit ${SHORT_SHA})" \
+              --draft=false \
+              --prerelease
           else
             gh release create "${TAG}" \
               --repo "${{ github.repository }}" \
