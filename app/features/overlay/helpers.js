@@ -1,7 +1,9 @@
 const { BrowserWindow, app } = require('electron');
+const isDev = require('electron-is-dev');
 const fs = require('fs');
 const path = require('path');
-const isDev = require('electron-is-dev');
+
+const { getParticipantWindow } = require('../pip/helpers');
 
 const { OVERLAY_PRELOAD_FILENAME } = require('./constants');
 const { overlayWindows } = require('./window-factory');
@@ -9,12 +11,19 @@ const { overlayWindows } = require('./window-factory');
 // ── Window lookup ───────────────────────────────────────────────────────────
 
 /**
- * Finds the main Sonacove application window.
+ * Finds the main Sonacove application window, excluding auxiliary windows
+ * (annotation overlays and the participant PiP panel). The PiP panel must be
+ * excluded explicitly — it's always-on-top with skipTaskbar, so a naive
+ * "first visible window" search returns it whenever the main window is
+ * minimized or hidden (e.g. deep-link navigation while PiP is open).
  *
- * @returns {BrowserWindow|undefined} The main window instance.
+ * @returns {BrowserWindow|null} The main window instance, or null if none.
  */
 function getMainWindow() {
-    const windows = BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !overlayWindows.has(w));
+    const participantWin = getParticipantWindow();
+    const windows = BrowserWindow.getAllWindows().filter(
+        w => !w.isDestroyed() && !overlayWindows.has(w) && w !== participantWin
+    );
 
     // 1. Try by visibility (more reliable than title which may not be set during startup)
     const visible = windows.find(w => w.isVisible());
@@ -23,8 +32,8 @@ function getMainWindow() {
         return visible;
     }
 
-    // 2. Fallback
-    return windows[0];
+    // 2. Fallback — normalized to null (matches pip/helpers:getMainWindowExcludingPip)
+    return windows[0] || null;
 }
 
 /**

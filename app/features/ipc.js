@@ -9,10 +9,10 @@ const {
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
-    getParticipantWindow,
     getCurrentState,
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
+const { getParticipantWindow } = require('./pip/helpers');
 
 /**
  * Previously registered listeners as [channel, fn] pairs.
