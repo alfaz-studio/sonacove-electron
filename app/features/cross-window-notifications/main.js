@@ -17,9 +17,15 @@ const MAX_RECENT_KEYS = 50;
  *
  * The renderer (jitsi-meet) forwards allowlisted notifications over the
  * 'cross-window-notification' IPC channel. This module checks focus state and,
- * when no app window has focus, pops a native Notification + flashes the taskbar
- * (Windows) / bounces the dock (macOS) / sets an unread badge. Clicking the toast
- * restores and focuses the main window. Focus clears all three attention signals.
+ * when the main window isn't focused, pops a native Notification + flashes the
+ * taskbar (Windows) / bounces the dock (macOS) / sets an unread badge. Clicking
+ * the toast restores and focuses the main window. Focus clears all three
+ * attention signals.
+ *
+ * Currently gated off for macOS at the call site in main.js. macOS code paths
+ * (dock.bounce, setBadgeCount, Notification permission flow) are implemented
+ * but unverified end-to-end — enable for macOS once tested. Windows and Linux
+ * run the same path and are enabled.
  *
  * @param {Electron.IpcMain} ipcMain
  * @param {Electron.BrowserWindow} mainWindow
