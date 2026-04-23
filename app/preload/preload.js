@@ -51,7 +51,8 @@ const whitelistedIpcChannels = [
     'retry-load',
     'update-toast-action',
     'leave-modal-action',
-    'deeplink-modal-action'
+    'deeplink-modal-action',
+    'cross-window-notification'
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app
