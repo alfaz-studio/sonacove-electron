@@ -1,7 +1,7 @@
 /* eslint-disable require-jsdoc */
 'use strict';
 
-const { BrowserWindow, Notification, app } = require('electron');
+const { Notification, app } = require('electron');
 
 const { getIconPath } = require('../paths');
 
@@ -138,8 +138,11 @@ function setupCrossWindowNotifications(ipcMain, mainWindow, options = {}) {
             return;
         }
 
-        // Any of our windows focused → drop. In-app React toast already shows.
-        if (BrowserWindow.getFocusedWindow() !== null) {
+        // Main window focused → user sees the in-app React toast; skip OS toast.
+        // Check only the main window, not getFocusedWindow() — the always-on-top
+        // Participants PiP can hold application-level focus even when the user
+        // has switched to another app, which would wrongly suppress every toast.
+        if (mainWindow.isFocused()) {
             return;
         }
 
