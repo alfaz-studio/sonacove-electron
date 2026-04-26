@@ -1,4 +1,4 @@
-# Jitsi Meet Electron
+# Sonacove Electron  (forked from Jitsi Meet)
 
 Desktop application for [Jitsi Meet] built with [Electron].
 
