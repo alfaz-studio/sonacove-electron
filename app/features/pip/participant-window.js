@@ -9,7 +9,7 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
 const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
-const { setParticipantWindow, getMainWindow, resolveFile } = require('./helpers');
+const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
@@ -315,16 +315,11 @@ function closeParticipantWindow(notifyUserClosed = false) {
     }
 }
 
-function getParticipantWindow() {
-    return participantWindow;
-}
-
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
-    getParticipantWindow,
     getCurrentState: getState,
 };

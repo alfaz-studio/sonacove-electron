@@ -53,7 +53,11 @@ const config = require('./app/features/config');
 const { setupCrossWindowNotifications } = require('./app/features/cross-window-notifications/main');
 const {
     registerProtocol,
-    navigateDeepLink
+    navigateDeepLink,
+    takeDeeplinkNavigating,
+    isDeeplinkPending,
+    completeDeeplinkNavigation,
+    cleanupDeeplinkState
 } = require('./app/features/deep-link');
 const { setupSonacoveIPC } = require('./app/features/ipc');
 const { closeOverlay } = require('./app/features/overlay/overlay-window');
@@ -478,7 +482,20 @@ function createJitsiMeetWindow() {
     // Not calling event.preventDefault() keeps the page open (prevents unload).
     // If the user confirms "Leave", the IPC handler triggers a clean XMPP leave
     // via pip-end-meeting, then the will-navigate handler destroys the window.
-    mainWindow.webContents.on('will-prevent-unload', () => {
+    //
+    // Exception: deep-link navigation. deep-link.js's loadURL also fires
+    // will-prevent-unload; in that case the user already confirmed the
+    // deep-link modal, so event.preventDefault() overrides the beforeunload
+    // block and lets the navigation proceed. takeDeeplinkNavigating()
+    // reads and clears the flag atomically so it can't leak into a later
+    // unrelated close attempt.
+    mainWindow.webContents.on('will-prevent-unload', event => {
+        if (takeDeeplinkNavigating()) {
+            event.preventDefault();
+
+            return;
+        }
+
         showLeaveModal(mainWindow.webContents, {
             title: t('leaveModal.title'),
             message: t('leaveModal.message'),
@@ -633,8 +650,29 @@ function createJitsiMeetWindow() {
         const parsedUrl = new URL(url);
 
         if (parsedUrl.pathname.includes('/static/close')) {
-            if (event) {
-                event.preventDefault();
+            event.preventDefault();
+
+            // Deep-link-initiated leave: after leaveConference() reaches
+            // /static/close, navigate to the new meeting URL instead of
+            // destroying the window or redirecting to the dashboard.
+            //
+            // If the leave-modal was also confirmed in parallel (rare race),
+            // cancel its destroy fallback — the deep-link navigation
+            // supersedes the quit, otherwise the 5s quitFallbackTimer
+            // would destroy the newly-loaded window.
+            if (isDeeplinkPending()) {
+                if (quitting) {
+                    clearTimeout(quitFallbackTimer);
+                    quitting = false;
+                }
+                // Defer out of the will-navigate dispatch — loadURL inside
+                // the navigation handler re-enters Electron's navigation
+                // stack and causes unpredictable ordering.
+                setImmediate(() => {
+                    completeDeeplinkNavigation();
+                });
+
+                return;
             }
 
             // If the user confirmed the leave-modal, destroy instead of
@@ -663,7 +701,7 @@ function createJitsiMeetWindow() {
                 mainWindow.loadURL(closePageUrl);
             });
 
-            return 'redirected';
+            return;
         }
 
         if (parsedUrl.pathname.startsWith('/meet')) {
@@ -930,6 +968,10 @@ function createJitsiMeetWindow() {
 
         // Close the annotation overlay if it is open
         closeOverlay();
+
+        // Tear down any in-flight deep-link state so its timers don't keep
+        // ticking against a destroyed window.
+        cleanupDeeplinkState();
 
         ipcMain.removeListener('retry-load', onRetryLoad);
         ipcMain.removeListener('update-toast-action', onUpdateToast);
