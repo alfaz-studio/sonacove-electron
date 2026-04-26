@@ -50,6 +50,7 @@ if (process.platform === 'win32') {
 }
 
 const config = require('./app/features/config');
+const { setupCrossWindowNotifications } = require('./app/features/cross-window-notifications/main');
 const {
     registerProtocol,
     navigateDeepLink,
@@ -727,6 +728,16 @@ function createJitsiMeetWindow() {
         capture
     });
 
+    // Cross-window OS notifications are gated off for macOS. The dock.bounce /
+    // setBadgeCount / Notification permission paths are implemented but need
+    // end-to-end verification (permission prompt flow, signed-build behavior,
+    // PiP focus interaction) before the feature ships on mac. Windows and
+    // Linux both use the same renderer-forward → native toast path and are
+    // enabled. Revisit mac once tested.
+    const cleanupCrossWindowNotifications = process.platform === 'darwin'
+        ? () => {}
+        : setupCrossWindowNotifications(ipcMain, mainWindow, { capture });
+
     windowState.manage(mainWindow);
 
     // Show a branded splash screen first, then navigate to the remote URL.
@@ -950,6 +961,7 @@ function createJitsiMeetWindow() {
 
         // Remove PiP IPC listeners to prevent accumulation on window recreation (macOS).
         cleanupPip();
+        cleanupCrossWindowNotifications();
 
         // Destroy the participant PiP panel (may still be alive in pill mode).
         closeParticipantWindow(false);
