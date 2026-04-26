@@ -100,14 +100,8 @@ if (isDev) {
     app.commandLine.appendSwitch('allow-insecure-localhost');
 }
 
-// Enable WebRTC field trials:
-// - Opus RED: redundant audio encoding for packet loss resilience
-// - FlexFEC-03: forward error correction for video in P2P calls
-//   (advertise in SDP + enable sending; receive is on by default)
-app.commandLine.appendSwitch('force-fieldtrials',
-    'WebRTC-Audio-Red-For-Opus/Enabled/'
-    + 'WebRTC-FlexFEC-03-Advertised/Enabled/'
-    + 'WebRTC-FlexFEC-03/Enabled/');
+// Enable Opus RED field trial.
+app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-Audio-Red-For-Opus/Enabled/');
 
 // Wayland: Enable optional PipeWire support.
 if (!app.commandLine.hasSwitch('enable-features')) {
