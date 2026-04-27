@@ -9,6 +9,7 @@ const {
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
+    suppressUnreadChatCount,
     getCurrentState,
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
@@ -248,6 +249,10 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             mainWindow.focus();
             if (data?.openPanel) {
                 mainWindow.webContents.send('pip-open-chat');
+                // Suppress the unread badge in subsequent participant updates
+                // until jitsi-meet's chat-read state catches up — otherwise
+                // a re-opened PiP briefly flashes the stale count.
+                suppressUnreadChatCount();
             }
         }
     });

@@ -31,8 +31,8 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
           </span>
         </button>
-        <button class="ctrl-btn" id="chatBtn" title="Open chat" style="position: relative;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+        <button class="ctrl-btn" id="chatBtn" title="Back to meeting" style="position: relative;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>
             <span class="chat-badge-count hidden" id="chatBadgeCount">0</span>
         </button>
         <button class="ctrl-btn" id="closeBtn" title="Minimize to pill">
@@ -97,6 +97,7 @@
       var pillOverlay = document.getElementById('pillOverlay');
       var pillBtn = document.getElementById('pillBtn');
       var pillBadge = document.getElementById('pillBadge');
+      var chatBtn = document.getElementById('chatBtn');
       var chatBadgeCount = document.getElementById('chatBadgeCount');
 
       // macOS: match pill shape to the native rounded-square window background.
@@ -402,6 +403,7 @@
 
       function updateChatBadge(count) {
         lastUnreadCount = count;
+        chatBtn.title = count > 0 ? 'Open chat' : 'Back to meeting';
 
         if (count > 0) {
           chatBadgeCount.textContent = count > 99 ? '99+' : count;
