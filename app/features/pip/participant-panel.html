@@ -402,8 +402,10 @@
       }
 
       function updateChatBadge(count) {
+        if ((lastUnreadCount > 0) !== (count > 0)) {
+          chatBtn.title = count > 0 ? 'Open chat' : 'Back to meeting';
+        }
         lastUnreadCount = count;
-        chatBtn.title = count > 0 ? 'Open chat' : 'Back to meeting';
 
         if (count > 0) {
           chatBadgeCount.textContent = count > 99 ? '99+' : count;

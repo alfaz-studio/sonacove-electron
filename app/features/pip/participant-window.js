@@ -20,17 +20,8 @@ let currentOrientation = 'horizontal';
 let currentParticipantCount = 1;
 let lastParticipantsData = null;
 
-// When the user opens chat from the PiP, jitsi-meet's chat-read state takes
-// time to propagate back into pp-participants-update. During this window we
-// override unreadChatCount to 0 so the PiP doesn't flash a stale badge.
-//
-// 15s is the upper bound of "click chat → read for a bit → minimise → PiP
-// reopens before jitsi catches up". Suppression usually drops earlier via
-// one of the signals below — the timer is just a safety floor.
-//
-// Baseline tracks the count at suppression-start so a real new message
-// arriving DURING the window (incoming > baseline) drops suppression and
-// shows the new badge.
+// See suppressUnreadChatCount() for the rationale. 15s is the safety floor;
+// suppression normally drops earlier via the signals in sendParticipantsUpdate.
 const UNREAD_SUPPRESS_MS = 15000;
 let suppressUnreadUntil = 0;
 let suppressBaseline = 0;
@@ -233,11 +224,10 @@ function openParticipantWindow() {
         if (participantWindow && !participantWindow.isDestroyed()) {
             participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
 
-            // Direct send — the cache is always suppression-applied at write
-            // time (sendParticipantsUpdate is the only writer of
-            // lastParticipantsData), so re-routing through that function
-            // here would just re-evaluate suppression against our own
-            // already-zeroed value and drop suppression early.
+            // Direct send: the cache is already suppression-applied (via
+            // sendParticipantsUpdate, the only writer); re-routing would
+            // re-evaluate suppression against our own zeroed value and
+            // drop the window early.
             if (lastParticipantsData) {
                 participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, lastParticipantsData);
             }
@@ -289,24 +279,13 @@ function sendParticipantFrame(frameData) {
 }
 
 function sendParticipantsUpdate(participants) {
-    // Apply the unread-chat suppression window (see suppressUnreadChatCount).
-    // Four exit conditions, in order:
-    //   1. timer expired              → pass through, drop suppression
-    //   2. incoming count === 0       → jitsi caught up, drop suppression
-    //   3. incoming count > baseline  → real new messages arrived, drop
-    //                                   suppression and pass the new count
-    //                                   through so the user sees them
-    //   otherwise (count > 0 and <= baseline) → stale propagation, override
-    //                                   to 0. Timer is NOT re-armed — the
-    //                                   fixed window is the safety floor.
     if (suppressUnreadUntil > 0) {
-        const incoming = participants?.unreadChatCount || 0;
+        const incoming = participants?.unreadChatCount ?? 0;
+        const expired = Date.now() >= suppressUnreadUntil;
+        const caughtUp = incoming === 0;
+        const newMessages = incoming > suppressBaseline;
 
-        if (Date.now() >= suppressUnreadUntil) {
-            suppressUnreadUntil = 0;
-        } else if (incoming === 0) {
-            suppressUnreadUntil = 0;
-        } else if (incoming > suppressBaseline) {
+        if (expired || caughtUp || newMessages) {
             suppressUnreadUntil = 0;
         } else {
             participants = { ...participants, unreadChatCount: 0 };
@@ -322,12 +301,8 @@ function sendParticipantsUpdate(participants) {
 
 function closeParticipantWindow(notifyUserClosed = false) {
     lastParticipantsData = null;
-    // Do NOT reset suppressUnreadUntil here. The whole point of the
-    // suppression is to survive the close-and-reopen cycle that follows
-    // a chat-button click (PiP closes ms after the click, reopens when
-    // the user minimises again). Resetting would defeat the feature.
-    // The timer self-expires if it hasn't been re-armed by an incoming
-    // stale update, so stale state can't accumulate.
+    // suppressUnreadUntil intentionally survives close: the chat-click
+    // closes the PiP ms later and reopens it when the user minimises.
     if (participantWindow && !participantWindow.isDestroyed()) {
         participantWindow.destroy();
         participantWindow = null;
@@ -344,20 +319,18 @@ function closeParticipantWindow(notifyUserClosed = false) {
 }
 
 /**
- * Suppress the unread-chat badge for a short window after the user opened
- * chat from the PiP. Without this, jitsi-meet's chat-read state takes a few
- * seconds to propagate, so the next pp-participants-update still carries
- * the old unreadChatCount and a re-opened PiP briefly shows a stale badge.
+ * Suppress the unread-chat badge after the user opened chat from the PiP.
+ * jitsi-meet's chat-read state takes a few seconds to propagate, so the
+ * next pp-participants-update still carries the old unreadChatCount and
+ * a re-opened PiP would briefly show a stale badge.
  *
- * Tracks a baseline (the count at suppression-start) so a real new message
- * arriving during the window — incoming > baseline — drops suppression
- * and lets the new badge through. Drops early on incoming count === 0
- * (jitsi caught up) or via the safety timer.
+ * Baseline = count at suppression-start: incoming > baseline drops
+ * suppression so a real new message during the window shows immediately.
  */
 function suppressUnreadChatCount() {
-    suppressBaseline = lastParticipantsData?.unreadChatCount || 0;
+    suppressBaseline = lastParticipantsData?.unreadChatCount ?? 0;
     if (lastParticipantsData) {
-        lastParticipantsData.unreadChatCount = 0;
+        lastParticipantsData = { ...lastParticipantsData, unreadChatCount: 0 };
     }
     suppressUnreadUntil = Date.now() + UNREAD_SUPPRESS_MS;
 }
