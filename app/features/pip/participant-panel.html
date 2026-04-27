@@ -92,6 +92,7 @@
 
       var panel = document.getElementById('panel');
       var tilesContainer = document.getElementById('tilesContainer');
+      var toggleBtn = document.getElementById('toggleBtn');
       var toggleIcon = document.getElementById('toggleIcon');
       var gripIcon = document.getElementById('gripIcon');
       var participantCountEl = document.getElementById('participantCount');
@@ -395,6 +396,10 @@
         } else {
           pillBadge.classList.add('hidden');
         }
+
+        // Layout toggle is only meaningful with 2+ tiles. Hide it when the
+        // user is alone in the meeting — there's nothing to re-arrange.
+        toggleBtn.style.display = total > 1 ? '' : 'none';
       }
 
       function updateChatBadge(count) {
