@@ -237,14 +237,18 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
-    // User clicked chat badge in PiP — restore main window and open chat.
-    register('pp-open-chat', () => {
+    // User clicked chat icon in PiP — restore + focus main window. Only
+    // open the chat panel itself when there are unread messages; otherwise
+    // just bring the meeting forward.
+    register('pp-open-chat', (_event, data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) {
                 mainWindow.restore();
             }
             mainWindow.focus();
-            mainWindow.webContents.send('pip-open-chat');
+            if (data?.openPanel) {
+                mainWindow.webContents.send('pip-open-chat');
+            }
         }
     });
 

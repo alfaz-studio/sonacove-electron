@@ -73,6 +73,7 @@
       var currentOrientation = 'horizontal';
       var participants = [];
       var totalParticipantCount = 0;
+      var lastUnreadCount = 0;
       var visibleTileCount = 4;
       var resizeEdge = null; // which edge is being dragged — determines slice direction
       // { participantId: true } — local pinned by default.
@@ -400,6 +401,8 @@
       }
 
       function updateChatBadge(count) {
+        lastUnreadCount = count;
+
         if (count > 0) {
           chatBadgeCount.textContent = count > 99 ? '99+' : count;
           chatBadgeCount.classList.remove('hidden');
@@ -587,7 +590,7 @@
       });
 
       document.getElementById('chatBtn').addEventListener('click', function () {
-        window.panelAPI.openChat();
+        window.panelAPI.openChat(lastUnreadCount > 0);
       });
 
       document.getElementById('endMeetingBtn').addEventListener('click', function () {
