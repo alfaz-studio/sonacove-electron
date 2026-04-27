@@ -146,16 +146,6 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
-     * Tell the main process to restore and focus the main window,
-     * closing the PiP panel.
-     *
-     * @returns {void}
-     */
-    focusMainWindow() {
-        ipcRenderer.send('pp-focus-main');
-    },
-
-    /**
      * Tell the main process to end the meeting (leave conference)
      * without restoring the main window.
      *

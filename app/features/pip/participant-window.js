@@ -132,28 +132,6 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
     participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
 });
 
-ipcMain.on(IPC.FOCUS_MAIN, () => {
-    const mw = getMainWindow();
-
-    if (process.platform === 'darwin') {
-        app.dock.show();
-        app.focus({ steal: true });
-    }
-
-    if (mw && !mw.isDestroyed()) {
-        if (mw.isMinimized()) {
-            mw.restore();
-        }
-        mw.show();
-        mw.focus();
-    }
-
-    // Close PiP directly instead of relying on the indirect
-    // pip-window-restored → renderer → shrinkToPill path,
-    // which races with the blur timer on macOS.
-    closeParticipantWindow(false);
-});
-
 // ── Window lifecycle ─────────────────────────────────────────────────────────
 
 /**
