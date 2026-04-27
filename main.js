@@ -1194,5 +1194,19 @@ if (!isStaging) {
  */
 app.on('open-url', (event, data) => {
     event.preventDefault();
+
+    // Match the Windows `second-instance` behavior: bring the app forward
+    // before the deep-link modal renders. macOS auto-activates the app on
+    // open-url, but a window hidden via cmd+H stays hidden, and a minimized
+    // window stays minimized — so the modal would render invisibly. show()
+    // is required (focus() alone won't un-hide a hidden window).
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+        mainWindow.show();
+        mainWindow.focus();
+    }
+
     handleProtocolCall(data);
 });
