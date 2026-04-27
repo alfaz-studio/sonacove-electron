@@ -669,6 +669,12 @@ function createJitsiMeetWindow() {
                 return;
             }
 
+            // /static/close is the canonical "meeting ended" signal — the
+            // PiP must not survive past it. The screenshare-stop handler
+            // skips the close in pill mode (to avoid the shrinkToPill
+            // teardown loop), so we close it here unconditionally.
+            closeParticipantWindow(false);
+
             // If the user confirmed the leave-modal, destroy instead of
             // navigating to the dashboard — the meeting was left cleanly.
             if (quitting) {
