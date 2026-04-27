@@ -7,7 +7,7 @@
 
 const { ipcMain, screen } = require('electron');
 const { PILL_SIZE, MARGIN, IPC } = require('./constants');
-const { getMainWindow } = require('./helpers');
+const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setVisibleTileCount } = require('./resize');
 

@@ -10,8 +10,9 @@ const path = require('path');
 let _participantWindow = null;
 
 /**
- * Sets the participant window reference so getMainWindow() can exclude it.
- * Called by participant-window.js whenever the window is created or destroyed.
+ * Sets the participant window reference so getMainWindowExcludingPip() and
+ * overlay/helpers:getMainWindow can exclude it. Called by
+ * participant-window.js whenever the window is created or destroyed.
  *
  * @param {BrowserWindow|null} win
  */
@@ -20,15 +21,37 @@ function setParticipantWindow(win) {
 }
 
 /**
- * Returns the actual main application window, excluding the PiP panel.
- *
- * The generic "first visible window" approach fails when the main window is
- * minimized because the always-on-top PiP panel becomes the first visible
- * window instead.
+ * Returns the participant PiP window reference (or null). Exported so that
+ * other features' main-window lookups (e.g. overlay/helpers, deep-link) can
+ * exclude it — the always-on-top PiP panel would otherwise be picked as the
+ * "first visible" window when the main window is minimized/hidden.
  *
  * @returns {BrowserWindow|null}
  */
-function getMainWindow() {
+function getParticipantWindow() {
+    return _participantWindow;
+}
+
+/**
+ * Returns the first non-destroyed window that isn't the participant PiP
+ * panel. Pip-internal helper only.
+ *
+ * ⚠ DO NOT use outside the `pip/` feature. This helper exists solely to
+ * avoid a circular require back into `overlay/helpers`, and it has two
+ * limitations compared to `overlay/helpers:getMainWindow`:
+ *
+ *   1. It does NOT exclude annotation overlay windows — an overlay could
+ *      be returned if present.
+ *   2. It does NOT prefer visible windows — it returns the first
+ *      non-destroyed match.
+ *
+ * These are acceptable for pip-internal use (display geometry / bounds
+ * lookups) but wrong for routing user intent. External callers should use
+ * `overlay/helpers:getMainWindow` instead.
+ *
+ * @returns {BrowserWindow|null}
+ */
+function getMainWindowExcludingPip() {
     const windows = BrowserWindow.getAllWindows().filter(
         w => !w.isDestroyed() && w !== _participantWindow
     );
@@ -56,6 +79,7 @@ function resolveFile(filename, featureDir) {
 
 module.exports = {
     setParticipantWindow,
-    getMainWindow,
+    getParticipantWindow,
+    getMainWindowExcludingPip,
     resolveFile,
 };
