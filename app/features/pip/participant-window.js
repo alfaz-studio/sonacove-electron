@@ -304,6 +304,11 @@ function closeParticipantWindow(notifyUserClosed = false) {
     lastParticipantsData = null;
     // suppressUnreadUntil intentionally survives close: the chat-click
     // closes the PiP ms later and reopens it when the user minimises.
+    // Edge case: if a new meeting starts within the 15s window with
+    // unread <= suppressBaseline (carried from the old meeting), those
+    // messages are suppressed briefly. The caughtUp signal
+    // (incoming === 0) drops suppression on a clean-slate meeting, and
+    // the timer caps the worst case at 15s.
     if (participantWindow && !participantWindow.isDestroyed()) {
         participantWindow.destroy();
         participantWindow = null;

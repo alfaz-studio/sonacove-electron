@@ -60,6 +60,10 @@ function sendToMainWindow(channel, data) {
 function restoreMainWindow(mainWindow) {
     const mw = mainWindow || getMainWindow();
 
+    if (!mw || mw.isDestroyed()) {
+        return;
+    }
+
     if (process.platform === 'darwin') {
         // Dock icon is hidden when PiP (alwaysOnTop+skipTaskbar) is the only
         // visible window. steal: true is needed when another app is in the
@@ -68,13 +72,11 @@ function restoreMainWindow(mainWindow) {
         app.focus({ steal: true });
     }
 
-    if (mw && !mw.isDestroyed()) {
-        if (mw.isMinimized()) {
-            mw.restore();
-        }
-        mw.show();
-        mw.focus();
+    if (mw.isMinimized()) {
+        mw.restore();
     }
+    mw.show();
+    mw.focus();
 }
 
 // ── Overlay creation helpers ────────────────────────────────────────────────
