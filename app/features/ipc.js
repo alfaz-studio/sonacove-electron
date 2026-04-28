@@ -3,6 +3,7 @@ const isDev = require('electron-is-dev');
 
 const config = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
+const { restoreMainWindow } = require('./overlay/helpers');
 const {
     openParticipantWindow,
     sendParticipantFrame,
@@ -243,10 +244,11 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // just bring the meeting forward.
     register('pp-open-chat', (_event, data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();
-            }
-            mainWindow.focus();
+            // restoreMainWindow handles dock.show + app.focus({ steal }) on
+            // macOS — required because PiP (alwaysOnTop+skipTaskbar) hides
+            // the dock icon and focus() alone won't bring the app forward
+            // when another app is in the foreground.
+            restoreMainWindow(mainWindow);
             if (data?.openPanel) {
                 mainWindow.webContents.send('pip-open-chat');
                 suppressUnreadChatCount();

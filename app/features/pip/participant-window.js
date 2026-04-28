@@ -287,6 +287,7 @@ function sendParticipantsUpdate(participants) {
 
         if (expired || caughtUp || newMessages) {
             suppressUnreadUntil = 0;
+            suppressBaseline = 0;
         } else {
             participants = { ...participants, unreadChatCount: 0 };
         }
