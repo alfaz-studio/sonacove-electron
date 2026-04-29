@@ -3,12 +3,14 @@ const isDev = require('electron-is-dev');
 
 const config = require('./config');
 const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
+const { restoreMainWindow } = require('./overlay/helpers');
 const {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
+    suppressUnreadChatCount,
     getCurrentState,
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
@@ -237,14 +239,20 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
-    // User clicked chat badge in PiP — restore main window and open chat.
-    register('pp-open-chat', () => {
+    // User clicked chat icon in PiP — restore + focus main window. Only
+    // open the chat panel itself when there are unread messages; otherwise
+    // just bring the meeting forward.
+    register('pp-open-chat', (_event, data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();
+            // restoreMainWindow handles dock.show + app.focus({ steal }) on
+            // macOS — required because PiP (alwaysOnTop+skipTaskbar) hides
+            // the dock icon and focus() alone won't bring the app forward
+            // when another app is in the foreground.
+            restoreMainWindow(mainWindow);
+            if (data?.openPanel) {
+                mainWindow.webContents.send('pip-open-chat');
+                suppressUnreadChatCount();
             }
-            mainWindow.focus();
-            mainWindow.webContents.send('pip-open-chat');
         }
     });
 

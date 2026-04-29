@@ -43,7 +43,6 @@ const IPC = {
     TOGGLE_AUDIO: 'pp-toggle-audio',
     TOGGLE_VIDEO: 'pp-toggle-video',
     OPEN_CHAT: 'pp-open-chat',
-    FOCUS_MAIN: 'pp-focus-main',
     END_MEETING: 'pp-end-meeting',
     START_EDGE_RESIZE: 'pp-start-edge-resize',
     STOP_EDGE_RESIZE: 'pp-stop-edge-resize',

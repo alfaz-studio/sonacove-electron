@@ -26,17 +26,14 @@
         <span class="participant-count" id="participantCount">0 participants</span>
       </div>
       <div class="control-right">
-        <button class="ctrl-btn" id="toggleBtn" title="Toggle layout">
+        <button class="ctrl-btn" id="toggleBtn" title="Toggle layout" style="display: none;">
           <span id="toggleIcon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
           </span>
         </button>
-        <button class="ctrl-btn" id="chatBtn" title="Open chat" style="position: relative;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+        <button class="ctrl-btn" id="chatBtn" title="Back to meeting" style="position: relative;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>
             <span class="chat-badge-count hidden" id="chatBadgeCount">0</span>
-        </button>
-        <button class="ctrl-btn" id="backBtn" title="Back to meeting">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
         </button>
         <button class="ctrl-btn" id="closeBtn" title="Minimize to pill">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
@@ -76,6 +73,7 @@
       var currentOrientation = 'horizontal';
       var participants = [];
       var totalParticipantCount = 0;
+      var lastUnreadCount = 0;
       var visibleTileCount = 4;
       var resizeEdge = null; // which edge is being dragged — determines slice direction
       // { participantId: true } — local pinned by default.
@@ -92,12 +90,14 @@
 
       var panel = document.getElementById('panel');
       var tilesContainer = document.getElementById('tilesContainer');
+      var toggleBtn = document.getElementById('toggleBtn');
       var toggleIcon = document.getElementById('toggleIcon');
       var gripIcon = document.getElementById('gripIcon');
       var participantCountEl = document.getElementById('participantCount');
       var pillOverlay = document.getElementById('pillOverlay');
       var pillBtn = document.getElementById('pillBtn');
       var pillBadge = document.getElementById('pillBadge');
+      var chatBtn = document.getElementById('chatBtn');
       var chatBadgeCount = document.getElementById('chatBadgeCount');
 
       // macOS: match pill shape to the native rounded-square window background.
@@ -395,9 +395,18 @@
         } else {
           pillBadge.classList.add('hidden');
         }
+
+        // Layout toggle is only meaningful with 2+ tiles. Hide it when the
+        // user is alone in the meeting — there's nothing to re-arrange.
+        toggleBtn.style.display = total > 1 ? '' : 'none';
       }
 
       function updateChatBadge(count) {
+        if ((lastUnreadCount > 0) !== (count > 0)) {
+          chatBtn.title = count > 0 ? 'Open chat' : 'Back to meeting';
+        }
+        lastUnreadCount = count;
+
         if (count > 0) {
           chatBadgeCount.textContent = count > 99 ? '99+' : count;
           chatBadgeCount.classList.remove('hidden');
@@ -584,12 +593,8 @@
         window.panelAPI.toggleOrientation();
       });
 
-      document.getElementById('backBtn').addEventListener('click', function () {
-        window.panelAPI.focusMainWindow();
-      });
-
       document.getElementById('chatBtn').addEventListener('click', function () {
-        window.panelAPI.openChat();
+        window.panelAPI.openChat(lastUnreadCount > 0);
       });
 
       document.getElementById('endMeetingBtn').addEventListener('click', function () {

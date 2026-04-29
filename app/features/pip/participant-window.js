@@ -20,6 +20,12 @@ let currentOrientation = 'horizontal';
 let currentParticipantCount = 1;
 let lastParticipantsData = null;
 
+// See suppressUnreadChatCount() for the rationale. 15s is the safety floor;
+// suppression normally drops earlier via the signals in sendParticipantsUpdate.
+const UNREAD_SUPPRESS_MS = 15000;
+let suppressUnreadUntil = 0;
+let suppressBaseline = 0;
+
 // ── Wire up drag and pill subsystems ─────────────────────────────────────────
 
 const getWindow = () => participantWindow;
@@ -132,28 +138,6 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
     participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
 });
 
-ipcMain.on(IPC.FOCUS_MAIN, () => {
-    const mw = getMainWindow();
-
-    if (process.platform === 'darwin') {
-        app.dock.show();
-        app.focus({ steal: true });
-    }
-
-    if (mw && !mw.isDestroyed()) {
-        if (mw.isMinimized()) {
-            mw.restore();
-        }
-        mw.show();
-        mw.focus();
-    }
-
-    // Close PiP directly instead of relying on the indirect
-    // pip-window-restored → renderer → shrinkToPill path,
-    // which races with the blur timer on macOS.
-    closeParticipantWindow(false);
-});
-
 // ── Window lifecycle ─────────────────────────────────────────────────────────
 
 /**
@@ -240,6 +224,10 @@ function openParticipantWindow() {
         if (participantWindow && !participantWindow.isDestroyed()) {
             participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
 
+            // Direct send: the cache is already suppression-applied (via
+            // sendParticipantsUpdate, the only writer); re-routing would
+            // re-evaluate suppression against our own zeroed value and
+            // drop the window early.
             if (lastParticipantsData) {
                 participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, lastParticipantsData);
             }
@@ -291,6 +279,20 @@ function sendParticipantFrame(frameData) {
 }
 
 function sendParticipantsUpdate(participants) {
+    if (suppressUnreadUntil > 0) {
+        const incoming = participants?.unreadChatCount ?? 0;
+        const expired = Date.now() >= suppressUnreadUntil;
+        const caughtUp = incoming === 0;
+        const newMessages = incoming > suppressBaseline;
+
+        if (expired || caughtUp || newMessages) {
+            suppressUnreadUntil = 0;
+            suppressBaseline = 0;
+        } else {
+            participants = { ...participants, unreadChatCount: 0 };
+        }
+    }
+
     lastParticipantsData = participants;
     if (!participantWindow || participantWindow.isDestroyed()) {
         return;
@@ -300,6 +302,13 @@ function sendParticipantsUpdate(participants) {
 
 function closeParticipantWindow(notifyUserClosed = false) {
     lastParticipantsData = null;
+    // suppressUnreadUntil intentionally survives close: the chat-click
+    // closes the PiP ms later and reopens it when the user minimises.
+    // Edge case: if a new meeting starts within the 15s window with
+    // unread <= suppressBaseline (carried from the old meeting), those
+    // messages are suppressed briefly. The caughtUp signal
+    // (incoming === 0) drops suppression on a clean-slate meeting, and
+    // the timer caps the worst case at 15s.
     if (participantWindow && !participantWindow.isDestroyed()) {
         participantWindow.destroy();
         participantWindow = null;
@@ -315,11 +324,29 @@ function closeParticipantWindow(notifyUserClosed = false) {
     }
 }
 
+/**
+ * Suppress the unread-chat badge after the user opened chat from the PiP.
+ * jitsi-meet's chat-read state takes a few seconds to propagate, so the
+ * next pp-participants-update still carries the old unreadChatCount and
+ * a re-opened PiP would briefly show a stale badge.
+ *
+ * Baseline = count at suppression-start: incoming > baseline drops
+ * suppression so a real new message during the window shows immediately.
+ */
+function suppressUnreadChatCount() {
+    suppressBaseline = lastParticipantsData?.unreadChatCount ?? 0;
+    if (lastParticipantsData) {
+        lastParticipantsData = { ...lastParticipantsData, unreadChatCount: 0 };
+    }
+    suppressUnreadUntil = Date.now() + UNREAD_SUPPRESS_MS;
+}
+
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
     closeParticipantWindow,
     shrinkToPill,
+    suppressUnreadChatCount,
     getCurrentState: getState,
 };

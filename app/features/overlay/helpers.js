@@ -60,17 +60,23 @@ function sendToMainWindow(channel, data) {
 function restoreMainWindow(mainWindow) {
     const mw = mainWindow || getMainWindow();
 
-    if (process.platform === 'darwin') {
-        app.dock.show();
+    if (!mw || mw.isDestroyed()) {
+        return;
     }
 
-    if (mw && !mw.isDestroyed()) {
-        if (mw.isMinimized()) {
-            mw.restore();
-        }
-        mw.show();
-        mw.focus();
+    if (process.platform === 'darwin') {
+        // Dock icon is hidden when PiP (alwaysOnTop+skipTaskbar) is the only
+        // visible window. steal: true is needed when another app is in the
+        // foreground — focus() alone won't bring the app forward.
+        app.dock.show();
+        app.focus({ steal: true });
     }
+
+    if (mw.isMinimized()) {
+        mw.restore();
+    }
+    mw.show();
+    mw.focus();
 }
 
 // ── Overlay creation helpers ────────────────────────────────────────────────

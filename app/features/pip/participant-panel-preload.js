@@ -48,10 +48,13 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
-     * Tell the main process to open the chat panel in the main window.
+     * Restore and focus the main window. If `openPanel` is true, also open
+     * the chat panel; otherwise just bring the meeting window forward.
+     *
+     * @param {boolean} openPanel - Whether to also open the chat panel.
      */
-    openChat() {
-        ipcRenderer.send('pp-open-chat');
+    openChat(openPanel) {
+        ipcRenderer.send('pp-open-chat', { openPanel: !!openPanel });
     },
 
     /**
@@ -143,16 +146,6 @@ contextBridge.exposeInMainWorld('panelAPI', {
      */
     stopWindowDrag() {
         ipcRenderer.send('pp-stop-window-drag');
-    },
-
-    /**
-     * Tell the main process to restore and focus the main window,
-     * closing the PiP panel.
-     *
-     * @returns {void}
-     */
-    focusMainWindow() {
-        ipcRenderer.send('pp-focus-main');
     },
 
     /**
