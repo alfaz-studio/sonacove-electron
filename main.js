@@ -227,6 +227,91 @@ function checkForUpdatesManually() {
 }
 
 /**
+ * Per-platform window chrome shared by the main meeting window and the
+ * auxiliary dashboard windows.
+ *
+ * Windows: frameless with custom in-page title bar (setupTitlebar).
+ * macOS: hiddenInset keeps traffic lights but drops the title text so we can
+ *        inject branding + the update pill.
+ * Linux: keeps native frame — thickFrame is Windows-only and frame:false
+ *        without it breaks resize handles on Linux.
+ */
+function platformWindowChrome() {
+    if (process.platform === 'darwin') {
+        return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 8 } };
+    }
+    if (process.platform === 'win32') {
+        return { frame: false, thickFrame: true };
+    }
+    return {};
+}
+
+/**
+ * macOS sets the icon from the bundle; everywhere else we set it on the
+ * window explicitly so it appears in the taskbar / PiP / alt-tab list.
+ */
+function applyNonDarwinIcon(win) {
+    if (process.platform === 'darwin') {
+        return;
+    }
+    const iconPath = getIconPath();
+
+    if (fs.existsSync(iconPath)) {
+        win.setIcon(iconPath);
+    }
+}
+
+/**
+ * Auxiliary dashboard windows opened in addition to the main window — useful
+ * when the user is in a meeting and wants to browse/manage their dashboard
+ * alongside it. Tracked separately from `mainWindow` so PiP and the meeting
+ * leave-modal logic don't engage for these.
+ *
+ * These windows load the configured landing URL and behave as a standard
+ * browser window: no will-prevent-unload guard, no PiP integration. If the
+ * user joins a meeting from one of these, they get a second concurrent
+ * meeting in that window — at the dashboard's discretion. Use Cmd/Ctrl+N
+ * or call the `open-dashboard-window` IPC from the renderer.
+ */
+const dashboardWindows = new Set();
+
+function createDashboardWindow() {
+    const dashboardBasePath = isDev ? process.cwd() : app.getAppPath();
+    const win = new BrowserWindow({
+        title: t('app.windowTitle'),
+        icon: getIconPath(),
+        width: 1100,
+        height: 720,
+        minWidth: 800,
+        minHeight: 600,
+        backgroundColor: '#1A1A1A',
+        ...platformWindowChrome(),
+        webPreferences: {
+            contextIsolation: false,
+            nodeIntegration: false,
+            preload: path.resolve(dashboardBasePath, 'build', 'preload.js'),
+            sandbox: false,
+            webSecurity: false
+        }
+    });
+
+    dashboardWindows.add(win);
+    applyNonDarwinIcon(win);
+
+    win.on('closed', () => {
+        dashboardWindows.delete(win);
+    });
+
+    win.loadURL(config.currentConfig.landing);
+
+    return win;
+}
+
+ipcMain.on('open-dashboard-window', () => {
+    createDashboardWindow();
+});
+
+/**
  * Sets the application menu.
  *
  * macOS: app-name menu with About, Check for Updates, and the standard
@@ -298,6 +383,12 @@ function setApplicationMenu() {
             label: t('menu.window'),
             role: 'window',
             submenu: [
+                {
+                    label: t('menu.newDashboard'),
+                    accelerator: 'CmdOrCtrl+N',
+                    click: () => createDashboardWindow()
+                },
+                { type: 'separator' },
                 { role: 'minimize' },
                 { role: 'close' }
             ]
@@ -350,20 +441,7 @@ function createJitsiMeetWindow() {
         minHeight: 600,
         show: false,
         backgroundColor: '#1A1A1A',
-
-        // Windows: frameless window with custom in-page title bar (setupTitlebar).
-        // macOS: hiddenInset keeps native traffic lights but removes the title
-        //        text, giving us space to inject branding + update pill.
-        // Linux: keeps native frame — thickFrame is Windows-only and frame:false
-        //        without it breaks resize handles on Linux.
-        ...(process.platform === 'darwin' ? {
-            titleBarStyle: 'hiddenInset',
-            trafficLightPosition: { x: 12, y: 8 }
-        } : process.platform === 'win32' ? {
-            frame: false,
-            thickFrame: true
-        } : {}),
-
+        ...platformWindowChrome(),
         webPreferences: {
             enableBlinkFeatures: 'WebAssemblyCSP',
             contextIsolation: false,
@@ -462,15 +540,7 @@ function createJitsiMeetWindow() {
 
     mainWindow = new BrowserWindow(options);
 
-    // Set icon immediately after creating window for taskbar/PiP
-    if (process.platform !== 'darwin') {
-        const iconPath = getIconPath();
-
-        console.log(`🎯 Setting window icon: ${iconPath}`);
-        if (fs.existsSync(iconPath)) {
-            mainWindow.setIcon(iconPath);
-        }
-    }
+    applyNonDarwinIcon(mainWindow);
 
     // Prevent Close during Meeting — show custom in-app modal instead of native dialog.
     // Not calling event.preventDefault() keeps the page open (prevents unload).
@@ -1081,10 +1151,34 @@ if (!gotInstanceLock) {
  * Run the application.
  */
 
+// Fires on macOS dock-icon clicks and on app reactivation (cmd-tab back into
+// the app, etc.). Previously a no-op when the window already existed, which
+// caused two reported issues:
+//   1. "Dock click twice" — clicking the dock activated the app menu bar but
+//      didn't bring the window forward; users had to click a second time.
+//   2. "PiP doesn't close on focus" — switching back to the meeting window
+//      while the always-on-top PiP overlay was foregrounded left the PiP
+//      visible until the user clicked the meeting window directly, because
+//      the mainWindow `focus` event only fires when that BrowserWindow itself
+//      receives focus.
+// Activation now explicitly restores/shows/focuses the main window and tells
+// the renderer to close the PiP overlay (idempotent — the renderer guards
+// against duplicate restored events).
 app.on('activate', () => {
     if (mainWindow === null) {
         createJitsiMeetWindow();
+
+        return;
     }
+    if (mainWindow.isDestroyed()) {
+        return;
+    }
+    if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send('pip-window-restored');
 });
 
 app.on('certificate-error',
