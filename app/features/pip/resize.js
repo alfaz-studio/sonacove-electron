@@ -81,6 +81,10 @@ function isInternalActive() {
  *   (pill transition, drag) is mutating bounds; skip while true.
  */
 function attachNativeResizeListener(win, getState, isExternalActive) {
+    // During drag (continuous fire): track which tile-count the cursor has
+    // crossed past so the panel re-renders with the right number of tiles.
+    // Window bounds are left at wherever the OS cursor is — fighting it would
+    // feel unresponsive.
     win.on('resize', () => {
         if (win.isDestroyed() || isInternalActive() || isExternalActive()) {
             return;
@@ -93,6 +97,22 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
         if (n !== _visibleTileCount) {
             _visibleTileCount = n;
             win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: n, edge: null });
+        }
+    });
+
+    // After drag ends (single fire on macOS/Windows): snap bounds to the
+    // tile boundary so the panel doesn't leave empty space around the tiles.
+    win.on('resized', () => {
+        if (win.isDestroyed() || isInternalActive() || isExternalActive()) {
+            return;
+        }
+
+        const { orientation } = getState();
+        const bounds = win.getBounds();
+        const { width, height } = computeWindowSize(_visibleTileCount, orientation);
+
+        if (bounds.width !== width || bounds.height !== height) {
+            win.setBounds({ x: bounds.x, y: bounds.y, width, height });
         }
     });
 }

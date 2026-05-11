@@ -279,7 +279,6 @@ function createDashboardWindow() {
     const dashboardBasePath = isDev ? process.cwd() : app.getAppPath();
     const win = new BrowserWindow({
         title: t('app.windowTitle'),
-        icon: getIconPath(),
         width: 1100,
         height: 720,
         minWidth: 800,
@@ -297,6 +296,12 @@ function createDashboardWindow() {
 
     dashboardWindows.add(win);
     applyNonDarwinIcon(win);
+
+    // Deny any `window.open()` from the dashboard renderer until the full
+    // multi-window join flow is wired. Without this, a popup would spawn a
+    // BrowserWindow that inherits the preload script without the routing
+    // the main window has via `windowOpenHandler` in createJitsiMeetWindow.
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
     win.on('closed', () => {
         dashboardWindows.delete(win);

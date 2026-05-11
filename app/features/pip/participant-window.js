@@ -40,9 +40,9 @@ function loadOrientation() {
 }
 
 function saveOrientation(orientation) {
-    try {
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ orientation }), 'utf8');
-    } catch (_) { /* ignore — best-effort */ }
+    // Async — IPC handler shouldn't block on disk I/O. Best-effort; a
+    // failure just means next launch falls back to vertical.
+    fs.writeFile(SETTINGS_FILE, JSON.stringify({ orientation }), 'utf8', () => {});
 }
 
 let participantWindow = null;

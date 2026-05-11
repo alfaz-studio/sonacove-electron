@@ -110,9 +110,10 @@ function expandFromPill(count, orientation) {
         : screen.getPrimaryDisplay();
     const { x: posX, y: posY } = getWindowPosition(count, orientation, display.workArea);
 
-    // Release pill size lock, set bounds, then restore the participant-window
-    // constraints. Without the explicit restore the window stayed at (1,1)/
-    // (0,0) and the next native-OS resize gesture could shrink it past the
+    // Release the pill size lock (min back to 1×1, max back to "no limit"),
+    // set bounds, then restore the participant-window panel constraints.
+    // Without the explicit restore the constraints stayed unlocked and the
+    // next native-OS resize gesture could shrink the panel below the
     // single-tile minimum.
     win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
