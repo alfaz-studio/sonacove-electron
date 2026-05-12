@@ -60,7 +60,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        # Pin to windows-2022 instead of windows-latest. The new
+        # `win25-vs2026` image (Win Server 2025 + VS 2026, as of
+        # May 12, 2026) breaks node-gyp's VS detection — vswhere.exe
+        # output exceeds the 1MB child_process stdout buffer
+        # (ERR_CHILD_PROCESS_STDIO_MAXBUFFER → "Could not find any
+        # Visual Studio installation") even though VS is installed.
+        # Affects only the winaudio addon postinstall. macOS path
+        # unaffected; stays on -latest.
+        os: [windows-2022, macos-latest]
     permissions:
       contents: write
     steps:
@@ -148,7 +156,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Zip portable build (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
           Compress-Archive -Path "dist\win-unpacked\*" -DestinationPath "dist\sonacove-staging-win-x64.zip"
