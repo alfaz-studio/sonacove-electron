@@ -39,6 +39,17 @@ if (!electronVersion) {
     process.exit(1);
 }
 
+// Hint VS 2022 explicitly. Skips node-gyp's `vswhere.exe` auto-detection
+// which overflows the 1MB default child_process stdout buffer on the
+// `windows-latest` (Win Server 2025) runner and fails with
+// ERR_CHILD_PROCESS_STDIO_MAXBUFFER → "Could not find any Visual Studio
+// installation". `windows-2022` runners and locally-installed VS still
+// work because we just override the search, not the actual toolset.
+const msvsVersion =
+    process.env.GYP_MSVS_VERSION
+    || process.env.npm_config_msvs_version
+    || '2022';
+
 // Install the addon's own deps (node-addon-api) the first time. Subsequent
 // runs short-circuit. Keeping it self-contained means top-level package.json
 // doesn't need to know about node-addon-api or node-gyp build details.
@@ -50,7 +61,15 @@ if (!fs.existsSync(path.join(addonRoot, 'node_modules', 'node-addon-api'))) {
         {
             cwd: addonRoot,
             stdio: 'inherit',
-            shell: true
+            shell: true,
+            // Forward GYP_MSVS_VERSION so the nested install's
+            // `node-gyp rebuild` (from the addon's package.json install
+            // script) doesn't trip the vswhere buffer issue. Without
+            // this the env var only reaches THIS script's spawn below.
+            env: {
+                ...process.env,
+                GYP_MSVS_VERSION: msvsVersion
+            }
         }
     );
 
@@ -77,7 +96,8 @@ const result = spawnSync(
         'rebuild',
         `--target=${electronVersion}`,
         '--dist-url=https://electronjs.org/headers',
-        '--runtime=electron'
+        '--runtime=electron',
+        `--msvs_version=${msvsVersion}`
     ],
     {
         cwd: addonRoot,
@@ -88,7 +108,8 @@ const result = spawnSync(
         // tree to find node-gyp, and we want the project's local copy.
         env: {
             ...process.env,
-            PATH: `${path.join(repoRoot, 'node_modules', '.bin')};${process.env.PATH}`
+            PATH: `${path.join(repoRoot, 'node_modules', '.bin')};${process.env.PATH}`,
+            GYP_MSVS_VERSION: msvsVersion
         }
     }
 );

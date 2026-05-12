@@ -47,24 +47,11 @@ jobs:
 
       - name: Load addon under Electron
         shell: bash
-        run: |
-          # Run a minimal script INSIDE Electron (not host Node) so we
-          # validate the V8 ABI match — host Node would load the addon
-          # at a different ABI and produce a false positive.
-          npx electron -- -e "
-            const wa = require('./native/winaudio');
-            console.log('isSupported:', wa.isSupported());
-            console.log('loadError:', wa.loadError() && wa.loadError().message);
-            const diag = wa.diagnostics(false);
-            console.log('diagnostics:', JSON.stringify(diag, null, 2));
-            // Windows 2022 runner is build 20348+ (Win Server 2022) which
-            // also has the API; assert isSupported reflects that.
-            if (!wa.isSupported()) {
-              console.error('FAIL: addon loaded but isSupported() is false');
-              process.exit(1);
-            }
-            process.exit(0);
-          "
+        timeout-minutes: 2
+        # Run inside Electron (not host Node) so we validate the V8 ABI
+        # match — host Node would load against a different ABI and
+        # produce a false-positive pass.
+        run: npx electron scripts/smoketest-native.js --win
 
   macaudio:
     name: macaudio build (macOS arm64+x64)
@@ -89,14 +76,5 @@ jobs:
           lipo -info "$BIN"
 
       - name: Load addon under Electron
-        run: |
-          npx electron -- -e "
-            const ma = require('./native/macaudio');
-            console.log('isSupported:', ma.isSupported());
-            console.log('loadError:', ma.loadError() && ma.loadError().message);
-            if (!ma.isSupported()) {
-              console.error('FAIL: macaudio loaded but isSupported() is false');
-              process.exit(1);
-            }
-            process.exit(0);
-          "
+        timeout-minutes: 2
+        run: npx electron scripts/smoketest-native.js --mac
