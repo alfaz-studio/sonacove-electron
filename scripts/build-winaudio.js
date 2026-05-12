@@ -53,23 +53,21 @@ const msvsVersion =
 // Install the addon's own deps (node-addon-api) the first time. Subsequent
 // runs short-circuit. Keeping it self-contained means top-level package.json
 // doesn't need to know about node-addon-api or node-gyp build details.
+//
+// --ignore-scripts: skip the addon's package.json `install: node-gyp rebuild`
+// script. We invoke node-gyp ourselves below with --msvs_version so the
+// VS-detection vswhere-buffer issue on windows-latest doesn't kill the
+// install. The downside is a fresh clone needs build-winaudio.js to run
+// before the .node binary exists, which is exactly what postinstall does.
 if (!fs.existsSync(path.join(addonRoot, 'node_modules', 'node-addon-api'))) {
     process.stdout.write('[winaudio] installing addon build deps\n');
     const install = spawnSync(
         'npm',
-        [ 'install', '--no-save', '--no-audit', '--no-fund' ],
+        [ 'install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts' ],
         {
             cwd: addonRoot,
             stdio: 'inherit',
-            shell: true,
-            // Forward GYP_MSVS_VERSION so the nested install's
-            // `node-gyp rebuild` (from the addon's package.json install
-            // script) doesn't trip the vswhere buffer issue. Without
-            // this the env var only reaches THIS script's spawn below.
-            env: {
-                ...process.env,
-                GYP_MSVS_VERSION: msvsVersion
-            }
+            shell: true
         }
     );
 

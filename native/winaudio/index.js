@@ -1,7 +1,13 @@
 'use strict';
 
-// Win11 21H2 base build = 22000.
-const MIN_BUILD_FOR_PROCESS_LOOPBACK = 22000;
+// OS minimum where AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK exists:
+// Windows 10 build 20348 (Server 2022 / Insider) and Windows 11 21H2
+// (build 22000+). End users almost always run Win 10 stable (19045)
+// or Win 11, but Server 2022 runners also pass this gate — the addon
+// is honest about OS capability, not target end-user OS. The renderer
+// applies a stricter Win11-only gate (functions.ts >= 22000) for the
+// user-facing echoFree UX decision.
+const MIN_BUILD_FOR_PROCESS_LOOPBACK = 20348;
 
 // Lazy-load the compiled addon. Windows-only: importing on other platforms
 // would fail at the require() — we surface a friendlier error and return a
