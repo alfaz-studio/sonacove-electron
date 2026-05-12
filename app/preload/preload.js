@@ -54,7 +54,9 @@ const whitelistedIpcChannels = [
     'deeplink-modal-action',
     'cross-window-notification',
     'mac-audio-buffer',
-    'mac-audio-error'
+    'mac-audio-error',
+    'win-audio-buffer',
+    'win-audio-error'
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app
@@ -162,6 +164,25 @@ window.sonacoveElectronAPI = {
         // `mac-audio-error` (terminal stream error).
         start: opts => ipcRenderer.invoke('mac-audio-start', opts || {}),
         stop: () => ipcRenderer.invoke('mac-audio-stop')
+    },
+    winAudio: {
+        // True when the platform is Win11 21H2+ (build 22000+) AND the
+        // addon loaded. Renderer mirrors macAudio: on true, route through
+        // the echo-free WASAPI process-loopback path; on false, fall back
+        // to the legacy capture path with a "may echo" disclaimer.
+        isSupported: () => ipcRenderer.invoke('win-audio-supported'),
+
+        // Begin capture. Resolves with `{ ok, reason?, message? }`.
+        // On `ok: true`, listen for `win-audio-buffer` (Float32 PCM) and
+        // `win-audio-error` (terminal stream error).
+        start: opts => ipcRenderer.invoke('win-audio-start', opts || {}),
+        stop: () => ipcRenderer.invoke('win-audio-stop'),
+
+        // Pre-test diagnostics — gathers Electron's PID tree, Windows
+        // version, COM state, and optionally runs the full activation
+        // chain WITHOUT starting capture (smoke test). Returns a JSON
+        // snapshot the renderer's test-plan runner logs to console.
+        diagnostics: opts => ipcRenderer.invoke('win-audio-diagnostics', opts || {})
     },
     ipc: {
         on: (channel, listener) => {

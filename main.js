@@ -29,6 +29,7 @@ const { setupPictureInPicture } = require('./app/features/pip/main');
 const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
 const { setupMacAudioIpc, shutdownMacAudio } = require('./app/features/mac-audio');
+const { setupWinAudioIpc, shutdownWinAudio } = require('./app/features/win-audio');
 const { initI18n, t } = require('./app/features/i18n');
 const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
@@ -546,6 +547,9 @@ function createJitsiMeetWindow() {
     // (the main window is the only one that asks for system audio today,
     // but the indirection keeps that assumption removable).
     setupMacAudioIpc(() =>
+        mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
+    );
+    setupWinAudioIpc(() =>
         mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
     );
 
@@ -1162,8 +1166,10 @@ app.on('before-quit', event => {
 
     // Stop the SCStream first — its delivery queue holds onto a couple of
     // CMSampleBuffers and the system warns about leaked Mach ports if we
-    // exit while it's mid-buffer.
+    // exit while it's mid-buffer. Symmetric on Windows so the WASAPI
+    // capture thread joins cleanly before the COM apartment unwinds.
     shutdownMacAudio();
+    shutdownWinAudio();
 
     capture('app_quit', {
         session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)

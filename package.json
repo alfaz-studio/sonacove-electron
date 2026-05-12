@@ -18,7 +18,8 @@
     "build": "webpack --config ./webpack.main.js --mode production",
     "dist": "npm run build && electron-builder",
     "build:macaudio": "node-gyp rebuild --directory=native/macaudio",
-    "postinstall": "patch-package && node ./scripts/build-macaudio.js"
+    "build:winaudio": "node-gyp rebuild --directory=native/winaudio",
+    "postinstall": "patch-package && node ./scripts/build-macaudio.js && node ./scripts/build-winaudio.js"
   },
   "build": {
     "appId": "com.sonacove.meet",
@@ -37,10 +38,14 @@
       "node_modules/**/*",
       "native/macaudio/index.js",
       "native/macaudio/package.json",
-      "native/macaudio/build/Release/macaudio.node"
+      "native/macaudio/build/Release/macaudio.node",
+      "native/winaudio/index.js",
+      "native/winaudio/package.json",
+      "native/winaudio/build/Release/winaudio.node"
     ],
     "asarUnpack": [
-      "native/macaudio/build/Release/macaudio.node"
+      "native/macaudio/build/Release/macaudio.node",
+      "native/winaudio/build/Release/winaudio.node"
     ],
     "protocols": [
       {

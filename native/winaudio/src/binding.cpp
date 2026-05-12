@@ -1,12 +1,13 @@
-// binding.mm — N-API surface for MacAudioCapture.
+// binding.cpp — N-API surface for WinAudioCapture.
 //
-// Why a TSFN: SCStream delivers buffers on a private dispatch queue, which is
-// NOT the V8 thread. We need a thread-safe function (TSFN) to bounce each
-// buffer back into JS land. The TSFN is created with an unlimited queue —
-// realistic backpressure happens via WebAudio later in the pipeline; if we
-// dropped here we'd add an extra failure mode that's harder to reason about.
+// Mirrors native/macaudio/src/binding.mm. Why a TSFN: WASAPI delivers
+// buffers on a dedicated capture thread, which is NOT the V8 thread. We
+// need a thread-safe function (TSFN) to bounce each buffer back into JS
+// land. The TSFN is created with an unlimited queue — realistic
+// backpressure happens via WebAudio later in the pipeline; if we dropped
+// here we'd add an extra failure mode that's harder to reason about.
 
-#import "MacAudioCapture.h"
+#include "WinAudioCapture.h"
 
 #include <napi.h>
 
@@ -17,15 +18,9 @@
 
 namespace {
 
-// Wrapper holding the singleton capture instance + a lock guarding
-// start/stop transitions. We expose a stateless module surface (start,
-// stop, isRunning) rather than a class, because there's no useful case
-// for two simultaneous captures: one stream per process is the supported
-// SCStream model and a second consumer would just steal the audio
-// callback target.
 struct Module {
     std::mutex mu;
-    std::unique_ptr<sonacove::MacAudioCapture> capture;
+    std::unique_ptr<sonacove::WinAudioCapture> capture;
     Napi::ThreadSafeFunction tsfn;
     bool tsfnAcquired = false;
 };
@@ -54,14 +49,11 @@ void dispatchBufferToJS(Napi::Env env, Napi::Function callback,
         Napi::HandleScope scope(env);
         const size_t bytes = owned->samples.size() * sizeof(float);
 
-        // Copy into a Buffer the JS side owns; freeing the std::vector
-        // happens with `owned` going out of scope. We don't try to give JS
-        // a zero-copy view because the source memory belongs to a CMSampleBuffer
-        // we've already returned from on the capture queue.
         Napi::Buffer<uint8_t> buf = Napi::Buffer<uint8_t>::Copy(
             env, reinterpret_cast<const uint8_t*>(owned->samples.data()), bytes);
 
         Napi::Object meta = Napi::Object::New(env);
+
         meta.Set("sampleRate", owned->sampleRate);
         meta.Set("channels", owned->channels);
         meta.Set("frameCount",
@@ -82,12 +74,18 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
     }
 
     Napi::Object opts = info[0].As<Napi::Object>();
-    const double sampleRate =
+
+    sonacove::WinAudioCapture::StartOptions startOpts;
+
+    startOpts.sampleRate =
         opts.Has("sampleRate") ? opts.Get("sampleRate").ToNumber().DoubleValue()
                                : 48000.0;
-    const uint32_t channels = opts.Has("channels")
+    startOpts.channelCount = opts.Has("channels")
                                   ? opts.Get("channels").ToNumber().Uint32Value()
                                   : 2;
+    startOpts.verboseProcessTree =
+        opts.Has("verboseProcessTree")
+            && opts.Get("verboseProcessTree").ToBoolean().Value();
 
     auto& m = module();
     std::lock_guard<std::mutex> lock(m.mu);
@@ -97,13 +95,13 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
     }
 
     m.tsfn = Napi::ThreadSafeFunction::New(
-        env, info[1].As<Napi::Function>(), "MacAudioCaptureCallback",
+        env, info[1].As<Napi::Function>(), "WinAudioCaptureCallback",
         0, // unlimited queue
-        1  // single thread (the SCStream delivery queue)
+        1  // single thread (the WASAPI capture thread)
     );
     m.tsfnAcquired = true;
 
-    m.capture = std::make_unique<sonacove::MacAudioCapture>();
+    m.capture = std::make_unique<sonacove::WinAudioCapture>();
 
     auto onAudio = [](const float* samples, size_t frameCount,
                       sonacove::AudioFormat fmt) {
@@ -119,13 +117,8 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
         pb->sampleRate = fmt.sampleRate;
         pb->channels = fmt.channelCount;
 
-        // BlockingCall has back-pressure baked in; if JS is slow we wait
-        // here instead of drowning the queue. SCStream tolerates a backlog
-        // because it has its own bounded queue (config.queueDepth).
         napi_status st = mm.tsfn.BlockingCall(
             pb,
-            // Pass nullptr cast pointer for the unused first slot —
-            // Napi requires the prototype but we don't use it.
             [](Napi::Env env, Napi::Function cb, PendingBuffer* data) {
                 dispatchBufferToJS(env, cb, nullptr, data);
             });
@@ -142,9 +135,6 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
             return;
         }
 
-        // Emit a special "error" buffer with frameCount=0 and an error
-        // string in the meta object. Keeps the JS surface to a single
-        // callback rather than two.
         struct ErrPb {
             int code;
             std::string message;
@@ -168,7 +158,7 @@ Napi::Value Start(const Napi::CallbackInfo& info) {
             });
     };
 
-    const bool ok = m.capture->start(sampleRate, channels, onAudio, onError);
+    const bool ok = m.capture->start(startOpts, onAudio, onError);
 
     if (!ok) {
         // start() failed — release the TSFN we acquired above and drop
@@ -210,14 +200,45 @@ Napi::Value IsRunning(const Napi::CallbackInfo& info) {
                               m.capture && m.capture->isRunning());
 }
 
+// Diagnostics — non-capture function that gathers PID tree, Windows
+// version, COM state, and (if smokeTest=true) runs the full activation
+// chain WITHOUT starting capture. The Win11 test session can call this
+// before committing to a real capture session to maximize signal per
+// run and isolate activation issues from capture issues.
+Napi::Value Diagnostics(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    const bool smoke =
+        info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+
+    sonacove::DiagnosticsSnapshot snap = sonacove::collectDiagnostics(smoke);
+
+    Napi::Object out = Napi::Object::New(env);
+
+    out.Set("currentProcessId",
+            Napi::Number::New(env, snap.currentProcessId));
+    out.Set("childPids", Napi::String::New(env, snap.childPids));
+    out.Set("descendantPids", Napi::String::New(env, snap.descendantPids));
+    out.Set("windowsVersion", Napi::String::New(env, snap.windowsVersion));
+    out.Set("comInitFresh", Napi::Boolean::New(env, snap.comInitFresh));
+    out.Set("smokeTestRan", Napi::Boolean::New(env, smoke));
+    out.Set("smokeTestHresult",
+            Napi::Number::New(env,
+                              static_cast<double>(snap.smokeTestHresult)));
+    out.Set("mixFormatDescription",
+            Napi::String::New(env, snap.mixFormatDescription));
+
+    return out;
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("start", Napi::Function::New(env, Start));
     exports.Set("stop", Napi::Function::New(env, Stop));
     exports.Set("isRunning", Napi::Function::New(env, IsRunning));
+    exports.Set("diagnostics", Napi::Function::New(env, Diagnostics));
 
     return exports;
 }
 
 } // namespace
 
-NODE_API_MODULE(macaudio, Init)
+NODE_API_MODULE(winaudio, Init)

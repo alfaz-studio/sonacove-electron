@@ -1,0 +1,102 @@
+name: Native Addon Smoke Test
+
+# Builds the platform-specific native audio addons against Electron's
+# V8 ABI and asserts they load + report isSupported correctly. Doesn't
+# do actual audio capture (CI runners don't have a useful audio device
+# anyway) — catches the "compiles fine on the dev box but fails to load
+# under Electron" class of bugs cheaply.
+
+on:
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'scripts/build-*.js'
+      - 'app/features/{mac,win}-audio.js'
+      - 'app/preload/preload.js'
+      - 'package.json'
+      - '.github/workflows/native-addon-smoketest.yml'
+  workflow_dispatch:
+
+jobs:
+  winaudio:
+    name: winaudio build + load (Windows 11 runner)
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install (runs postinstall → builds winaudio against Electron ABI)
+        run: npm ci --no-audit --no-fund
+        shell: bash
+
+      - name: Verify .node binary exists
+        shell: bash
+        run: |
+          set -e
+          BIN="native/winaudio/build/Release/winaudio.node"
+          if [ ! -f "$BIN" ]; then
+            echo "ERROR: $BIN not produced by postinstall"
+            exit 1
+          fi
+          ls -la "$BIN"
+
+      - name: Load addon under Electron
+        shell: bash
+        run: |
+          # Run a minimal script INSIDE Electron (not host Node) so we
+          # validate the V8 ABI match — host Node would load the addon
+          # at a different ABI and produce a false positive.
+          npx electron -- -e "
+            const wa = require('./native/winaudio');
+            console.log('isSupported:', wa.isSupported());
+            console.log('loadError:', wa.loadError() && wa.loadError().message);
+            const diag = wa.diagnostics(false);
+            console.log('diagnostics:', JSON.stringify(diag, null, 2));
+            // Windows 2022 runner is build 20348+ (Win Server 2022) which
+            // also has the API; assert isSupported reflects that.
+            if (!wa.isSupported()) {
+              console.error('FAIL: addon loaded but isSupported() is false');
+              process.exit(1);
+            }
+            process.exit(0);
+          "
+
+  macaudio:
+    name: macaudio build (macOS arm64+x64)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install (runs postinstall → universal macaudio build)
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify universal .node binary
+        run: |
+          set -e
+          BIN="native/macaudio/build/Release/macaudio.node"
+          test -f "$BIN" || { echo "ERROR: $BIN not produced"; exit 1; }
+          lipo -info "$BIN"
+
+      - name: Load addon under Electron
+        run: |
+          npx electron -- -e "
+            const ma = require('./native/macaudio');
+            console.log('isSupported:', ma.isSupported());
+            console.log('loadError:', ma.loadError() && ma.loadError().message);
+            if (!ma.isSupported()) {
+              console.error('FAIL: macaudio loaded but isSupported() is false');
+              process.exit(1);
+            }
+            process.exit(0);
+          "
