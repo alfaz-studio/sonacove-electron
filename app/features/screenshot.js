@@ -1,6 +1,8 @@
-const { BrowserWindow, app, desktopCapturer, screen, shell } = require('electron');
+const { BrowserWindow, desktopCapturer, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
+
+const { getScreenshotsDir, getAllowedRevealDirs } = require('./sonacovePaths');
 
 /**
  * Registers screenshot-related IPC handlers.
@@ -45,7 +47,8 @@ function setupScreenshotIPC(ipcMain) {
         }
     });
 
-    // Save a screenshot directly to the user's Pictures/Sonacove Screenshots folder.
+    // Save a screenshot directly to the user's Sonacove screenshots folder
+    // (Documents/Sonacove/Screenshots by default, or a custom path from settings).
     ipcMain.handle('save-screenshot', async (_event, base64Data, filename) => {
         try {
             if (typeof base64Data !== 'string' || !base64Data) {
@@ -68,10 +71,7 @@ function setupScreenshotIPC(ipcMain) {
                 safeName = safeName.slice(0, 251) + '.png';
             }
 
-            const dir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
-
-            await fs.promises.mkdir(dir, { recursive: true });
-
+            const dir = getScreenshotsDir();
             const filePath = path.join(dir, safeName);
             const base64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64, 'base64');
@@ -94,17 +94,19 @@ function setupScreenshotIPC(ipcMain) {
     });
 
     // Reveal a file in the OS file explorer.
-    // Only allow paths inside the screenshots directory to prevent arbitrary path disclosure.
-    const screenshotsDir = path.join(app.getPath('pictures'), 'Sonacove Screenshots');
-
+    // Only allow paths inside known Sonacove output directories to prevent arbitrary path disclosure.
+    // Allowed dirs include current recording/screenshot dirs (including custom overrides) and
+    // the legacy Pictures/Sonacove Screenshots folder so older saved files can still be revealed.
     ipcMain.on('show-in-folder', (_event, filePath) => {
         if (typeof filePath !== 'string' || !filePath) return;
 
         // Normalize separators for consistent comparison on Windows.
         const normalizedPath = path.normalize(filePath);
+        const allowedDirs = getAllowedRevealDirs().map(d => path.normalize(d));
+        const isAllowed = allowedDirs.some(dir => normalizedPath.startsWith(dir + path.sep));
 
-        if (!normalizedPath.startsWith(screenshotsDir + path.sep)) {
-            console.warn('⚠️ Main: show-in-folder blocked — path outside screenshots dir:', normalizedPath);
+        if (!isAllowed) {
+            console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', normalizedPath);
 
             return;
         }
