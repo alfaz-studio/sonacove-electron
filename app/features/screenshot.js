@@ -2,7 +2,7 @@ const { BrowserWindow, desktopCapturer, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { getScreenshotsDir, getAllowedRevealDirs } = require('./sonacovePaths');
+const { getAllowedRevealDirs, getScreenshotsDir, sanitizeOutputFilename } = require('./sonacovePaths');
 
 /**
  * Registers screenshot-related IPC handlers.
@@ -54,25 +54,14 @@ function setupScreenshotIPC(ipcMain) {
             if (typeof base64Data !== 'string' || !base64Data) {
                 throw new Error('Invalid base64Data');
             }
-            if (typeof filename !== 'string' || !filename) {
+
+            const safeName = sanitizeOutputFilename(filename, '.png');
+
+            if (!safeName) {
                 throw new Error('Invalid filename');
             }
 
-            // Sanitize filename: strip directory components and enforce .png extension
-            let safeName = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
-
-            if (!safeName || safeName === '.png' || !safeName.endsWith('.png')) {
-                throw new Error('Invalid filename: must be a non-empty name ending with .png');
-            }
-
-            // Enforce filesystem filename length limit (255 bytes on most OSes)
-            if (safeName.length > 255) {
-                safeName = safeName.slice(0, -4); // strip .png
-                safeName = safeName.slice(0, 251) + '.png';
-            }
-
-            const dir = getScreenshotsDir();
-            const filePath = path.join(dir, safeName);
+            const filePath = path.join(getScreenshotsDir(), safeName);
             const base64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64, 'base64');
 
@@ -93,10 +82,7 @@ function setupScreenshotIPC(ipcMain) {
         }
     });
 
-    // Reveal a file in the OS file explorer.
-    // Only allow paths inside known Sonacove output directories to prevent arbitrary path disclosure.
-    // Allowed dirs include current recording/screenshot dirs (including custom overrides) and
-    // the legacy Pictures/Sonacove Screenshots folder so older saved files can still be revealed.
+    // Path allowlist prevents arbitrary path disclosure via this IPC.
     ipcMain.on('show-in-folder', (_event, filePath) => {
         if (typeof filePath !== 'string' || !filePath) return;
 

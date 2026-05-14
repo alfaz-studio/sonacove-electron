@@ -1,30 +1,21 @@
 'use strict';
 
-const { BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const { getRecordingsDir } = require('./sonacovePaths');
+const { getRecordingsDir, sanitizeOutputFilename } = require('./sonacovePaths');
 
-/**
- * Maximum concurrent recording sessions per webContents.
- * Prevents a misbehaving renderer from exhausting file handles.
- */
 const MAX_SESSIONS_PER_WC = 4;
 
-/**
- * Maximum size (bytes) of a single chunk accepted from the renderer.
- * 64 MiB is well above MediaRecorder's typical 5 s timeslice (~10–20 MiB)
- * while still preventing accidental OOM from a runaway sender.
- */
+// 64 MiB is well above MediaRecorder's typical 5 s timeslice (~10–20 MiB) while
+// still capping accidental OOM from a runaway sender.
 const MAX_CHUNK_BYTES = 64 * 1024 * 1024;
 
 /**
- * Active write sessions, keyed by sessionId.
- * Each entry: { filePath, stream, webContentsId, firstChunkSize, detachCleanup }.
- * detachCleanup removes the per-session 'destroyed' listener from the renderer's webContents
- * once the session is finalized — without it, listeners would accumulate across many recordings.
+ * Active write sessions keyed by sessionId. detachCleanup removes the per-session
+ * 'destroyed' listener once the session terminates — without it, listeners would
+ * accumulate across many recordings within one webContents.
  *
  * @type {Map<string, {
  *   filePath: string,
@@ -37,42 +28,20 @@ const MAX_CHUNK_BYTES = 64 * 1024 * 1024;
 const sessions = new Map();
 
 /**
- * Sanitizes a filename for safe writing to disk.
- * Strips directory components, restricts to a safe charset, enforces .webm extension,
- * and caps total length at 255 bytes (most filesystems' limit).
- *
- * @param {string} filename - User-suggested filename.
- * @returns {string|null} Safe filename, or null if not recoverable.
+ * Wraps an ArrayBuffer/Uint8Array/Buffer (post-structured-clone) into a Buffer
+ * without copying. Returns null if the input isn't one of those types.
  */
-function sanitizeFilename(filename) {
-    if (typeof filename !== 'string' || !filename) {
-        return null;
+function toBuffer(chunk) {
+    if (chunk instanceof Uint8Array) {
+        return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+    }
+    if (chunk instanceof ArrayBuffer) {
+        return Buffer.from(chunk);
     }
 
-    let safe = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
-
-    if (!safe.toLowerCase().endsWith('.webm')) {
-        safe = `${safe}.webm`;
-    }
-
-    if (safe === '.webm' || safe.length === 0) {
-        return null;
-    }
-
-    if (safe.length > 255) {
-        safe = `${safe.slice(0, 250)}.webm`;
-    }
-
-    return safe;
+    return null;
 }
 
-/**
- * Closes and removes a session, optionally unlinking the partial file.
- *
- * @param {string} sessionId - The session to clean up.
- * @param {boolean} [unlink=false] - If true, delete the partial file from disk.
- * @returns {Promise<void>}
- */
 async function disposeSession(sessionId, unlink = false) {
     const session = sessions.get(sessionId);
 
@@ -93,81 +62,81 @@ async function disposeSession(sessionId, unlink = false) {
     });
 
     if (unlink) {
-        try {
-            await fs.promises.unlink(session.filePath);
-        } catch (_) { /* ignore — file may not exist yet */ }
+        await fs.promises.unlink(session.filePath).catch(() => { /* may not exist */ });
     }
 }
 
 /**
- * Registers recording-related IPC handlers.
+ * Wraps an IPC handler with uniform error logging and a `{ error }` failure return.
+ */
+function handle(label, fn) {
+    return async (event, params = {}) => {
+        try {
+            return await fn(event, params);
+        } catch (err) {
+            console.error(`❌ ${label} failed:`, err);
+
+            return { error: err.message || label };
+        }
+    };
+}
+
+/**
+ * Registers recording IPC handlers.
  *
- * Protocol (chunk-stream):
- *   recording:start-write({ filename })           → { sessionId, filePath }
- *   recording:write-chunk({ sessionId, chunk })   → { ok: true }
- *   recording:finish-write({ sessionId, firstChunkOverride? }) → { filePath }
- *   recording:cancel-write({ sessionId })         → { ok: true }
+ * Protocol (chunk-stream — memory-flat, each chunk hits disk immediately):
+ *   recording:start-write({ filename })                          → { sessionId, filePath }
+ *   recording:write-chunk({ sessionId, chunk })                  → { ok: true }
+ *   recording:finish-write({ sessionId, firstChunkOverride? })   → { filePath }
+ *   recording:cancel-write({ sessionId })                        → { ok: true }
  *
- * Memory is flat: each chunk hits the disk write-stream directly,
- * so long meetings don't accumulate in renderer or main RAM.
- *
- * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
- * @returns {void}
+ * @param {Electron.IpcMain} ipcMain
  */
 function setupRecordingIPC(ipcMain) {
-    ipcMain.handle('recording:start-write', async (event, params = {}) => {
-        try {
-            const safeName = sanitizeFilename(params.filename);
+    ipcMain.handle('recording:start-write', handle('recording:start-write', async (event, params) => {
+        const safeName = sanitizeOutputFilename(params.filename, '.webm');
 
-            if (!safeName) {
-                return { error: 'Invalid filename' };
-            }
-
-            const wcId = event.sender.id;
-            const activeForWc = Array.from(sessions.values())
-                .filter(s => s.webContentsId === wcId).length;
-
-            if (activeForWc >= MAX_SESSIONS_PER_WC) {
-                return { error: 'Too many active recording sessions' };
-            }
-
-            const dir = getRecordingsDir();
-            const filePath = path.join(dir, safeName);
-            const stream = fs.createWriteStream(filePath);
-
-            const sessionId = crypto.randomUUID();
-
-            // If the renderer's webContents goes away mid-recording (window closed,
-            // app quit, renderer crashed), close the stream but keep the partial file
-            // on disk so the user can recover what was captured.
-            const cleanup = () => {
-                disposeSession(sessionId, false).catch(() => { /* swallow */ });
-            };
-            const sender = event.sender;
-
-            sender.once('destroyed', cleanup);
-
-            sessions.set(sessionId, {
-                filePath,
-                stream,
-                webContentsId: wcId,
-                firstChunkSize: 0,
-                detachCleanup: () => {
-                    if (!sender.isDestroyed()) {
-                        sender.removeListener('destroyed', cleanup);
-                    }
-                }
-            });
-
-            return { sessionId, filePath };
-        } catch (err) {
-            console.error('❌ recording:start-write failed:', err);
-
-            return { error: err.message || 'Failed to start recording' };
+        if (!safeName) {
+            return { error: 'Invalid filename' };
         }
-    });
 
-    ipcMain.handle('recording:write-chunk', async (event, params = {}) => {
+        const wcId = event.sender.id;
+        const activeForWc = Array.from(sessions.values()).filter(s => s.webContentsId === wcId).length;
+
+        if (activeForWc >= MAX_SESSIONS_PER_WC) {
+            return { error: 'Too many active recording sessions' };
+        }
+
+        const filePath = path.join(getRecordingsDir(), safeName);
+        const stream = fs.createWriteStream(filePath);
+        const sessionId = crypto.randomUUID();
+
+        // If the renderer's webContents goes away mid-recording (window closed,
+        // app quit, renderer crashed), close the stream but keep the partial file
+        // on disk so the user can recover what was captured.
+        const sender = event.sender;
+        const cleanup = () => {
+            disposeSession(sessionId, false).catch(() => { /* swallow */ });
+        };
+
+        sender.once('destroyed', cleanup);
+
+        sessions.set(sessionId, {
+            filePath,
+            stream,
+            webContentsId: wcId,
+            firstChunkSize: 0,
+            detachCleanup: () => {
+                if (!sender.isDestroyed()) {
+                    sender.removeListener('destroyed', cleanup);
+                }
+            }
+        });
+
+        return { sessionId, filePath };
+    }));
+
+    ipcMain.handle('recording:write-chunk', handle('recording:write-chunk', async (event, params) => {
         const { sessionId, chunk } = params;
         const session = sessions.get(sessionId);
 
@@ -177,12 +146,12 @@ function setupRecordingIPC(ipcMain) {
         if (session.webContentsId !== event.sender.id) {
             return { error: 'Session does not belong to this window' };
         }
-        if (!chunk || !(chunk instanceof Uint8Array) && !(chunk instanceof ArrayBuffer)) {
+
+        const buf = toBuffer(chunk);
+
+        if (!buf) {
             return { error: 'Invalid chunk' };
         }
-
-        const buf = chunk instanceof ArrayBuffer ? Buffer.from(chunk) : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
-
         if (buf.length === 0) {
             return { ok: true };
         }
@@ -196,10 +165,7 @@ function setupRecordingIPC(ipcMain) {
             session.firstChunkSize = buf.length;
         }
 
-        // Honor backpressure: wait for 'drain' if write() returns false.
-        const ok = session.stream.write(buf);
-
-        if (!ok) {
+        if (!session.stream.write(buf)) {
             await new Promise((resolve, reject) => {
                 session.stream.once('drain', resolve);
                 session.stream.once('error', reject);
@@ -207,9 +173,9 @@ function setupRecordingIPC(ipcMain) {
         }
 
         return { ok: true };
-    });
+    }));
 
-    ipcMain.handle('recording:finish-write', async (event, params = {}) => {
+    ipcMain.handle('recording:finish-write', handle('recording:finish-write', async (event, params) => {
         const { sessionId, firstChunkOverride } = params;
         const session = sessions.get(sessionId);
 
@@ -225,19 +191,17 @@ function setupRecordingIPC(ipcMain) {
                 session.stream.end(err => err ? reject(err) : resolve());
             });
 
-            // Optional: re-write the first chunk with WebM duration fixed.
-            // Must be the same byte length as the original first chunk to avoid corruption.
+            // Re-write the first chunk with WebM duration fixed. Must be the same
+            // byte length as the original first chunk to avoid corrupting the file.
             if (firstChunkOverride) {
-                const override = firstChunkOverride instanceof ArrayBuffer
-                    ? Buffer.from(firstChunkOverride)
-                    : Buffer.from(firstChunkOverride.buffer, firstChunkOverride.byteOffset, firstChunkOverride.byteLength);
+                const override = toBuffer(firstChunkOverride);
 
-                if (override.length !== session.firstChunkSize) {
+                if (override && override.length !== session.firstChunkSize) {
                     console.warn(
-                        `⚠️ recording:finish-write — firstChunkOverride length ${override.length} ` +
-                        `!= original ${session.firstChunkSize}; skipping overwrite to avoid corruption.`
+                        `⚠️ recording:finish-write — firstChunkOverride length ${override.length} `
+                        + `!= original ${session.firstChunkSize}; skipping overwrite to avoid corruption.`
                     );
-                } else {
+                } else if (override) {
                     const fh = await fs.promises.open(session.filePath, 'r+');
 
                     try {
@@ -255,14 +219,12 @@ function setupRecordingIPC(ipcMain) {
 
             return { filePath };
         } catch (err) {
-            console.error('❌ recording:finish-write failed:', err);
             await disposeSession(sessionId, true);
-
-            return { error: err.message || 'Failed to finalize recording' };
+            throw err;
         }
-    });
+    }));
 
-    ipcMain.handle('recording:cancel-write', async (event, params = {}) => {
+    ipcMain.handle('recording:cancel-write', handle('recording:cancel-write', async (event, params) => {
         const { sessionId } = params;
         const session = sessions.get(sessionId);
 
@@ -276,7 +238,7 @@ function setupRecordingIPC(ipcMain) {
         await disposeSession(sessionId, true);
 
         return { ok: true };
-    });
+    }));
 }
 
 module.exports = { setupRecordingIPC };

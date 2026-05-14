@@ -5,12 +5,9 @@ const { BrowserWindow, dialog } = require('electron');
 const { getSavePathsInfo, saveSettings } = require('./sonacovePaths');
 
 /**
- * Validates a user-supplied directory override value.
- * Accepts strings (taken verbatim) and null (clears the override).
- * Empty strings are coerced to null.
- *
- * @param {unknown} value - Value from the renderer.
- * @returns {string|null|undefined} Sanitized value, or undefined if the input is invalid.
+ * Validates a user-supplied directory override.
+ * Returns `null` for null or empty-string (clears the override),
+ * a trimmed string for valid input, or `undefined` for invalid input.
  */
 function sanitizeOverride(value) {
     if (value === null) return null;
@@ -21,58 +18,47 @@ function sanitizeOverride(value) {
     return trimmed === '' ? null : trimmed;
 }
 
+function handle(label, fn) {
+    return async (event, params = {}) => {
+        try {
+            return await fn(event, params);
+        } catch (err) {
+            console.error(`❌ ${label} failed:`, err);
+
+            return { error: err.message || label };
+        }
+    };
+}
+
 /**
- * Registers IPC handlers for inspecting and updating Sonacove save-path settings.
+ * Registers IPC for inspecting and updating save-path settings.
  *
- * Channels:
- *   sonacove:get-save-paths()                        → SavePathsInfo
+ *   sonacove:get-save-paths()                              → SavePathsInfo
  *   sonacove:set-save-paths({ recordings?, screenshots? }) → SavePathsInfo
- *   sonacove:pick-folder({ defaultPath?, title? })   → string|null
+ *   sonacove:pick-folder({ defaultPath?, title? })         → string|null
  *
- * @param {Electron.IpcMain} ipcMain - The Electron IPC Main instance.
- * @returns {void}
+ * @param {Electron.IpcMain} ipcMain
  */
 function setupSavePathsIPC(ipcMain) {
-    ipcMain.handle('sonacove:get-save-paths', async () => {
-        try {
-            return getSavePathsInfo();
-        } catch (err) {
-            console.error('❌ sonacove:get-save-paths failed:', err);
+    ipcMain.handle('sonacove:get-save-paths', handle('sonacove:get-save-paths', async () => getSavePathsInfo()));
 
-            return { error: err.message || 'Failed to read save paths' };
-        }
-    });
+    ipcMain.handle('sonacove:set-save-paths', handle('sonacove:set-save-paths', async (_event, params) => {
+        const next = {};
 
-    ipcMain.handle('sonacove:set-save-paths', async (_event, params = {}) => {
-        try {
-            const next = {};
+        for (const key of [ 'recordings', 'screenshots' ]) {
+            if (!(key in params)) continue;
+            const v = sanitizeOverride(params[key]);
 
-            if ('recordings' in params) {
-                const r = sanitizeOverride(params.recordings);
-
-                if (r === undefined) {
-                    return { error: 'Invalid recordings path' };
-                }
-                next.recordings = r;
+            if (v === undefined) {
+                return { error: `Invalid ${key} path` };
             }
-            if ('screenshots' in params) {
-                const s = sanitizeOverride(params.screenshots);
-
-                if (s === undefined) {
-                    return { error: 'Invalid screenshots path' };
-                }
-                next.screenshots = s;
-            }
-
-            saveSettings(next);
-
-            return getSavePathsInfo();
-        } catch (err) {
-            console.error('❌ sonacove:set-save-paths failed:', err);
-
-            return { error: err.message || 'Failed to save paths' };
+            next[key] = v;
         }
-    });
+
+        saveSettings(next);
+
+        return getSavePathsInfo();
+    }));
 
     ipcMain.handle('sonacove:pick-folder', async (event, params = {}) => {
         try {
