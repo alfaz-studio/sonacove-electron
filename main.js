@@ -28,6 +28,8 @@ const nodeURL = require('url');
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
+const { setupMacAudioIpc, shutdownMacAudio } = require('./app/features/mac-audio');
+const { setupWinAudioIpc, shutdownWinAudio } = require('./app/features/win-audio');
 const { initI18n, t } = require('./app/features/i18n');
 const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
@@ -537,6 +539,19 @@ function createJitsiMeetWindow() {
 
     // Picture-in-Picture Auto-Trigger
     const cleanupPip = setupPictureInPicture(mainWindow);
+
+    // macOS system-audio capture bridge (no-op on non-macOS). The IPC
+    // handlers it registers are idempotent across reloads — they're
+    // installed once on first window creation. The lazy webContents
+    // accessor lets us hand off buffers to whichever renderer is current
+    // (the main window is the only one that asks for system audio today,
+    // but the indirection keeps that assumption removable).
+    setupMacAudioIpc(() =>
+        mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
+    );
+    setupWinAudioIpc(() =>
+        mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
+    );
 
     // Participant PiP — open overlay when the main window loses focus
     // (minimize, alt-tab, click another app, etc.)
@@ -1148,6 +1163,13 @@ app.on('before-quit', event => {
     }
     event.preventDefault();
     analyticsShutdownDone = true;
+
+    // Stop the SCStream first — its delivery queue holds onto a couple of
+    // CMSampleBuffers and the system warns about leaked Mach ports if we
+    // exit while it's mid-buffer. Symmetric on Windows so the WASAPI
+    // capture thread joins cleanly before the COM apartment unwinds.
+    shutdownMacAudio();
+    shutdownWinAudio();
 
     capture('app_quit', {
         session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)

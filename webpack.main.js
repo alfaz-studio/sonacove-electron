@@ -29,12 +29,34 @@ module.exports = {
             ]
         })
     ],
-    externals: [ {
-        '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
-        'electron-context-menu': 'require(\'electron-context-menu\')',
-        'electron-reload': 'require(\'electron-reload\')',
-        'posthog-node': 'require(\'posthog-node\')'
-    } ],
+    externals: [
+        // Native audio addons stay as runtime requires — webpack can't
+        // bundle binary .node files, and the JS wrappers around them
+        // load the .node via relative paths that only resolve correctly
+        // when the wrappers stay on disk (alongside the binary). Both
+        // are shipped unpacked from asar so they're available at
+        // runtime.
+        function ({ request }, callback) {
+            const match = request && request.match(/(?:^|[\\/])native[\\/](mac|win)audio(?:$|[\\/])/);
+
+            if (match) {
+                // Source files (e.g. app/features/mac-audio.js) require the
+                // addon via `../../native/Xaudio` — correct from source,
+                // but the bundle output lives in build/ where the same
+                // relative path escapes the repo. Rewrite to a path that
+                // resolves correctly from build/main.js at runtime.
+                return callback(null, `commonjs ../native/${match[1]}audio`);
+            }
+            callback();
+        },
+        {
+            '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
+            'electron-context-menu': 'require(\'electron-context-menu\')',
+            'electron-reload': 'require(\'electron-reload\')',
+            'electron-updater': 'require(\'electron-updater\')',
+            'posthog-node': 'require(\'posthog-node\')'
+        }
+    ],
     resolve: {
         modules: [
             path.resolve('./node_modules')

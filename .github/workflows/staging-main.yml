@@ -62,7 +62,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # Pinned to windows-2022 — see staging.yml for the reason
+        # (win25-vs2026 image breaks node-gyp VS detection).
+        os: [windows-2022, macos-latest]
     permissions:
       contents: write
     steps:
@@ -129,7 +131,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Zip portable build (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
           Compress-Archive -Path "dist\win-unpacked\*" -DestinationPath "dist\sonacove-staging-win-x64.zip"
