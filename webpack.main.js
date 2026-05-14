@@ -37,8 +37,15 @@ module.exports = {
         // are shipped unpacked from asar so they're available at
         // runtime.
         function ({ request }, callback) {
-            if (request && /(?:^|[\\/])native[\\/](?:mac|win)audio(?:$|[\\/])/.test(request)) {
-                return callback(null, `commonjs ${request}`);
+            const match = request && request.match(/(?:^|[\\/])native[\\/](mac|win)audio(?:$|[\\/])/);
+
+            if (match) {
+                // Source files (e.g. app/features/mac-audio.js) require the
+                // addon via `../../native/Xaudio` — correct from source,
+                // but the bundle output lives in build/ where the same
+                // relative path escapes the repo. Rewrite to a path that
+                // resolves correctly from build/main.js at runtime.
+                return callback(null, `commonjs ../native/${match[1]}audio`);
             }
             callback();
         },
@@ -46,6 +53,7 @@ module.exports = {
             '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
             'electron-context-menu': 'require(\'electron-context-menu\')',
             'electron-reload': 'require(\'electron-reload\')',
+            'electron-updater': 'require(\'electron-updater\')',
             'posthog-node': 'require(\'posthog-node\')'
         }
     ],

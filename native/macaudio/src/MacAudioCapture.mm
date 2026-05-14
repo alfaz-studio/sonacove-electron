@@ -7,7 +7,16 @@
 #import <Foundation/Foundation.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 
-@interface SonacoveAudioStreamOutput : NSObject <SCStreamOutput, SCStreamDelegate>
+#include <cstdlib>
+#include <vector>
+
+@interface SonacoveAudioStreamOutput : NSObject <SCStreamOutput, SCStreamDelegate> {
+    // Persistent scratch buffer for the planar→interleaved copy. SCStream
+    // delivers on a single serial queue, so single-threaded access is safe.
+    // Resizing on the rare growth event beats fresh-alloc-per-buffer at
+    // ~50 callbacks/second.
+    std::vector<float> _interleaveBuffer;
+}
 @property (nonatomic) sonacove::AudioBufferCallback audioCallback;
 @property (nonatomic) sonacove::ErrorCallback errorCallback;
 @end
@@ -37,14 +46,13 @@
         return;
     }
 
-    // ScreenCaptureKit delivers interleaved Float32 by default; bail loudly
-    // if a future macOS picks a different default rather than silently
-    // forwarding garbage to JS.
+    // ScreenCaptureKit delivers Float32 PCM, but **non-interleaved** (planar)
+    // — one buffer per channel. The JS contract is interleaved Float32, so
+    // we read the planar AudioBufferList and interleave inline. Bail on
+    // anything other than Float32 32-bit, since the consumer can't handle it.
     const bool isFloat = (asbd->mFormatFlags & kAudioFormatFlagIsFloat) != 0;
-    const bool isInterleaved =
-        (asbd->mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0;
 
-    if (!isFloat || !isInterleaved || asbd->mBitsPerChannel != 32) {
+    if (!isFloat || asbd->mBitsPerChannel != 32) {
         if (self.errorCallback) {
             self.errorCallback(-2, "Unexpected audio format from SCStream");
         }
@@ -52,37 +60,98 @@
         return;
     }
 
-    CMBlockBufferRef blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer);
-
-    if (!blockBuffer) {
-        return;
-    }
-
-    size_t totalLen = 0;
-    char* dataPtr = nullptr;
-    OSStatus s =
-        CMBlockBufferGetDataPointer(blockBuffer, 0, nullptr, &totalLen, &dataPtr);
-
-    if (s != kCMBlockBufferNoErr || !dataPtr || totalLen == 0) {
-        return;
-    }
-
     const uint32_t channels = asbd->mChannelsPerFrame;
-    const size_t bytesPerFrame = sizeof(float) * channels;
 
-    if (bytesPerFrame == 0) {
+    if (channels == 0) {
         return;
     }
 
-    const size_t frameCount = totalLen / bytesPerFrame;
+    // CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer fills an
+    // AudioBufferList that points into a retained CMBlockBuffer we own
+    // and must release. For planar PCM this returns N buffers (one per
+    // channel); for interleaved it returns one buffer of N*frames floats.
+    size_t ablSize = 0;
+    CMBlockBufferRef retainedBlock = nullptr;
+    AudioBufferList ablStack;
+    AudioBufferList* abl = &ablStack;
+
+    OSStatus s = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+        sampleBuffer, &ablSize, abl, sizeof(ablStack),
+        kCFAllocatorDefault, kCFAllocatorDefault,
+        kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+        &retainedBlock);
+
+    // If the layout doesn't fit in our stack ABL (more channels than
+    // expected), allocate a sized one and retry. Keeps the common
+    // mono/stereo case alloc-free.
+    if (s == kCMSampleBufferError_ArrayTooSmall) {
+        const size_t needed =
+            sizeof(AudioBufferList) + sizeof(AudioBuffer) * (channels - 1);
+        abl = static_cast<AudioBufferList*>(malloc(needed));
+
+        if (!abl) {
+            return;
+        }
+
+        s = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer, &ablSize, abl, needed,
+            kCFAllocatorDefault, kCFAllocatorDefault,
+            kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            &retainedBlock);
+    }
+
+    if (s != noErr || !retainedBlock) {
+        if (abl != &ablStack) {
+            free(abl);
+        }
+
+        return;
+    }
+
+    const bool isInterleaved =
+        (asbd->mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0;
 
     sonacove::AudioFormat fmt{};
     fmt.sampleRate = asbd->mSampleRate;
     fmt.channelCount = channels;
 
-    if (self.audioCallback) {
-        self.audioCallback(reinterpret_cast<const float*>(dataPtr), frameCount,
+    if (isInterleaved && abl->mNumberBuffers >= 1 && self.audioCallback) {
+        const AudioBuffer& buf = abl->mBuffers[0];
+        const size_t frameCount = buf.mDataByteSize / (sizeof(float) * channels);
+
+        self.audioCallback(static_cast<const float*>(buf.mData), frameCount,
                            fmt);
+    } else if (!isInterleaved && abl->mNumberBuffers == channels
+               && self.audioCallback) {
+        // Planar: one buffer per channel, each `frameCount * 4` bytes.
+        const size_t frameCount =
+            abl->mBuffers[0].mDataByteSize / sizeof(float);
+        const size_t needed = frameCount * channels;
+
+        if (_interleaveBuffer.size() < needed) {
+            _interleaveBuffer.resize(needed);
+        }
+
+        float* interleaved = _interleaveBuffer.data();
+
+        for (uint32_t ch = 0; ch < channels; ++ch) {
+            const float* src =
+                static_cast<const float*>(abl->mBuffers[ch].mData);
+
+            if (!src) {
+                continue;
+            }
+            for (size_t f = 0; f < frameCount; ++f) {
+                interleaved[f * channels + ch] = src[f];
+            }
+        }
+
+        self.audioCallback(interleaved, frameCount, fmt);
+    }
+
+    CFRelease(retainedBlock);
+    if (abl != &ablStack) {
+        free(abl);
     }
 }
 
