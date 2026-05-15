@@ -1,8 +1,14 @@
+'use strict';
+
 const { BrowserWindow, desktopCapturer, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { getAllowedRevealDirs, getScreenshotsDir, sanitizeOutputFilename } = require('./sonacovePaths');
+const { openExclusiveFileHandle } = require('./fileWriters');
+const { sanitizeOutputFilename } = require('./sanitizers');
+const { getAllowedRevealDirs, getScreenshotsDir } = require('./sonacovePaths');
+
+const PNG_EXT = '.png';
 
 /**
  * Registers screenshot-related IPC handlers.
@@ -55,13 +61,12 @@ function setupScreenshotIPC(ipcMain) {
                 throw new Error('Invalid base64Data');
             }
 
-            const safeName = sanitizeOutputFilename(filename, '.png');
+            const safeName = sanitizeOutputFilename(filename, PNG_EXT);
 
             if (!safeName) {
                 throw new Error('Invalid filename');
             }
 
-            const filePath = path.join(getScreenshotsDir(), safeName);
             const base64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64, 'base64');
 
@@ -72,7 +77,18 @@ function setupScreenshotIPC(ipcMain) {
                 throw new Error('Invalid image data: not a valid PNG');
             }
 
-            await fs.promises.writeFile(filePath, buffer);
+            // Exclusive open with suffix-on-collision keeps parity with
+            // recording.js — two screenshots with the same timestamp can't
+            // silently clobber each other.
+            const dir = await getScreenshotsDir();
+            const baseName = safeName.slice(0, -PNG_EXT.length);
+            const { handle, filePath } = await openExclusiveFileHandle(dir, baseName, PNG_EXT);
+
+            try {
+                await handle.writeFile(buffer);
+            } finally {
+                await handle.close();
+            }
 
             return filePath;
         } catch (error) {
@@ -83,19 +99,49 @@ function setupScreenshotIPC(ipcMain) {
     });
 
     // Path allowlist prevents arbitrary path disclosure via this IPC.
-    ipcMain.on('show-in-folder', (_event, filePath) => {
+    // We resolve realpath on both the target and the allowed dirs before
+    // prefix-comparing so a symlink inside an allowed dir can't escape it.
+    ipcMain.on('show-in-folder', async (_event, filePath) => {
         if (typeof filePath !== 'string' || !filePath) return;
+
+        // Resolve the real path of the target. If it doesn't exist yet
+        // (showInFolder is sometimes called for an in-flight file), fall back
+        // to the normalized input — shell.showItemInFolder will handle the
+        // "missing file" case with its own warning.
+        let realTarget;
+
+        try {
+            realTarget = await fs.promises.realpath(filePath);
+        } catch (err) {
+            if (err.code === 'ENOENT') {
+                realTarget = path.normalize(filePath);
+            } else {
+                console.warn('⚠️ Main: show-in-folder realpath failed:', err.message);
+
+                return;
+            }
+        }
+
+        // Realpath the allowed dirs too — on macOS, /var is a symlink to
+        // /private/var, and the user's custom override could legitimately
+        // sit under such a path.
+        const realAllowedDirs = await Promise.all(
+            getAllowedRevealDirs().map(async dir => {
+                try {
+                    return await fs.promises.realpath(dir);
+                } catch {
+                    // Dir may not exist yet — fall back to the literal path.
+                    return dir;
+                }
+            })
+        );
 
         // Windows paths are case-insensitive — compare lowercased to avoid
         // false negatives if a renderer sends a differently-cased path.
         const isWindows = process.platform === 'win32';
-        const norm = s => {
-            const n = path.normalize(s);
-
-            return isWindows ? n.toLowerCase() : n;
-        };
-        const target = norm(filePath);
-        const isAllowed = getAllowedRevealDirs().some(dir => target.startsWith(norm(dir) + path.sep));
+        const norm = s => (isWindows ? s.toLowerCase() : s);
+        const target = norm(realTarget);
+        const isAllowed = realAllowedDirs.some(dir => target.startsWith(norm(dir) + path.sep));
 
         if (!isAllowed) {
             console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', filePath);
@@ -104,9 +150,16 @@ function setupScreenshotIPC(ipcMain) {
         }
 
         // shell.showItemInFolder handles missing files gracefully (logs a
-        // warning, returns false) — no need to pre-check existence.
+        // warning, returns false) — no need to pre-check existence. Use
+        // `realTarget` (not the raw input) so a symlink-targeted reveal opens
+        // the same path the allowlist actually authorised. Side-effect: if a
+        // user's recordings dir is itself a symlink (e.g. ~/Documents/Sonacove
+        // -> /Volumes/NAS/Sonacove on macOS), Finder/Explorer opens the
+        // resolved target rather than the symlink path. Intentional — we'd
+        // rather be consistent with the allowlist than preserve the
+        // friendlier-looking path.
         try {
-            shell.showItemInFolder(path.normalize(filePath));
+            shell.showItemInFolder(realTarget);
         } catch (error) {
             console.error('❌ Main: Error revealing file in folder:', error);
         }

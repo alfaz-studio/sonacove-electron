@@ -4,7 +4,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const { openExclusiveWriteStream } = require('./fileWriters');
-const { getRecordingsDir, sanitizeOutputFilename } = require('./sonacovePaths');
+const { handle } = require('./ipcHelpers');
+const { sanitizeOutputFilename } = require('./sanitizers');
+const { getRecordingsDir } = require('./sonacovePaths');
 
 const WEBM_EXT = '.webm';
 
@@ -12,12 +14,25 @@ const MAX_SESSIONS_PER_WC = 4;
 
 // 64 MiB is well above MediaRecorder's typical 5 s timeslice (~10–20 MiB) while
 // still capping accidental OOM from a runaway sender.
+// Contract: oversized chunks are rejected, session preserved — the caller may
+// invoke `recording:cancel-write` to discard if it wants to abandon. We
+// deliberately do not unlink here because doing so would destroy all prior
+// recorded content for a single anomalous chunk.
 const MAX_CHUNK_BYTES = 64 * 1024 * 1024;
 
 /**
  * Active write sessions keyed by sessionId. detachCleanup removes the per-session
  * 'destroyed' listener once the session terminates — without it, listeners would
  * accumulate across many recordings within one webContents.
+ *
+ * Best-effort save guarantee: on a normal renderer-window close, the 'destroyed'
+ * handler runs and the stream is ended cleanly. On a hard kill (SIGKILL, power
+ * loss, OS crash), the process exits before any handler runs — the OS will close
+ * file descriptors so all written bytes hit disk, but stream.end() is never
+ * called, so the resulting WebM may lack a final EOF/cluster marker. The file
+ * stays on disk and is usually still playable, just not seekable past the last
+ * fully-flushed cluster. Considered acceptable; documented here so future
+ * maintainers don't get surprised.
  *
  * @type {Map<string, {
  *   filePath: string,
@@ -28,6 +43,21 @@ const MAX_CHUNK_BYTES = 64 * 1024 * 1024;
  * }>}
  */
 const sessions = new Map();
+
+/**
+ * In-flight `start-write` calls keyed by webContentsId. The cap check has to
+ * count pending starts in addition to live sessions — otherwise N truly-parallel
+ * `start-write` invocations all observe `sessions` as empty during their
+ * synchronous prelude and every one of them slips past `MAX_SESSIONS_PER_WC`
+ * before the first one finishes its awaits and writes to `sessions`.
+ *
+ * Key assumption: webContents IDs are unique per webContents lifetime. We
+ * don't try to handle ID reuse — Electron monotonically increments and
+ * doesn't reissue.
+ *
+ * @type {Map<number, number>}
+ */
+const pendingCountByWc = new Map();
 
 /**
  * Wraps an ArrayBuffer/Uint8Array/Buffer (post-structured-clone) into a Buffer
@@ -45,19 +75,38 @@ function toBuffer(chunk) {
 }
 
 /**
- * Awaits a writable stream's 'finish' event after calling .end().
- * Safe to call on an already-ended stream — `.end(cb)` on a stream past
- * 'finish' never invokes the callback, so we resolve immediately when
- * `writableEnded` is set, avoiding a forever hang.
+ * Awaits a writable stream's 'finish' event after calling .end(), racing
+ * against 'error'. `stream.end(cb)` attaches `cb` to 'finish' only — if the
+ * stream emits 'error' instead (e.g. disk full at flush), the cb never runs
+ * and the promise would hang. We also have to listen for 'error' explicitly
+ * because an unhandled 'error' on a Writable crashes the process.
+ *
+ * Safe to call on an already-finished stream — `writableFinished` short-circuits
+ * to resolve immediately. We deliberately check `writableFinished` (set after
+ * the 'finish' event fires, i.e. after the OS has flushed) rather than
+ * `writableEnded` (flips the instant .end() is called, before bytes hit disk).
+ * A concurrent caller racing this function would otherwise see "done" while
+ * the flush is still in flight.
  */
 function endStream(stream) {
-    return new Promise(resolve => {
-        if (stream.destroyed || stream.writableEnded) {
+    return new Promise((resolve, reject) => {
+        if (stream.destroyed || stream.writableFinished) {
             resolve();
 
             return;
         }
-        stream.end(() => resolve());
+        const onFinish = () => {
+            stream.removeListener('error', onError);
+            resolve();
+        };
+        const onError = err => {
+            stream.removeListener('finish', onFinish);
+            reject(err);
+        };
+
+        stream.once('finish', onFinish);
+        stream.once('error', onError);
+        stream.end();
     });
 }
 
@@ -76,21 +125,6 @@ async function disposeSession(sessionId, unlink = false) {
     if (unlink) {
         await fs.promises.unlink(session.filePath).catch(() => { /* may not exist */ });
     }
-}
-
-/**
- * Wraps an IPC handler with uniform error logging and a `{ error }` failure return.
- */
-function handle(label, fn) {
-    return async (event, params = {}) => {
-        try {
-            return await fn(event, params);
-        } catch (err) {
-            console.error(`❌ ${label} failed:`, err);
-
-            return { error: err.message || label };
-        }
-    };
 }
 
 /**
@@ -113,42 +147,77 @@ function setupRecordingIPC(ipcMain) {
         }
 
         const wcId = event.sender.id;
+        const pending = pendingCountByWc.get(wcId) ?? 0;
         const activeForWc = Array.from(sessions.values()).filter(s => s.webContentsId === wcId).length;
 
-        if (activeForWc >= MAX_SESSIONS_PER_WC) {
+        if (pending + activeForWc >= MAX_SESSIONS_PER_WC) {
             return { error: 'Too many active recording sessions' };
         }
 
-        // If a file with this name already exists, openExclusiveWriteStream
-        // adds an `_1`, `_2`, … suffix until it finds a free slot — avoids
-        // silently clobbering a previous recording with the same timestamp.
-        const baseName = safeName.slice(0, -WEBM_EXT.length);
-        const { stream, filePath } = await openExclusiveWriteStream(getRecordingsDir(), baseName, WEBM_EXT);
-        const sessionId = crypto.randomUUID();
+        // Reserve a slot synchronously, BEFORE awaiting. Parallel callers that
+        // arrive between this point and `sessions.set` below will see the
+        // increment in `pending` and bounce off the cap correctly.
+        pendingCountByWc.set(wcId, pending + 1);
 
-        // If the renderer's webContents goes away mid-recording (window closed,
-        // app quit, renderer crashed), close the stream but keep the partial file
-        // on disk so the user can recover what was captured.
-        const sender = event.sender;
-        const cleanup = () => {
-            disposeSession(sessionId, false).catch(() => { /* swallow */ });
-        };
+        try {
+            // If a file with this name already exists, openExclusiveWriteStream
+            // adds an `_1`, `_2`, … suffix until it finds a free slot — avoids
+            // silently clobbering a previous recording with the same timestamp.
+            const baseName = safeName.slice(0, -WEBM_EXT.length);
+            const dir = await getRecordingsDir();
+            const { stream, filePath } = await openExclusiveWriteStream(dir, baseName, WEBM_EXT);
+            const sessionId = crypto.randomUUID();
 
-        sender.once('destroyed', cleanup);
+            // If the renderer's webContents goes away mid-recording (window closed,
+            // app quit, renderer crashed), close the stream but keep the partial file
+            // on disk so the user can recover what was captured.
+            const sender = event.sender;
+            const cleanup = () => {
+                disposeSession(sessionId, false).catch(() => { /* swallow */ });
+            };
 
-        sessions.set(sessionId, {
-            filePath,
-            stream,
-            webContentsId: wcId,
-            firstChunkSize: 0,
-            detachCleanup: () => {
-                if (!sender.isDestroyed()) {
-                    sender.removeListener('destroyed', cleanup);
-                }
+            // If the sender was destroyed during the awaits above, 'destroyed'
+            // has already fired — registering now would never run. Close the
+            // stream and unlink the 0-byte placeholder file; no bytes were
+            // ever written so the "keep partial file" policy doesn't apply.
+            // The renderer's invoke promise has already been rejected by
+            // Electron at this point, so the error return is mostly for
+            // completeness.
+            if (sender.isDestroyed()) {
+                await endStream(stream).catch(() => {});
+                await fs.promises.unlink(filePath).catch(() => {});
+
+                return { error: 'Renderer destroyed before session was established' };
             }
-        });
 
-        return { sessionId, filePath };
+            sender.once('destroyed', cleanup);
+
+            sessions.set(sessionId, {
+                filePath,
+                stream,
+                webContentsId: wcId,
+                firstChunkSize: 0,
+                detachCleanup: () => {
+                    if (!sender.isDestroyed()) {
+                        sender.removeListener('destroyed', cleanup);
+                    }
+                }
+            });
+
+            return { sessionId, filePath };
+        } finally {
+            // Release the reservation regardless of success/failure. On success
+            // the live session is now in `sessions` and will be counted by
+            // `activeForWc` on subsequent calls; on failure the slot frees up
+            // for the next attempt.
+            const p = pendingCountByWc.get(wcId) ?? 1;
+
+            if (p <= 1) {
+                pendingCountByWc.delete(wcId);
+            } else {
+                pendingCountByWc.set(wcId, p - 1);
+            }
+        }
     }));
 
     ipcMain.handle('recording:write-chunk', handle('recording:write-chunk', async (event, params) => {
@@ -171,20 +240,46 @@ function setupRecordingIPC(ipcMain) {
             return { ok: true };
         }
         if (buf.length > MAX_CHUNK_BYTES) {
-            await disposeSession(sessionId, true);
-
             return { error: 'Chunk exceeds maximum size' };
         }
 
-        if (session.firstChunkSize === 0) {
-            session.firstChunkSize = buf.length;
+        if (!session.stream.write(buf)) {
+            // Race drain (normal) against error (I/O fault) and close (stream
+            // destroyed by the OS before either fired). Without the close
+            // listener, an unexpected destroy would hang the IPC forever.
+            await new Promise((resolve, reject) => {
+                const stream = session.stream;
+                const removeListeners = () => {
+                    stream.removeListener('drain', onDrain);
+                    stream.removeListener('error', onError);
+                    stream.removeListener('close', onClose);
+                };
+                const onDrain = () => { removeListeners(); resolve(); };
+                const onError = err => {
+                    removeListeners();
+                    // Fire-and-forget: dispose frees resources so subsequent
+                    // writes from a renderer that ignored the error get a
+                    // clean "Unknown session" instead of repeated failures.
+                    disposeSession(sessionId, true).catch(() => { /* swallow */ });
+                    reject(err);
+                };
+                const onClose = () => {
+                    removeListeners();
+                    disposeSession(sessionId, true).catch(() => { /* swallow */ });
+                    reject(new Error('Recording stream closed unexpectedly'));
+                };
+
+                stream.once('drain', onDrain);
+                stream.once('error', onError);
+                stream.once('close', onClose);
+            });
         }
 
-        if (!session.stream.write(buf)) {
-            await new Promise((resolve, reject) => {
-                session.stream.once('drain', resolve);
-                session.stream.once('error', reject);
-            });
+        // Write accepted; safe to record size invariant. Doing this after the
+        // drain-wait ensures we never record a firstChunkSize for bytes that
+        // didn't durably land.
+        if (session.firstChunkSize === 0) {
+            session.firstChunkSize = buf.length;
         }
 
         return { ok: true };
@@ -201,12 +296,29 @@ function setupRecordingIPC(ipcMain) {
             return { error: 'Session does not belong to this window' };
         }
 
+        // Step 1 — close the stream. If THIS fails, the file is corrupt
+        // (incomplete flush), so unlink and surface the error.
         try {
             await endStream(session.stream);
+        } catch (err) {
+            await disposeSession(sessionId, true);
+            throw err;
+        }
 
-            // Re-write the first chunk with WebM duration fixed. Must be the same
-            // byte length as the original first chunk to avoid corrupting the file.
-            if (firstChunkOverride) {
+        // Step 2 — drop the session from the map. The file is fully written;
+        // we keep it no matter what happens in the best-effort step below.
+        const filePath = session.filePath;
+
+        sessions.delete(sessionId);
+        session.detachCleanup();
+
+        // Step 3 — best-effort duration-header re-write. A transient I/O error
+        // here would otherwise destroy an already-good recording; log and
+        // return success instead.
+        if (firstChunkOverride) {
+            try {
+                // Re-write the first chunk with WebM duration fixed. Must be the same
+                // byte length as the original first chunk to avoid corrupting the file.
                 const override = toBuffer(firstChunkOverride);
 
                 if (override && override.length !== session.firstChunkSize) {
@@ -215,26 +327,31 @@ function setupRecordingIPC(ipcMain) {
                         + `!= original ${session.firstChunkSize}; skipping overwrite to avoid corruption.`
                     );
                 } else if (override) {
-                    const fh = await fs.promises.open(session.filePath, 'r+');
+                    const fh = await fs.promises.open(filePath, 'r+');
 
                     try {
                         await fh.write(override, 0, override.length, 0);
                     } finally {
                         await fh.close();
                     }
+                } else {
+                    // toBuffer returned null — caller sent a truthy value that
+                    // isn't ArrayBuffer/Uint8Array/Buffer. Without this branch
+                    // we'd silently skip the duration fixup.
+                    console.warn(
+                        '⚠️ recording:finish-write — firstChunkOverride present but not a '
+                        + 'recognized binary type; duration header not fixed.'
+                    );
                 }
+            } catch (err) {
+                console.warn(
+                    '⚠️ recording:finish-write — duration overwrite failed, keeping file as-is:',
+                    err.message
+                );
             }
-
-            const filePath = session.filePath;
-
-            sessions.delete(sessionId);
-            session.detachCleanup();
-
-            return { filePath };
-        } catch (err) {
-            await disposeSession(sessionId, true);
-            throw err;
         }
+
+        return { filePath };
     }));
 
     ipcMain.handle('recording:cancel-write', handle('recording:cancel-write', async (event, params) => {

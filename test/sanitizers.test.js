@@ -61,7 +61,7 @@ test('sanitizeOutputFilename caps length at 255 bytes', () => {
     const longName = 'a'.repeat(300);
     const result = sanitizeOutputFilename(longName, '.webm');
 
-    assert.equal(result.length, MAX_FILENAME_BYTES);
+    assert.equal(Buffer.byteLength(result, 'utf8'), MAX_FILENAME_BYTES);
     assert.ok(result.endsWith('.webm'));
 });
 
@@ -69,9 +69,52 @@ test('sanitizeOutputFilename length cap accounts for extension', () => {
     const longName = 'a'.repeat(300);
     const result = sanitizeOutputFilename(longName, '.png');
 
-    assert.equal(result.length, MAX_FILENAME_BYTES);
+    assert.equal(Buffer.byteLength(result, 'utf8'), MAX_FILENAME_BYTES);
     assert.ok(result.endsWith('.png'));
     assert.equal(result, `${'a'.repeat(MAX_FILENAME_BYTES - 4)}.png`);
+});
+
+test('sanitizeOutputFilename caps by UTF-8 bytes, not characters, for Unicode names', () => {
+    // CJK ideographs are 3 bytes each in UTF-8. 100 of them = 300 bytes
+    // (only 100 UTF-16 code units), well over the 255-byte filesystem limit.
+    const cjkName = '会議'.repeat(100); // 200 chars, 600 bytes
+    const result = sanitizeOutputFilename(cjkName, '.webm');
+
+    assert.ok(Buffer.byteLength(result, 'utf8') <= MAX_FILENAME_BYTES);
+    assert.ok(result.endsWith('.webm'));
+});
+
+test('sanitizeOutputFilename truncation never cuts in the middle of a code point', () => {
+    // Worst case: byte budget that wouldn't evenly accommodate the last
+    // multi-byte char. Cap is 255 bytes. 84 CJK chars = 252 bytes; with a
+    // 5-byte ext we'd have 250 bytes for the body — 83 chars = 249 bytes
+    // fits, 84 = 252 doesn't, so we expect 83 chars before the extension.
+    const cjkName = '日'.repeat(100); // 300 bytes
+    const result = sanitizeOutputFilename(cjkName, '.webm');
+
+    // No replacement characters (U+FFFD) or stray surrogate pairs.
+    assert.ok(!result.includes('\uFFFD'));
+    // Round-trip through UTF-8 must give the same string back.
+    assert.equal(Buffer.from(result, 'utf8').toString('utf8'), result);
+});
+
+test('sanitizeOutputFilename prepends underscore when result starts with -', () => {
+    // Plain leading-dash filename — could be mistaken for a CLI flag.
+    assert.equal(
+        sanitizeOutputFilename('-rf something.webm', '.webm'),
+        '_-rf_something.webm'
+    );
+    // Double-dash long-flag form, no extension supplied.
+    assert.equal(
+        sanitizeOutputFilename('--foo', '.webm'),
+        '_--foo.webm'
+    );
+});
+
+test('sanitizeOutputFilename leaves non-dash-prefixed names alone (regression)', () => {
+    // The leading-dash guard must not affect ordinary ASCII filenames.
+    assert.equal(sanitizeOutputFilename('meeting.webm', '.webm'), 'meeting.webm');
+    assert.equal(sanitizeOutputFilename('abc-def.webm', '.webm'), 'abc-def.webm');
 });
 
 test('sanitizeOverride passes through valid strings', () => {
