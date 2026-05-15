@@ -227,8 +227,7 @@ function checkForUpdatesManually() {
 }
 
 /**
- * Per-platform window chrome shared by the main meeting window and the
- * auxiliary dashboard windows.
+ * Per-platform window chrome for the main meeting window.
  *
  * Windows: frameless with custom in-page title bar (setupTitlebar).
  * macOS: hiddenInset keeps traffic lights but drops the title text so we can
@@ -262,74 +261,6 @@ function applyNonDarwinIcon(win) {
 }
 
 /**
- * Auxiliary dashboard windows opened in addition to the main window — useful
- * when the user is in a meeting and wants to browse/manage their dashboard
- * alongside it. Tracked separately from `mainWindow` so PiP and the meeting
- * leave-modal logic don't engage for these.
- *
- * These windows load the configured landing URL and behave as a standard
- * browser window: no will-prevent-unload guard, no PiP integration. If the
- * user joins a meeting from one of these, they get a second concurrent
- * meeting in that window — at the dashboard's discretion. Use Cmd/Ctrl+N
- * or call the `open-dashboard-window` IPC from the renderer.
- */
-const dashboardWindows = new Set();
-
-function createDashboardWindow() {
-    const dashboardBasePath = isDev ? process.cwd() : app.getAppPath();
-    const win = new BrowserWindow({
-        title: t('app.windowTitle'),
-        width: 1100,
-        height: 720,
-        minWidth: 800,
-        minHeight: 600,
-        show: false,
-        backgroundColor: '#1A1A1A',
-        ...platformWindowChrome(),
-        webPreferences: {
-            contextIsolation: false,
-            nodeIntegration: false,
-            preload: path.resolve(dashboardBasePath, 'build', 'preload.js'),
-            sandbox: false,
-            webSecurity: false
-        }
-    });
-
-    dashboardWindows.add(win);
-    applyNonDarwinIcon(win);
-
-    // Deny any `window.open()` from the dashboard renderer until the full
-    // multi-window join flow is wired. Without this, a popup would spawn a
-    // BrowserWindow that inherits the preload script without the routing
-    // the main window has via `windowOpenHandler` in createJitsiMeetWindow.
-    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-
-    // Mirror the main window's navigation guard: keep the dashboard window
-    // pinned to the trusted landing origin. setWindowOpenHandler only covers
-    // `window.open()`; this also blocks anchor / location.href navigations.
-    win.webContents.on('will-navigate', (event, url) => {
-        if (!url.startsWith(config.currentConfig.landing)) {
-            event.preventDefault();
-        }
-    });
-
-    win.on('closed', () => {
-        dashboardWindows.delete(win);
-    });
-
-    // Avoid a blank flash: the window stays hidden (show:false) until the
-    // remote landing URL has painted its first frame.
-    win.once('ready-to-show', () => win.show());
-    win.loadURL(config.currentConfig.landing);
-
-    return win;
-}
-
-ipcMain.on('open-dashboard-window', () => {
-    createDashboardWindow();
-});
-
-/**
  * Sets the application menu.
  *
  * macOS: app-name menu with About, Check for Updates, and the standard
@@ -359,16 +290,6 @@ function setApplicationMenu() {
                 { role: 'unhide' },
                 { type: 'separator' },
                 { role: 'quit' }
-            ]
-        },
-        {
-            label: t('menu.file'),
-            submenu: [
-                {
-                    label: t('menu.newWindow'),
-                    accelerator: 'CmdOrCtrl+N',
-                    click: () => createDashboardWindow()
-                }
             ]
         },
         {
@@ -428,17 +349,6 @@ function setApplicationMenu() {
             ]
         }
     ]));
-
-    // Dock right-click menu (macOS): surface "New Window" alongside the
-    // system-provided options so it is discoverable without the menu bar.
-    if (app.dock && typeof app.dock.setMenu === 'function') {
-        app.dock.setMenu(Menu.buildFromTemplate([
-            {
-                label: t('menu.newWindow'),
-                click: () => createDashboardWindow()
-            }
-        ]));
-    }
 }
 
 

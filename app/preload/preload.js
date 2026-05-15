@@ -38,7 +38,6 @@ const whitelistedIpcChannels = [
     'pip-toggle-video',
     'pip-open-chat',
     'pip-end-meeting',
-    'open-dashboard-window',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',
