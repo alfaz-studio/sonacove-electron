@@ -86,24 +86,27 @@ function setupScreenshotIPC(ipcMain) {
     ipcMain.on('show-in-folder', (_event, filePath) => {
         if (typeof filePath !== 'string' || !filePath) return;
 
-        // Normalize separators for consistent comparison on Windows.
-        const normalizedPath = path.normalize(filePath);
-        const allowedDirs = getAllowedRevealDirs().map(d => path.normalize(d));
-        const isAllowed = allowedDirs.some(dir => normalizedPath.startsWith(dir + path.sep));
+        // Windows paths are case-insensitive — compare lowercased to avoid
+        // false negatives if a renderer sends a differently-cased path.
+        const isWindows = process.platform === 'win32';
+        const norm = s => {
+            const n = path.normalize(s);
+
+            return isWindows ? n.toLowerCase() : n;
+        };
+        const target = norm(filePath);
+        const isAllowed = getAllowedRevealDirs().some(dir => target.startsWith(norm(dir) + path.sep));
 
         if (!isAllowed) {
-            console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', normalizedPath);
-
-            return;
-        }
-        if (!fs.existsSync(normalizedPath)) {
-            console.warn('⚠️ Main: show-in-folder blocked — file does not exist:', normalizedPath);
+            console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', filePath);
 
             return;
         }
 
+        // shell.showItemInFolder handles missing files gracefully (logs a
+        // warning, returns false) — no need to pre-check existence.
         try {
-            shell.showItemInFolder(normalizedPath);
+            shell.showItemInFolder(path.normalize(filePath));
         } catch (error) {
             console.error('❌ Main: Error revealing file in folder:', error);
         }
