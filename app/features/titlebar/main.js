@@ -30,6 +30,8 @@ function injectTitlebar(mainWindow) {
         aboutTooltip: t('titlebar.aboutTooltip'),
         checkForUpdates: t('titlebar.checkForUpdates'),
         checkForUpdatesTooltip: t('titlebar.checkForUpdatesTooltip'),
+        newWindow: t('titlebar.newWindow'),
+        newWindowTooltip: t('titlebar.newWindowTooltip'),
         help: t('titlebar.help'),
         helpTooltip: t('titlebar.helpTooltip')
     };

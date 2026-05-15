@@ -85,6 +85,7 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
         '<div class="stb-title"></div>' +
         '<span class="stb-ver" id="stb-ver"></span>' +
         '<div class="stb-menu">' +
+            '<button class="stb-btn" id="stb-new-window"></button>' +
             '<button class="stb-btn" id="stb-about"></button>' +
             '<button class="stb-btn" id="stb-updates"></button>' +
             '<button class="stb-btn" id="stb-help"></button>' +
@@ -96,6 +97,9 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
         '</div>';
     bar.querySelector('.stb-title').textContent = document.title || strings.windowTitle;
     bar.querySelector('#stb-ver').textContent = 'v' + strings.appVersion;
+    var newWindowBtn = bar.querySelector('#stb-new-window');
+    newWindowBtn.textContent = strings.newWindow;
+    newWindowBtn.title = strings.newWindowTooltip;
     var aboutBtn = bar.querySelector('#stb-about');
     aboutBtn.textContent = strings.about;
     aboutBtn.title = strings.aboutTooltip;
@@ -128,6 +132,9 @@ const getTitlebarJS = (iconHtml = '', strings = {}) => `
     // Do not remove — creates a containing block for position:fixed children.
     document.body.style.setProperty('transform', 'translateY(0)', 'important');
 
+    document.getElementById('stb-new-window').addEventListener('click', function() {
+        window.sonacoveElectronAPI.ipc.send('open-dashboard-window');
+    });
     document.getElementById('stb-about').addEventListener('click', function() {
         window.sonacoveElectronAPI.ipc.send('show-about-dialog');
     });

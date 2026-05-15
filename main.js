@@ -349,6 +349,16 @@ function setApplicationMenu() {
             ]
         },
         {
+            label: t('menu.file'),
+            submenu: [
+                {
+                    label: t('menu.newWindow'),
+                    accelerator: 'CmdOrCtrl+N',
+                    click: () => createDashboardWindow()
+                }
+            ]
+        },
+        {
             label: t('menu.edit'),
             submenu: [ {
                 label: t('menu.undo'),
@@ -388,12 +398,6 @@ function setApplicationMenu() {
             label: t('menu.window'),
             role: 'window',
             submenu: [
-                {
-                    label: t('menu.newDashboard'),
-                    accelerator: 'CmdOrCtrl+N',
-                    click: () => createDashboardWindow()
-                },
-                { type: 'separator' },
                 { role: 'minimize' },
                 { role: 'close' }
             ]
@@ -411,6 +415,17 @@ function setApplicationMenu() {
             ]
         }
     ]));
+
+    // Dock right-click menu (macOS): surface "New Window" alongside the
+    // system-provided options so it is discoverable without the menu bar.
+    if (app.dock && typeof app.dock.setMenu === 'function') {
+        app.dock.setMenu(Menu.buildFromTemplate([
+            {
+                label: t('menu.newWindow'),
+                click: () => createDashboardWindow()
+            }
+        ]));
+    }
 }
 
 

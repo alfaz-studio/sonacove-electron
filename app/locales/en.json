@@ -13,6 +13,8 @@
         "copy": "Copy",
         "paste": "Paste",
         "selectAll": "Select All",
+        "file": "&File",
+        "newWindow": "New Window",
         "window": "&Window",
         "newDashboard": "New Dashboard Window",
         "help": "&Help",
@@ -24,6 +26,8 @@
         "aboutTooltip": "View app version and system info",
         "checkForUpdates": "Check for Updates",
         "checkForUpdatesTooltip": "Check for new versions",
+        "newWindow": "New Window",
+        "newWindowTooltip": "Open a new Sonacove window",
         "help": "Help",
         "helpTooltip": "Open Sonacove documentation"
     },
