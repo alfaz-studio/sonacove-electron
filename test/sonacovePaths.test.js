@@ -212,8 +212,12 @@ test('sonacovePaths.getAllowedRevealDirs — v1 file with custom overrides inclu
     const documentsDir = await mkTempDir('sonacove-paths-docs-');
     const picturesDir = await mkTempDir('sonacove-paths-pics-');
 
-    const customRecordings = path.join(os.tmpdir(), 'sonacove-test-custom-recordings');
-    const customScreenshots = path.join(os.tmpdir(), 'sonacove-test-custom-screenshots');
+    // Put custom overrides under documentsDir (an allowed-root in the fake
+    // electron) so loadSettings()'s allowlist check accepts them. Paths
+    // outside the allowed roots are now rejected during load and dropped
+    // back to null, which is the behaviour Fix 1 introduced.
+    const customRecordings = path.join(documentsDir, 'CustomRecordings');
+    const customScreenshots = path.join(documentsDir, 'CustomScreenshots');
 
     const settingsPath = path.join(userDataDir, '.sonacove-save-paths.json');
 
@@ -244,6 +248,60 @@ test('sonacovePaths.getAllowedRevealDirs — v1 file with custom overrides inclu
         assert.ok(dirs.includes(customRecordings), 'includes custom recordings override');
         assert.ok(dirs.includes(customScreenshots), 'includes custom screenshots override');
     } finally {
+        await fs.rm(userDataDir, { recursive: true, force: true });
+        await fs.rm(documentsDir, { recursive: true, force: true });
+        await fs.rm(picturesDir, { recursive: true, force: true });
+    }
+});
+
+test('sonacovePaths.loadSettings — relative/traversal stored paths are rejected and fall back to defaults', async () => {
+    // A hand-edited .sonacove-save-paths.json with `recordings: "../../etc/creds"`
+    // would otherwise flow straight into fs.promises.mkdir() via
+    // getRecordingsDir(), creating directories relative to process.cwd(). Fix 1
+    // validates each stored path against the allowed-roots list at load time.
+    const userDataDir = await mkTempDir('sonacove-paths-ud-');
+    const documentsDir = await mkTempDir('sonacove-paths-docs-');
+    const picturesDir = await mkTempDir('sonacove-paths-pics-');
+
+    const settingsPath = path.join(userDataDir, '.sonacove-save-paths.json');
+
+    fsSync.writeFileSync(settingsPath, JSON.stringify({
+        version: 1,
+        recordings: '../../etc/creds',
+        screenshots: '../../var/whatever'
+    }));
+
+    resetSutCache();
+    installFakeElectron(userDataDir, documentsDir, picturesDir);
+
+    const originalWarn = console.warn;
+    const warnCalls = [];
+
+    console.warn = (...args) => { warnCalls.push(args); };
+
+    try {
+        const { getSavePathsInfo } = require('../app/features/sonacovePaths.js');
+
+        const info = getSavePathsInfo();
+
+        // Both overrides must have been rejected.
+        assert.equal(info.recordings.override, null, 'recordings override rejected -> null');
+        assert.equal(info.screenshots.override, null, 'screenshots override rejected -> null');
+
+        // `current` should fall back to the platform defaults.
+        const expectedRecordings = path.join(documentsDir, 'Sonacove', 'Recordings');
+        const expectedScreenshots = path.join(documentsDir, 'Sonacove', 'Screenshots');
+
+        assert.equal(info.recordings.current, expectedRecordings);
+        assert.equal(info.screenshots.current, expectedScreenshots);
+
+        // A warn must have been emitted naming validateUserPath.
+        const matched = warnCalls.some(call =>
+            call.some(arg => typeof arg === 'string' && arg.includes('validateUserPath')));
+
+        assert.ok(matched, 'console.warn carried the validateUserPath-rejection message');
+    } finally {
+        console.warn = originalWarn;
         await fs.rm(userDataDir, { recursive: true, force: true });
         await fs.rm(documentsDir, { recursive: true, force: true });
         await fs.rm(picturesDir, { recursive: true, force: true });

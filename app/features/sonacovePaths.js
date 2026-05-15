@@ -4,11 +4,50 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
+const { validateUserPath } = require('./sanitizers');
+
 const SETTINGS_FILENAME = '.sonacove-save-paths.json';
 const SETTINGS_VERSION = 1;
 const DEFAULT_ROOT_NAME = 'Sonacove';
 const RECORDINGS_SUBDIR = 'Recordings';
 const SCREENSHOTS_SUBDIR = 'Screenshots';
+
+/**
+ * Standard Electron `app.getPath()` keys we allow as save-path roots.
+ * Defined here (not in savePathsIpc.js) because `loadSettings` also needs
+ * to consult them when validating a previously-persisted path on disk —
+ * keeping a single source-of-truth list avoids drift between the IPC's
+ * accept-set and the cold-load accept-set.
+ */
+const ALLOWED_ROOT_KEYS = [
+    'documents',
+    'downloads',
+    'videos',
+    'pictures',
+    'music',
+    'desktop',
+    'home'
+];
+
+/**
+ * Resolves the allowed root directories at call time (not module init)
+ * because `app.getPath` can throw before the `ready` event in some
+ * environments, and because the value of e.g. `home` depends on the
+ * runtime user.
+ */
+function getAllowedSavePathRoots() {
+    const roots = [];
+
+    for (const key of ALLOWED_ROOT_KEYS) {
+        try {
+            roots.push(app.getPath(key));
+        } catch {
+            // Some platforms don't expose every well-known dir — skip silently.
+        }
+    }
+
+    return roots;
+}
 
 /** @type {{ recordings: string|null, screenshots: string|null } | null} */
 let cachedSettings = null;
@@ -18,6 +57,9 @@ function getSettingsFilePath() {
 }
 
 function loadSettings() {
+    // Cache-first: the sync readFileSync below only runs on the first call
+    // per process lifetime — subsequent calls return the in-memory object.
+    // Async wouldn't buy us much for a ~100-byte file read once at startup.
     if (cachedSettings) {
         return cachedSettings;
     }
@@ -38,9 +80,29 @@ function loadSettings() {
             return cachedSettings;
         }
 
+        // Re-validate stored paths against the allowed-roots allowlist. A
+        // hand-edited settings file could otherwise feed an arbitrary
+        // relative or out-of-allowlist absolute path straight into
+        // fs.promises.mkdir() via getRecordingsDir()/getScreenshotsDir().
+        const allowedRoots = getAllowedSavePathRoots();
+        const validateStored = v => {
+            if (typeof v !== 'string') return null;
+            const check = validateUserPath(v, allowedRoots);
+
+            if ('error' in check) {
+                console.warn(
+                    `⚠️ sonacovePaths: stored path rejected by validateUserPath (${check.error}); falling back to default`
+                );
+
+                return null;
+            }
+
+            return check.ok;
+        };
+
         cachedSettings = {
-            recordings: typeof parsed.recordings === 'string' ? parsed.recordings : null,
-            screenshots: typeof parsed.screenshots === 'string' ? parsed.screenshots : null
+            recordings: validateStored(parsed.recordings),
+            screenshots: validateStored(parsed.screenshots)
         };
     } catch (err) {
         if (err.code !== 'ENOENT') {
@@ -187,6 +249,7 @@ module.exports = {
     getScreenshotsDir,
     getLegacyScreenshotsDir,
     getAllowedRevealDirs,
+    getAllowedSavePathRoots,
     getSavePathsInfo,
     saveSettings
 };

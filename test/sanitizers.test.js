@@ -117,6 +117,19 @@ test('sanitizeOutputFilename leaves non-dash-prefixed names alone (regression)',
     assert.equal(sanitizeOutputFilename('abc-def.webm', '.webm'), 'abc-def.webm');
 });
 
+test('sanitizeOutputFilename rejects dot-only filenames', () => {
+    // `.`, `..`, `...` would each become a hidden file when the extension
+    // is appended (`.webm`, `..webm`, `...png`) — refuse them entirely.
+    assert.equal(sanitizeOutputFilename('.', '.webm'), null);
+    assert.equal(sanitizeOutputFilename('..', '.webm'), null);
+    assert.equal(sanitizeOutputFilename('...', '.png'), null);
+});
+
+test('sanitizeOutputFilename allows leading-dot names that are not dot-only (regression)', () => {
+    // The all-dots guard must not catch names that merely start with dots.
+    assert.equal(sanitizeOutputFilename('..foo.webm', '.webm'), '..foo.webm');
+});
+
 test('sanitizeOverride passes through valid strings', () => {
     assert.equal(sanitizeOverride('C:\\Users\\me\\Videos'), 'C:\\Users\\me\\Videos');
     assert.equal(sanitizeOverride('/home/user/videos'), '/home/user/videos');

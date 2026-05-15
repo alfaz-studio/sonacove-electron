@@ -10,6 +10,11 @@ const { getRecordingsDir } = require('./sonacovePaths');
 
 const WEBM_EXT = '.webm';
 
+// 4 is a generous safety margin — a single meeting has 1 active recording
+// session in normal use. Higher caps risk file-descriptor exhaustion if a
+// misbehaving renderer hammers start-write; lower caps would surprise
+// users who happened to start a second simultaneous recording (e.g. via
+// the audio-only path).
 const MAX_SESSIONS_PER_WC = 4;
 
 // 64 MiB is well above MediaRecorder's typical 5 s timeslice (~10–20 MiB) while
@@ -127,10 +132,18 @@ async function disposeSession(sessionId, unlink = false) {
     sessions.delete(sessionId);
     session.detachCleanup();
 
-    await endStream(session.stream);
-
-    if (unlink) {
-        await fs.promises.unlink(session.filePath).catch(() => { /* may not exist */ });
+    // If endStream rejects (e.g. flush I/O fault on a stream the caller
+    // explicitly asked us to discard), we still need to honour `unlink`
+    // — otherwise the partial file lingers despite the caller asking
+    // for it to go away (cancel path / oversized chunk on drain). The
+    // endStream error is rethrown so the outer caller (e.g.
+    // finish-write) can surface it.
+    try {
+        await endStream(session.stream);
+    } finally {
+        if (unlink) {
+            await fs.promises.unlink(session.filePath).catch(() => { /* may not exist */ });
+        }
     }
 }
 
@@ -260,7 +273,27 @@ function setupRecordingIPC(ipcMain) {
             return { error: 'Recording stream was closed unexpectedly' };
         }
 
-        if (!session.stream.write(buf)) {
+        const writeOk = session.stream.write(buf);
+
+        // Record the first-chunk size synchronously, BEFORE any await. Once
+        // stream.write() returns, the bytes are committed in the stream's
+        // internal buffer in the order they arrived on the main process.
+        // Recording after the drain-wait would let two concurrent
+        // write-chunks both see `firstChunkSize === 0` going into their own
+        // write/drain cycles — the chunk whose drain resolves second would
+        // win, and that isn't necessarily the chunk written first.
+        // (Renderer-side electronWriteChain already serializes these IPCs,
+        // but recording before the drain-wait keeps us safe against future
+        // callers that don't serialize.)
+        //
+        // A drain failure caught below fires onError → fire-and-forget
+        // disposeSession, which removes the session entirely — so a "stale"
+        // firstChunkSize for bytes that didn't durably land is unobservable.
+        if (session.firstChunkSize === 0) {
+            session.firstChunkSize = buf.length;
+        }
+
+        if (!writeOk) {
             // Race drain (normal) against error (I/O fault) and close (stream
             // destroyed by the OS before either fired). Without the close
             // listener, an unexpected destroy would hang the IPC forever.
@@ -290,13 +323,6 @@ function setupRecordingIPC(ipcMain) {
                 stream.once('error', onError);
                 stream.once('close', onClose);
             });
-        }
-
-        // Write accepted; safe to record size invariant. Doing this after the
-        // drain-wait ensures we never record a firstChunkSize for bytes that
-        // didn't durably land.
-        if (session.firstChunkSize === 0) {
-            session.firstChunkSize = buf.length;
         }
 
         return { ok: true };

@@ -56,6 +56,12 @@ function sanitizeOutputFilename(filename, requiredExt) {
 
     let safe = path.basename(filename).replace(/[^\p{L}\p{N}._-]/gu, '_');
 
+    // All-dots names (`.`, `..`, `...`) would become hidden files (`.${ext}`,
+    // `..${ext}`) — refuse them entirely, falling through to the null return.
+    if (/^\.+$/.test(safe)) {
+        return null;
+    }
+
     // Defence in depth: never let a sanitized name begin with `-`. The
     // current codebase doesn't pass these names to a shell, but a leading
     // dash can be misinterpreted as a flag if it ever does — prepending

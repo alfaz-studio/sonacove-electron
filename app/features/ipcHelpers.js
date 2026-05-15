@@ -21,6 +21,10 @@ const { app } = require('electron');
  * a security boundary and we should sanitize err.message before
  * returning it.
  *
+ * Fallback: if the thrown error has no `.message` (rare — e.g. a thrown
+ * non-Error, or `new Error()`), the channel `label` is used as the error
+ * string so the renderer at least gets a non-empty error.
+ *
  * @param {string} label - Channel name (or short label) for logging.
  * @param {(event: Electron.IpcMainInvokeEvent, params?: any) => Promise<any>} fn
  * @returns {(event: Electron.IpcMainInvokeEvent, params?: any) => Promise<any>}

@@ -154,7 +154,16 @@ async function handleShowInFolder(filePath) {
     const isWindows = process.platform === 'win32';
     const norm = s => (isWindows ? s.toLowerCase() : s);
     const target = norm(realTarget);
-    const isAllowed = realAllowedDirs.some(dir => target.startsWith(norm(dir) + path.sep));
+
+    // Allow either the dir itself or any descendant of it. The `+ path.sep`
+    // boundary prevents a sibling-with-prefix-match attack
+    // (e.g. `/foo/bar` against an allowed root of `/foo/ba`); the `===` arm
+    // lets a caller reveal an allowed dir itself (not just files inside it).
+    const isAllowed = realAllowedDirs.some(dir => {
+        const rootNorm = norm(dir);
+
+        return target === rootNorm || target.startsWith(rootNorm + path.sep);
+    });
 
     if (!isAllowed) {
         console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', filePath);

@@ -1,39 +1,10 @@
 'use strict';
 
-const { BrowserWindow, app, dialog } = require('electron');
+const { BrowserWindow, dialog } = require('electron');
 
 const { handle } = require('./ipcHelpers');
 const { sanitizeOverride, validateUserPath } = require('./sanitizers');
-const { getSavePathsInfo, saveSettings } = require('./sonacovePaths');
-
-/**
- * Standard Electron `app.getPath()` keys we allow as save-path roots.
- * Constructed at call time (not module init) because `app.getPath` can throw
- * before the `ready` event in some environments.
- */
-const ALLOWED_ROOT_KEYS = [
-    'documents',
-    'downloads',
-    'videos',
-    'pictures',
-    'music',
-    'desktop',
-    'home'
-];
-
-function getAllowedSavePathRoots() {
-    const roots = [];
-
-    for (const key of ALLOWED_ROOT_KEYS) {
-        try {
-            roots.push(app.getPath(key));
-        } catch {
-            // Some platforms don't expose every well-known dir — skip silently.
-        }
-    }
-
-    return roots;
-}
+const { getAllowedSavePathRoots, getSavePathsInfo, saveSettings } = require('./sonacovePaths');
 
 /**
  * Registers IPC for inspecting and updating save-path settings.
