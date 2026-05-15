@@ -1,10 +1,12 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 
+const { openExclusiveWriteStream } = require('./fileWriters');
 const { getRecordingsDir, sanitizeOutputFilename } = require('./sonacovePaths');
+
+const WEBM_EXT = '.webm';
 
 const MAX_SESSIONS_PER_WC = 4;
 
@@ -104,7 +106,7 @@ function handle(label, fn) {
  */
 function setupRecordingIPC(ipcMain) {
     ipcMain.handle('recording:start-write', handle('recording:start-write', async (event, params) => {
-        const safeName = sanitizeOutputFilename(params.filename, '.webm');
+        const safeName = sanitizeOutputFilename(params.filename, WEBM_EXT);
 
         if (!safeName) {
             return { error: 'Invalid filename' };
@@ -117,8 +119,11 @@ function setupRecordingIPC(ipcMain) {
             return { error: 'Too many active recording sessions' };
         }
 
-        const filePath = path.join(getRecordingsDir(), safeName);
-        const stream = fs.createWriteStream(filePath);
+        // If a file with this name already exists, openExclusiveWriteStream
+        // adds an `_1`, `_2`, … suffix until it finds a free slot — avoids
+        // silently clobbering a previous recording with the same timestamp.
+        const baseName = safeName.slice(0, -WEBM_EXT.length);
+        const { stream, filePath } = await openExclusiveWriteStream(getRecordingsDir(), baseName, WEBM_EXT);
         const sessionId = crypto.randomUUID();
 
         // If the renderer's webContents goes away mid-recording (window closed,
