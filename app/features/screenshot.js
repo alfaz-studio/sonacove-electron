@@ -101,69 +101,81 @@ function setupScreenshotIPC(ipcMain) {
     // Path allowlist prevents arbitrary path disclosure via this IPC.
     // We resolve realpath on both the target and the allowed dirs before
     // prefix-comparing so a symlink inside an allowed dir can't escape it.
-    ipcMain.on('show-in-folder', async (_event, filePath) => {
-        if (typeof filePath !== 'string' || !filePath) return;
+    //
+    // ipcMain.on doesn't await the callback, so we delegate to a named async
+    // function and attach a top-level .catch so an unexpected rejection (e.g.
+    // from the Promise.all of realpaths) can't become a process-level
+    // unhandledRejection. The renderer uses .send() here and doesn't expect
+    // a response, so swallowing the error after logging is fine.
+    ipcMain.on('show-in-folder', (_event, filePath) => {
+        handleShowInFolder(filePath).catch(err => {
+            console.error('❌ Main: show-in-folder failed:', err);
+        });
+    });
+}
 
-        // Resolve the real path of the target. If it doesn't exist yet
-        // (showInFolder is sometimes called for an in-flight file), fall back
-        // to the normalized input — shell.showItemInFolder will handle the
-        // "missing file" case with its own warning.
-        let realTarget;
+async function handleShowInFolder(filePath) {
+    if (typeof filePath !== 'string' || !filePath) return;
 
-        try {
-            realTarget = await fs.promises.realpath(filePath);
-        } catch (err) {
-            if (err.code === 'ENOENT') {
-                realTarget = path.normalize(filePath);
-            } else {
-                console.warn('⚠️ Main: show-in-folder realpath failed:', err.message);
+    // Resolve the real path of the target. If it doesn't exist yet
+    // (showInFolder is sometimes called for an in-flight file), fall back
+    // to the normalized input — shell.showItemInFolder will handle the
+    // "missing file" case with its own warning.
+    let realTarget;
 
-                return;
-            }
-        }
-
-        // Realpath the allowed dirs too — on macOS, /var is a symlink to
-        // /private/var, and the user's custom override could legitimately
-        // sit under such a path.
-        const realAllowedDirs = await Promise.all(
-            getAllowedRevealDirs().map(async dir => {
-                try {
-                    return await fs.promises.realpath(dir);
-                } catch {
-                    // Dir may not exist yet — fall back to the literal path.
-                    return dir;
-                }
-            })
-        );
-
-        // Windows paths are case-insensitive — compare lowercased to avoid
-        // false negatives if a renderer sends a differently-cased path.
-        const isWindows = process.platform === 'win32';
-        const norm = s => (isWindows ? s.toLowerCase() : s);
-        const target = norm(realTarget);
-        const isAllowed = realAllowedDirs.some(dir => target.startsWith(norm(dir) + path.sep));
-
-        if (!isAllowed) {
-            console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', filePath);
+    try {
+        realTarget = await fs.promises.realpath(filePath);
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            realTarget = path.normalize(filePath);
+        } else {
+            console.warn('⚠️ Main: show-in-folder realpath failed:', err.message);
 
             return;
         }
+    }
 
-        // shell.showItemInFolder handles missing files gracefully (logs a
-        // warning, returns false) — no need to pre-check existence. Use
-        // `realTarget` (not the raw input) so a symlink-targeted reveal opens
-        // the same path the allowlist actually authorised. Side-effect: if a
-        // user's recordings dir is itself a symlink (e.g. ~/Documents/Sonacove
-        // -> /Volumes/NAS/Sonacove on macOS), Finder/Explorer opens the
-        // resolved target rather than the symlink path. Intentional — we'd
-        // rather be consistent with the allowlist than preserve the
-        // friendlier-looking path.
-        try {
-            shell.showItemInFolder(realTarget);
-        } catch (error) {
-            console.error('❌ Main: Error revealing file in folder:', error);
-        }
-    });
+    // Realpath the allowed dirs too — on macOS, /var is a symlink to
+    // /private/var, and the user's custom override could legitimately
+    // sit under such a path.
+    const realAllowedDirs = await Promise.all(
+        getAllowedRevealDirs().map(async dir => {
+            try {
+                return await fs.promises.realpath(dir);
+            } catch {
+                // Dir may not exist yet — fall back to the literal path.
+                return dir;
+            }
+        })
+    );
+
+    // Windows paths are case-insensitive — compare lowercased to avoid
+    // false negatives if a renderer sends a differently-cased path.
+    const isWindows = process.platform === 'win32';
+    const norm = s => (isWindows ? s.toLowerCase() : s);
+    const target = norm(realTarget);
+    const isAllowed = realAllowedDirs.some(dir => target.startsWith(norm(dir) + path.sep));
+
+    if (!isAllowed) {
+        console.warn('⚠️ Main: show-in-folder blocked — path outside allowed dirs:', filePath);
+
+        return;
+    }
+
+    // shell.showItemInFolder handles missing files gracefully (logs a
+    // warning, returns false) — no need to pre-check existence. Use
+    // `realTarget` (not the raw input) so a symlink-targeted reveal opens
+    // the same path the allowlist actually authorised. Side-effect: if a
+    // user's recordings dir is itself a symlink (e.g. ~/Documents/Sonacove
+    // -> /Volumes/NAS/Sonacove on macOS), Finder/Explorer opens the
+    // resolved target rather than the symlink path. Intentional — we'd
+    // rather be consistent with the allowlist than preserve the
+    // friendlier-looking path.
+    try {
+        shell.showItemInFolder(realTarget);
+    } catch (error) {
+        console.error('❌ Main: Error revealing file in folder:', error);
+    }
 }
 
 module.exports = { setupScreenshotIPC };

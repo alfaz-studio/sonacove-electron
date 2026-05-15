@@ -11,6 +11,16 @@ const { app } = require('electron');
  * stack via an extra `stack` field. Production builds keep only the message
  * so we don't leak internal paths.
  *
+ * Note on error disclosure: err.message is returned to the renderer
+ * verbatim, which on Node fs errors includes the full file path (e.g.
+ * "EACCES: permission denied, open '/Users/al/.ssh/authorized_keys'").
+ * With contextIsolation: false the renderer is already broadly trusted,
+ * so we accept that information disclosure rather than strip paths and
+ * lose the actually-useful part of the error. If contextIsolation is
+ * ever turned on, revisit this — at that point the renderer becomes
+ * a security boundary and we should sanitize err.message before
+ * returning it.
+ *
  * @param {string} label - Channel name (or short label) for logging.
  * @param {(event: Electron.IpcMainInvokeEvent, params?: any) => Promise<any>} fn
  * @returns {(event: Electron.IpcMainInvokeEvent, params?: any) => Promise<any>}

@@ -101,6 +101,13 @@ function endStream(stream) {
         };
         const onError = err => {
             stream.removeListener('finish', onFinish);
+            // Force the stream into a terminal state so a second endStream call
+            // (e.g. from disposeSession after we reject) hits the short-circuit
+            // at the top of endStream instead of registering new listeners on a
+            // half-dead stream.
+            if (!stream.destroyed) {
+                stream.destroy();
+            }
             reject(err);
         };
 
@@ -241,6 +248,16 @@ function setupRecordingIPC(ipcMain) {
         }
         if (buf.length > MAX_CHUNK_BYTES) {
             return { error: 'Chunk exceeds maximum size' };
+        }
+
+        if (session.stream.destroyed) {
+            // Another async path (drain-wait onError/onClose, or a 'destroyed'
+            // listener) already disposed this session. Make sure the session is
+            // removed from the map so subsequent writes get a clean "Unknown
+            // session" error instead of repeated ERR_STREAM_DESTROYED throws.
+            disposeSession(sessionId, false).catch(() => { /* swallow */ });
+
+            return { error: 'Recording stream was closed unexpectedly' };
         }
 
         if (!session.stream.write(buf)) {

@@ -215,6 +215,140 @@ test('recording.js — write-chunk after cancel-write returns Unknown session an
     }
 });
 
+test('recording.js — write-chunk from a different webContents is rejected with cross-window error and writes no bytes', async () => {
+    const userDataDir = await mkTempDir('sonacove-rec-ud-');
+    const documentsDir = await mkTempDir('sonacove-rec-docs-');
+    const picturesDir = await mkTempDir('sonacove-rec-pics-');
+
+    resetSutCache();
+    const { handlers } = installFakeElectron(userDataDir, documentsDir, picturesDir);
+
+    try {
+        const { setupRecordingIPC } = require('../app/features/recording.js');
+
+        setupRecordingIPC({ handle: (ch, fn) => handlers.set(ch, fn) });
+
+        const startWrite = handlers.get('recording:start-write');
+        const writeChunk = handlers.get('recording:write-chunk');
+        const cancelWrite = handlers.get('recording:cancel-write');
+
+        // Window A owns the session. Window B will attempt to write into it.
+        const senderA = makeSender(1);
+        const senderB = makeSender(2);
+
+        const startRes = await startWrite({ sender: senderA }, { filename: 'cross-window.webm' });
+
+        assert.ok(startRes.sessionId, 'start-write from window A returns a sessionId');
+        assert.ok(startRes.filePath, 'start-write returns the filePath');
+
+        // Window B (different webContents id) tries to write into A's session
+        // with a perfectly valid 16-byte chunk. The handler must short-circuit
+        // on the ownership check BEFORE any bytes hit disk.
+        const chunk = Buffer.from([
+            0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
+            0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF
+        ]);
+        const chunkRes = await writeChunk(
+            { sender: senderB },
+            { sessionId: startRes.sessionId, chunk }
+        );
+
+        assert.deepEqual(
+            chunkRes,
+            { error: 'Session does not belong to this window' },
+            'cross-window write-chunk is rejected'
+        );
+
+        // start-write created the file via openExclusiveWriteStream (wx flag);
+        // the file exists but must still be 0 bytes because the rejected write
+        // never reached stream.write().
+        const stat = await fs.stat(startRes.filePath);
+
+        assert.equal(stat.size, 0, 'no bytes were written to the recording file');
+
+        // Tidy up — cancel from the owning window so the file is removed and
+        // the stream handle is closed.
+        await cancelWrite({ sender: senderA }, { sessionId: startRes.sessionId });
+    } finally {
+        await fs.rm(userDataDir, { recursive: true, force: true });
+        await fs.rm(documentsDir, { recursive: true, force: true });
+        await fs.rm(picturesDir, { recursive: true, force: true });
+    }
+});
+
+test('recording.js — finish-write rewrites the first chunk on disk when a valid same-length override is supplied', async () => {
+    const userDataDir = await mkTempDir('sonacove-rec-ud-');
+    const documentsDir = await mkTempDir('sonacove-rec-docs-');
+    const picturesDir = await mkTempDir('sonacove-rec-pics-');
+
+    resetSutCache();
+    const { handlers } = installFakeElectron(userDataDir, documentsDir, picturesDir);
+
+    try {
+        const { setupRecordingIPC } = require('../app/features/recording.js');
+
+        setupRecordingIPC({ handle: (ch, fn) => handlers.set(ch, fn) });
+
+        const startWrite = handlers.get('recording:start-write');
+        const writeChunk = handlers.get('recording:write-chunk');
+        const finishWrite = handlers.get('recording:finish-write');
+
+        const sender = makeSender(4);
+        const event = { sender };
+
+        const startRes = await startWrite(event, { filename: 'duration-fix.webm' });
+
+        assert.ok(startRes.sessionId, 'start-write returns a sessionId');
+        assert.ok(startRes.filePath, 'start-write returns a filePath');
+
+        // Original first chunk — 16 bytes, recognizable pattern.
+        const original = Buffer.from([
+            0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8,
+            0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0
+        ]);
+        const chunkRes = await writeChunk(event, {
+            sessionId: startRes.sessionId,
+            chunk: original
+        });
+
+        assert.deepEqual(chunkRes, { ok: true });
+
+        // Override — same length (16 bytes), distinct byte values so we can
+        // tell it from the original on disk. This simulates the duration-header
+        // patch path used to make the WebM seekable end-to-end.
+        const override = Buffer.from([
+            0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE,
+            0xFE, 0xED, 0xFA, 0xCE, 0x0F, 0xF1, 0xCE, 0x00
+        ]);
+        const finishRes = await finishWrite(event, {
+            sessionId: startRes.sessionId,
+            firstChunkOverride: override
+        });
+
+        assert.equal(
+            finishRes.filePath,
+            startRes.filePath,
+            'finish-write returns the same filePath as start-write'
+        );
+        assert.equal(finishRes.error, undefined, 'finish-write does not return an error');
+
+        // Read back the file. First 16 bytes must be the override, not the
+        // original — this is the load-bearing assertion for WebM seekability.
+        const onDisk = await fs.readFile(finishRes.filePath);
+
+        assert.equal(onDisk.length, 16, 'file contains exactly the 16 bytes that were written');
+        assert.deepEqual(
+            Array.from(onDisk.subarray(0, 16)),
+            Array.from(override),
+            'first 16 bytes on disk equal the override, not the original chunk'
+        );
+    } finally {
+        await fs.rm(userDataDir, { recursive: true, force: true });
+        await fs.rm(documentsDir, { recursive: true, force: true });
+        await fs.rm(picturesDir, { recursive: true, force: true });
+    }
+});
+
 test('recording.js — finish-write for an unknown sessionId returns Unknown session with no disk side effects', async () => {
     const userDataDir = await mkTempDir('sonacove-rec-ud-');
     const documentsDir = await mkTempDir('sonacove-rec-docs-');

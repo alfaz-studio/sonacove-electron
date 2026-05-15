@@ -124,7 +124,7 @@ function getDefaultScreenshotsDir() {
 
 async function getRecordingsDir() {
     const settings = loadSettings();
-    const dir = settings.recordings || getDefaultRecordingsDir();
+    const dir = settings.recordings ?? getDefaultRecordingsDir();
 
     await fs.promises.mkdir(dir, { recursive: true });
 
@@ -133,7 +133,7 @@ async function getRecordingsDir() {
 
 async function getScreenshotsDir() {
     const settings = loadSettings();
-    const dir = settings.screenshots || getDefaultScreenshotsDir();
+    const dir = settings.screenshots ?? getDefaultScreenshotsDir();
 
     await fs.promises.mkdir(dir, { recursive: true });
 
@@ -170,12 +170,12 @@ function getSavePathsInfo() {
 
     return {
         recordings: {
-            current: settings.recordings || getDefaultRecordingsDir(),
+            current: settings.recordings ?? getDefaultRecordingsDir(),
             override: settings.recordings,
             default: getDefaultRecordingsDir()
         },
         screenshots: {
-            current: settings.screenshots || getDefaultScreenshotsDir(),
+            current: settings.screenshots ?? getDefaultScreenshotsDir(),
             override: settings.screenshots,
             default: getDefaultScreenshotsDir()
         }
