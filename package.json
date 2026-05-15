@@ -15,6 +15,7 @@
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",
     "lint-fix": "eslint . --fix",
+    "test": "node --test \"test/**/*.test.js\"",
     "build": "webpack --config ./webpack.main.js --mode production",
     "dist": "npm run build && electron-builder",
     "postinstall": "patch-package"

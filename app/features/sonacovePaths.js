@@ -4,11 +4,13 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
+const { sanitizeOutputFilename } = require('./sanitizers');
+
 const SETTINGS_FILENAME = '.sonacove-save-paths.json';
+const SETTINGS_VERSION = 1;
 const DEFAULT_ROOT_NAME = 'Sonacove';
 const RECORDINGS_SUBDIR = 'Recordings';
 const SCREENSHOTS_SUBDIR = 'Screenshots';
-const MAX_FILENAME_BYTES = 255;
 
 /** @type {{ recordings: string|null, screenshots: string|null } | null} */
 let cachedSettings = null;
@@ -46,8 +48,9 @@ function saveSettings(next) {
         recordings: 'recordings' in next ? (next.recordings || null) : current.recordings,
         screenshots: 'screenshots' in next ? (next.screenshots || null) : current.screenshots
     };
+    const onDisk = { version: SETTINGS_VERSION, ...merged };
 
-    fs.writeFileSync(getSettingsFilePath(), JSON.stringify(merged, null, 2), 'utf8');
+    fs.writeFileSync(getSettingsFilePath(), JSON.stringify(onDisk, null, 2), 'utf8');
     cachedSettings = merged;
 
     return merged;
@@ -123,35 +126,6 @@ function getSavePathsInfo() {
             default: getDefaultScreenshotsDir()
         }
     };
-}
-
-/**
- * Sanitizes a user-supplied filename for safe writing to disk.
- * Strips directory components, restricts to a safe charset, enforces the given
- * extension (case-insensitive), and caps total length at 255 bytes.
- *
- * @param {string} filename - User-suggested filename.
- * @param {string} requiredExt - Required extension including the dot, e.g. '.webm'.
- * @returns {string|null} Safe filename, or null if not recoverable.
- */
-function sanitizeOutputFilename(filename, requiredExt) {
-    if (typeof filename !== 'string' || !filename) {
-        return null;
-    }
-
-    let safe = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
-
-    if (!safe.toLowerCase().endsWith(requiredExt.toLowerCase())) {
-        safe = `${safe}${requiredExt}`;
-    }
-    if (safe === requiredExt || safe.length === 0) {
-        return null;
-    }
-    if (safe.length > MAX_FILENAME_BYTES) {
-        safe = `${safe.slice(0, MAX_FILENAME_BYTES - requiredExt.length)}${requiredExt}`;
-    }
-
-    return safe;
 }
 
 module.exports = {

@@ -2,21 +2,8 @@
 
 const { BrowserWindow, dialog } = require('electron');
 
+const { sanitizeOverride } = require('./sanitizers');
 const { getSavePathsInfo, saveSettings } = require('./sonacovePaths');
-
-/**
- * Validates a user-supplied directory override.
- * Returns `null` for null or empty-string (clears the override),
- * a trimmed string for valid input, or `undefined` for invalid input.
- */
-function sanitizeOverride(value) {
-    if (value === null) return null;
-    if (typeof value !== 'string') return undefined;
-
-    const trimmed = value.trim();
-
-    return trimmed === '' ? null : trimmed;
-}
 
 function handle(label, fn) {
     return async (event, params = {}) => {
