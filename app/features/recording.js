@@ -42,6 +42,23 @@ function toBuffer(chunk) {
     return null;
 }
 
+/**
+ * Awaits a writable stream's 'finish' event after calling .end().
+ * Safe to call on an already-ended stream — `.end(cb)` on a stream past
+ * 'finish' never invokes the callback, so we resolve immediately when
+ * `writableEnded` is set, avoiding a forever hang.
+ */
+function endStream(stream) {
+    return new Promise(resolve => {
+        if (stream.destroyed || stream.writableEnded) {
+            resolve();
+
+            return;
+        }
+        stream.end(() => resolve());
+    });
+}
+
 async function disposeSession(sessionId, unlink = false) {
     const session = sessions.get(sessionId);
 
@@ -52,14 +69,7 @@ async function disposeSession(sessionId, unlink = false) {
     sessions.delete(sessionId);
     session.detachCleanup();
 
-    await new Promise(resolve => {
-        if (session.stream.destroyed) {
-            resolve();
-
-            return;
-        }
-        session.stream.end(() => resolve());
-    });
+    await endStream(session.stream);
 
     if (unlink) {
         await fs.promises.unlink(session.filePath).catch(() => { /* may not exist */ });
@@ -187,9 +197,7 @@ function setupRecordingIPC(ipcMain) {
         }
 
         try {
-            await new Promise((resolve, reject) => {
-                session.stream.end(err => err ? reject(err) : resolve());
-            });
+            await endStream(session.stream);
 
             // Re-write the first chunk with WebM duration fixed. Must be the same
             // byte length as the original first chunk to avoid corrupting the file.
