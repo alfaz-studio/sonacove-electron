@@ -283,6 +283,7 @@ function createDashboardWindow() {
         height: 720,
         minWidth: 800,
         minHeight: 600,
+        show: false,
         backgroundColor: '#1A1A1A',
         ...platformWindowChrome(),
         webPreferences: {
@@ -303,10 +304,22 @@ function createDashboardWindow() {
     // the main window has via `windowOpenHandler` in createJitsiMeetWindow.
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+    // Mirror the main window's navigation guard: keep the dashboard window
+    // pinned to the trusted landing origin. setWindowOpenHandler only covers
+    // `window.open()`; this also blocks anchor / location.href navigations.
+    win.webContents.on('will-navigate', (event, url) => {
+        if (!url.startsWith(config.currentConfig.landing)) {
+            event.preventDefault();
+        }
+    });
+
     win.on('closed', () => {
         dashboardWindows.delete(win);
     });
 
+    // Avoid a blank flash: the window stays hidden (show:false) until the
+    // remote landing URL has painted its first frame.
+    win.once('ready-to-show', () => win.show());
     win.loadURL(config.currentConfig.landing);
 
     return win;
