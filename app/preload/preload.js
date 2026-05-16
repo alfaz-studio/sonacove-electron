@@ -127,6 +127,25 @@ window.sonacoveElectronAPI = {
     captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
     saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
+
+    // Local recording — chunk-stream protocol. Keeps memory flat for long meetings:
+    // the renderer streams each MediaRecorder chunk to disk via main, instead of
+    // buffering the whole recording in memory or relying on showSaveFilePicker.
+    recording: {
+        startWrite: filename => ipcRenderer.invoke('recording:start-write', { filename }),
+        writeChunk: (sessionId, chunk) => ipcRenderer.invoke('recording:write-chunk', { sessionId, chunk }),
+        finishWrite: (sessionId, firstChunkOverride) =>
+            ipcRenderer.invoke('recording:finish-write', { sessionId, firstChunkOverride }),
+        cancelWrite: sessionId => ipcRenderer.invoke('recording:cancel-write', { sessionId })
+    },
+
+    // Save-path settings — lets the renderer expose a UI for customizing where
+    // recordings and screenshots are saved. Defaults live in Documents/Sonacove/.
+    savePaths: {
+        get: () => ipcRenderer.invoke('sonacove:get-save-paths'),
+        set: next => ipcRenderer.invoke('sonacove:set-save-paths', next),
+        pickFolder: options => ipcRenderer.invoke('sonacove:pick-folder', options || {})
+    },
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel)) {

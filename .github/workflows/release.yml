@@ -78,7 +78,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-2022, macos-latest]
     steps:
       - name: Check out the NEW tag
         uses: actions/checkout@v4
@@ -107,7 +107,7 @@ jobs:
         run: npm ci
 
       - name: Build without publishing (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -127,7 +127,7 @@ jobs:
         run: npm run dist
 
       - name: Regenerate and upload latest.yml (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
