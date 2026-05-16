@@ -4,7 +4,8 @@ const {
     ALWAYS_ON_TOP_LEVEL,
     TRANSPARENT_BG,
     SHORTCUT_TOGGLE_CLICK_THROUGH,
-    IPC_TOGGLE_CLICK_THROUGH
+    IPC_TOGGLE_CLICK_THROUGH,
+    IPC_SHOW_OVERLAY
 } = require('./constants');
 const { getIconPath } = require('../paths');
 
@@ -155,14 +156,36 @@ function wireEvents(win, collabServerUrl, { onClosed }) {
         });
     }
 
-    win.webContents.on('did-finish-load', () => {
-        if (win && !win.isDestroyed()) {
-            win.show();
-            win.focus();
+    // White-flash fix (#530): showing the window on 'did-finish-load' surfaces
+    // it before React mounts and applies the transparent background, so
+    // Chromium's default white document paints through the transparent window.
+    // The overlay renderer instead signals readiness via the 'show-overlay'
+    // IPC once it has forced transparent backgrounds (see AnnotationOverlay /
+    // useTransparentBackground). We wait for that signal and only fall back to
+    // a timer if it never arrives (e.g. the renderer crashed before mount).
+    let shown = false;
+    let showFallbackTimer = null;
+    const showOnce = () => {
+        if (shown || !win || win.isDestroyed()) {
+            return;
         }
+        shown = true;
+        win.show();
+        win.focus();
+    };
+
+    win.webContents.ipc.on(IPC_SHOW_OVERLAY, showOnce);
+
+    win.webContents.on('did-finish-load', () => {
+        // Safety net only — never show this early on the happy path.
+        clearTimeout(showFallbackTimer);
+        showFallbackTimer = setTimeout(showOnce, 4000);
     });
 
-    win.on('closed', onClosed);
+    win.on('closed', () => {
+        clearTimeout(showFallbackTimer);
+        onClosed();
+    });
 }
 
 module.exports = {

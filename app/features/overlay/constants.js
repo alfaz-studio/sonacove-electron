@@ -10,6 +10,9 @@ const IPC_NOTIFY_OVERLAY_CLOSED = 'notify-overlay-closed';
 /** @type {string} IPC channel sent to the overlay to toggle click-through. */
 const IPC_TOGGLE_CLICK_THROUGH = 'toggle-click-through-request';
 
+/** @type {string} IPC channel sent by the overlay renderer once it has painted (transparent) and is safe to show. */
+const IPC_SHOW_OVERLAY = 'show-overlay';
+
 /** @type {string} IPC channel sent to renderer to clean up viewer whiteboards. */
 const IPC_CLEANUP_VIEWER_WHITEBOARDS = 'cleanup-whiteboards-for-viewers';
 
@@ -33,6 +36,7 @@ module.exports = {
     OVERLAY_PRELOAD_FILENAME,
     IPC_NOTIFY_OVERLAY_CLOSED,
     IPC_TOGGLE_CLICK_THROUGH,
+    IPC_SHOW_OVERLAY,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
     CLOSE_REASON_MANUAL,
     CLOSE_REASON_OVERLAY_CLOSED,
