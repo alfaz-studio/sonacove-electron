@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-2022, macos-latest]
     permissions:
       contents: write
     steps:
@@ -63,7 +63,7 @@ jobs:
         run: npm install
 
       - name: Build launcher (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         working-directory: staging-launcher
         run: npx electron-builder --win --publish never
 

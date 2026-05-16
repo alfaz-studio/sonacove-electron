@@ -62,6 +62,8 @@ const {
 const { setupSonacoveIPC } = require('./app/features/ipc');
 const { closeOverlay } = require('./app/features/overlay/overlay-window');
 const { setupScreenshotIPC } = require('./app/features/screenshot');
+const { setupRecordingIPC } = require('./app/features/recording');
+const { setupSavePathsIPC } = require('./app/features/savePathsIpc');
 const { openExternalLink } = require('./app/features/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
@@ -1144,6 +1146,8 @@ app.on('ready', () => {
     // Register screenshot IPC handlers once at app level (not per-window)
     // to avoid "Attempted to register a second handler" crashes on window recreation.
     setupScreenshotIPC(ipcMain);
+    setupRecordingIPC(ipcMain);
+    setupSavePathsIPC(ipcMain);
 
     setupChildWindowIcon();
     createJitsiMeetWindow();
