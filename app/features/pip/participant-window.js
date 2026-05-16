@@ -7,16 +7,46 @@
  */
 
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
-const { setupResizeHandlers, isResizing, getVisibleTileCount, setVisibleTileCount } = require('./resize');
+const {
+    setupResizeHandlers,
+    isResizing,
+    attachNativeResizeListener,
+    getVisibleTileCount,
+    setVisibleTileCount,
+} = require('./resize');
+
+// ── Settings persistence ─────────────────────────────────────────────────────
+
+const SETTINGS_FILE = path.join(app.getPath('userData'), 'pip-settings.json');
+
+function loadOrientation() {
+    try {
+        const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+
+        if (data.orientation === 'horizontal' || data.orientation === 'vertical') {
+            return data.orientation;
+        }
+    } catch (_) { /* missing, corrupt, or unreadable — fall through */ }
+
+    return 'vertical';
+}
+
+function saveOrientation(orientation) {
+    // Async — IPC handler shouldn't block on disk I/O. Best-effort; a
+    // failure just means next launch falls back to vertical.
+    fs.writeFile(SETTINGS_FILE, JSON.stringify({ orientation }), 'utf8', () => {});
+}
 
 let participantWindow = null;
-let currentOrientation = 'horizontal';
+let currentOrientation = loadOrientation();
 let currentParticipantCount = 1;
 let lastParticipantsData = null;
 
@@ -31,9 +61,14 @@ let suppressBaseline = 0;
 const getWindow = () => participantWindow;
 const getState = () => ({ count: currentParticipantCount, orientation: currentOrientation });
 
+// Pill expand and the resize lerp both relax min/max to (1,1)/(0,0); without
+// this restore the next OS-native resize can shrink past the single-tile
+// minimum. Arrow wrapper sidesteps the hoisting question.
+const restoreSizeConstraints = () => updateSizeConstraints();
+
 setupDragHandlers(getWindow);
-setupPillHandlers(getWindow, getState);
-setupResizeHandlers(getWindow, getState);
+setupPillHandlers(getWindow, getState, restoreSizeConstraints);
+setupResizeHandlers(getWindow, getState, restoreSizeConstraints);
 
 // ── Orientation ──────────────────────────────────────────────────────────────
 
@@ -95,6 +130,7 @@ function updateSizeConstraints() {
 
 ipcMain.on(IPC.TOGGLE_ORIENTATION, () => {
     currentOrientation = currentOrientation === 'horizontal' ? 'vertical' : 'horizontal';
+    saveOrientation(currentOrientation);
     applyOrientation();
 });
 
@@ -219,6 +255,10 @@ function openParticipantWindow() {
         setParticipantWindow(null);
         resetPill();
     });
+
+    attachNativeResizeListener(
+        participantWindow, getState, () => isPillMode() || isDragging()
+    );
 
     participantWindow.webContents.on('did-finish-load', () => {
         if (participantWindow && !participantWindow.isDestroyed()) {

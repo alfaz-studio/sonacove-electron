@@ -17,6 +17,7 @@ const { computeWindowSize } = require('./sizing');
 
 let _getWindow = null;
 let _getState = null;
+let _restoreConstraints = null;
 let _visibleTileCount = 4;
 
 // Edge-resize polling state.
@@ -54,6 +55,66 @@ function setVisibleTileCount(n) {
  */
 function isResizing() {
     return _isResizing;
+}
+
+/**
+ * Whether any internal bounds mutation is in flight — edge-resize drag or
+ * the lerp animation that follows. Private — used by the native-resize
+ * listener below to avoid fighting the lerp.
+ *
+ * @returns {boolean}
+ */
+function isInternalActive() {
+    return _isResizing || _lerpInterval !== null;
+}
+
+/**
+ * Attaches a listener to the OS-native (exterior) resize of `win` so that
+ * enlarging the panel past the current visible-count refills with tiles and
+ * shrinking trims to what fits. Without this, the exterior handle could
+ * leave the panel oversized and empty after the interior handle had
+ * previously shrunk the visible count.
+ *
+ * @param {Electron.BrowserWindow} win
+ * @param {() => { count: number, orientation: string }} getState
+ * @param {() => boolean} isExternalActive - True when another subsystem
+ *   (pill transition, drag) is mutating bounds; skip while true.
+ */
+function attachNativeResizeListener(win, getState, isExternalActive) {
+    // During drag (continuous fire): track which tile-count the cursor has
+    // crossed past so the panel re-renders with the right number of tiles.
+    // Window bounds are left at wherever the OS cursor is — fighting it would
+    // feel unresponsive.
+    win.on('resize', () => {
+        if (win.isDestroyed() || isInternalActive() || isExternalActive()) {
+            return;
+        }
+
+        const { count, orientation } = getState();
+        const bounds = win.getBounds();
+        const { n } = snapToTileBoundary(bounds.width, bounds.height, orientation, count);
+
+        if (n !== _visibleTileCount) {
+            _visibleTileCount = n;
+            win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: n, edge: null });
+        }
+    });
+
+    // After drag ends (single fire on macOS/Windows): snap bounds to the
+    // tile boundary so the panel doesn't leave empty space around the tiles.
+    win.on('resized', () => {
+        if (win.isDestroyed() || isInternalActive() || isExternalActive()) {
+            return;
+        }
+
+        const { orientation } = getState();
+        const bounds = win.getBounds();
+        const { width, height } = computeWindowSize(_visibleTileCount, orientation);
+
+        if (bounds.width !== width || bounds.height !== height) {
+            win.setBounds({ x: bounds.x, y: bounds.y, width, height });
+        }
+    });
 }
 
 /**
@@ -235,7 +296,8 @@ function _startLerp(win, target) {
 }
 
 /**
- * Stops the lerp animation and snaps to the final target.
+ * Stops the lerp animation. Also restores the size constraints relaxed
+ * during the lerp so OS-native resize can't shrink below single-tile.
  */
 function _stopLerp() {
     if (_lerpInterval) {
@@ -244,6 +306,10 @@ function _stopLerp() {
     }
     _targetBounds = null;
     _lerpFrom = null;
+
+    if (_restoreConstraints) {
+        _restoreConstraints();
+    }
 }
 
 /**
@@ -272,10 +338,13 @@ function stopEdgeResize() {
  *
  * @param {() => Electron.BrowserWindow|null} getWindow
  * @param {() => { count: number, orientation: string }} getState
+ * @param {(() => void)=} restoreConstraints - Optional callback invoked when
+ *   the lerp animation completes so participant-window can reapply min/max.
  */
-function setupResizeHandlers(getWindow, getState) {
+function setupResizeHandlers(getWindow, getState, restoreConstraints) {
     _getWindow = getWindow;
     _getState = getState;
+    _restoreConstraints = restoreConstraints || null;
     _visibleTileCount = getState().count;
 
     ipcMain.on(IPC.START_EDGE_RESIZE, (_event, { edge }) => {
@@ -302,6 +371,7 @@ module.exports = {
     getVisibleTileCount,
     setVisibleTileCount,
     isResizing,
+    attachNativeResizeListener,
     setupResizeHandlers,
     cleanup,
 };

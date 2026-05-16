@@ -12,6 +12,7 @@ const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setVisibleTileCount } = require('./resize');
 
 let _getWindow = null;
+let _restoreConstraints = null;
 let _isPillMode = false;
 
 /**
@@ -109,11 +110,18 @@ function expandFromPill(count, orientation) {
         : screen.getPrimaryDisplay();
     const { x: posX, y: posY } = getWindowPosition(count, orientation, display.workArea);
 
-    // Release pill size lock, set bounds, then let participant-window
-    // re-apply proper constraints on the next resize/orientation event.
+    // Release the pill size lock (min back to 1×1, max back to "no limit"),
+    // set bounds, then restore the participant-window panel constraints.
+    // Without the explicit restore the constraints stayed unlocked and the
+    // next native-OS resize gesture could shrink the panel below the
+    // single-tile minimum.
     win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
     win.setBounds({ x: posX, y: posY, width: W, height: H });
+
+    if (_restoreConstraints) {
+        _restoreConstraints();
+    }
 
     win.webContents.send(IPC.ENTER_PANEL_MODE);
     win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: count, edge: null });
@@ -131,9 +139,12 @@ function expandFromPill(count, orientation) {
  * @param {() => Electron.BrowserWindow|null} getWindow
  * @param {() => { count: number, orientation: string }} getState - Returns
  *   current participant count and orientation for expand sizing.
+ * @param {(() => void)=} restoreConstraints - Optional callback invoked after
+ *   expanding back to panel mode so participant-window can reapply min/max.
  */
-function setupPillHandlers(getWindow, getState) {
+function setupPillHandlers(getWindow, getState, restoreConstraints) {
     _getWindow = getWindow;
+    _restoreConstraints = restoreConstraints || null;
 
     ipcMain.on(IPC.REOPEN_REQUEST, () => {
         const { count, orientation } = getState();

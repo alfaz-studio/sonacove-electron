@@ -60,6 +60,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # Pin Windows runner to 2022 image. GitHub's `windows-latest` rolled
+        # forward to win25-vs2026 in early May 2026, which ships a Visual
+        # Studio install whose PowerShell-based discovery overflows Node's
+        # 1 MB stdout buffer inside node-gyp (ERR_CHILD_PROCESS_STDIO_MAXBUFFER),
+        # so the @jitsi/electron-sdk native rebuild can't find VS at all.
+        # win22-vs2022 matches the environment that built successfully through
+        # late April; revisit once node-gyp ships a fix.
         os: [windows-2022, macos-latest]
     permissions:
       contents: write
