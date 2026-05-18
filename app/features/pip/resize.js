@@ -76,7 +76,7 @@ function isInternalActive() {
  * previously shrunk the visible count.
  *
  * @param {Electron.BrowserWindow} win
- * @param {() => { count: number, orientation: string }} getState
+ * @param {() => { count: number, minTiles: number, orientation: string }} getState
  * @param {() => boolean} isExternalActive - True when another subsystem
  *   (pill transition, drag) is mutating bounds; skip while true.
  */
@@ -338,7 +338,7 @@ function stopEdgeResize() {
  * Registers edge-resize IPC handlers.
  *
  * @param {() => Electron.BrowserWindow|null} getWindow
- * @param {() => { count: number, orientation: string }} getState
+ * @param {() => { count: number, minTiles: number, orientation: string }} getState
  * @param {(() => void)=} restoreConstraints - Optional callback invoked when
  *   the lerp animation completes so participant-window can reapply min/max.
  */

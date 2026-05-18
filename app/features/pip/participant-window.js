@@ -164,9 +164,15 @@ ipcMain.on(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
     // Grow visible count up to the new floor if pinning just expanded it.
     // Shrinking past the floor is handled by setMinimumSize via
     // updateSizeConstraints — the OS won't allow it.
+    //
+    // Skip the auto-expand while a drag/resize is in flight: applyOrientation
+    // silently no-ops in that state, so mutating _visibleTileCount here
+    // would leave the data layer out of sync with the window bounds.
+    // updateSizeConstraints picks up the new floor on the next tick when
+    // the resize completes and restoreSizeConstraints fires.
     const min = getMinTiles();
 
-    if (getVisibleTileCount() < min) {
+    if (!isDragging() && !isResizing() && getVisibleTileCount() < min) {
         setVisibleTileCount(min);
         applyOrientation();
     } else {
@@ -225,6 +231,7 @@ function openParticipantWindow() {
     }
 
     currentParticipantCount = 1;
+    currentPinnedCount = 0;
     setVisibleTileCount(1);
 
     const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
