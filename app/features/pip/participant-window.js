@@ -97,8 +97,14 @@ function applyOrientation() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
 
-    // Clamp visible count to current participant count after orientation change.
-    const visibleCount = Math.min(getVisibleTileCount(), currentParticipantCount);
+    // Clamp visible count to the pin floor as a lower bound and the
+    // participant count as an upper bound, so the data layer can't drift
+    // below the floor even when called from paths that bypass the
+    // PIN_STATE_CHANGED handler.
+    const visibleCount = Math.max(
+        getMinTiles(),
+        Math.min(getVisibleTileCount(), currentParticipantCount)
+    );
 
     setVisibleTileCount(visibleCount);
 
