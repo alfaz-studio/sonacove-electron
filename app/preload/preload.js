@@ -52,7 +52,9 @@ const whitelistedIpcChannels = [
     'update-toast-action',
     'leave-modal-action',
     'deeplink-modal-action',
-    'cross-window-notification'
+    'cross-window-notification',
+    'system-volume-changed',
+    'request-system-volume'
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app
