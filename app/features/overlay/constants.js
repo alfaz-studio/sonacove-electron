@@ -31,6 +31,15 @@ const ALWAYS_ON_TOP_LEVEL = 'screen-saver';
 /** @type {string} Fully transparent background colour. */
 const TRANSPARENT_BG = '#00000000';
 
+/**
+ * @type {number} Safety-net delay before force-showing the overlay if the
+ * renderer never sends IPC_SHOW_OVERLAY. Intentionally long: showing earlier
+ * risks compositing the pre-React white document, since transparency is
+ * applied only after AnnotationOverlay mounts (which awaits an async
+ * excalidraw chunk import). Only meant to cover a renderer crash.
+ */
+const SHOW_FALLBACK_MS = 15000;
+
 module.exports = {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     OVERLAY_PRELOAD_FILENAME,
@@ -42,5 +51,6 @@ module.exports = {
     CLOSE_REASON_OVERLAY_CLOSED,
     CLOSE_REASON_SCREENSHARE_STOPPED,
     ALWAYS_ON_TOP_LEVEL,
-    TRANSPARENT_BG
+    TRANSPARENT_BG,
+    SHOW_FALLBACK_MS
 };

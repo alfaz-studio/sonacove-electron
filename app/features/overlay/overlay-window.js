@@ -1,5 +1,6 @@
 const { screen, globalShortcut } = require('electron');
 const isDev = require('electron-is-dev');
+const log = require('./logger');
 
 const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
@@ -103,6 +104,10 @@ function toggleOverlay(mainWindow, data) {
         return;
     }
 
+    log.info(
+        `opening overlay (collabEnabled=${Boolean(data.collabEnabled)}`
+        + ` collabServerUrl=${data.collabServerUrl || 'none'}) — loading URL`
+    );
     annotationWindow.loadURL(overlayUrl);
     registerShortcut(annotationWindow);
     wireEvents(annotationWindow, data.collabServerUrl, {
