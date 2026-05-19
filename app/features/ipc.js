@@ -15,6 +15,10 @@ const {
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
 const { getParticipantWindow } = require('./pip/helpers');
+const {
+    IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
+    sendCurrentSystemVolume
+} = require('./system-volume');
 
 /**
  * Previously registered listeners as [channel, fn] pairs.
@@ -278,6 +282,14 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         if (event && typeof event === 'string' && handlers.capture) {
             handlers.capture(event, properties || {});
         }
+    });
+
+    // Renderer asks for the current OS-output volume on mount of the
+    // prejoin speaker-warning hook. The watcher broadcasts on changes;
+    // this handler covers the cold-start case where the first broadcast
+    // hasn't happened yet.
+    register(SYSTEM_VOLUME_REQUEST, event => {
+        sendCurrentSystemVolume(event.sender);
     });
 }
 

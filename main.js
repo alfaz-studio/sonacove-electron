@@ -64,6 +64,10 @@ const { closeOverlay } = require('./app/features/overlay/overlay-window');
 const { setupScreenshotIPC } = require('./app/features/screenshot');
 const { setupRecordingIPC } = require('./app/features/recording');
 const { setupSavePathsIPC } = require('./app/features/savePathsIpc');
+const {
+    startSystemVolumeWatcher,
+    stopSystemVolumeWatcher
+} = require('./app/features/system-volume');
 const { openExternalLink } = require('./app/features/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
@@ -743,6 +747,10 @@ function createJitsiMeetWindow() {
         capture
     });
 
+    // Poll the OS output volume + muted state and broadcast changes to all
+    // renderer windows. Drives the prejoin speaker-low warning icon.
+    startSystemVolumeWatcher();
+
     // Cross-window OS notifications are gated off for macOS. The dock.bounce /
     // setBadgeCount / Notification permission paths are implemented but need
     // end-to-end verification (permission prompt flow, signed-build behavior,
@@ -1189,6 +1197,10 @@ app.on('before-quit', event => {
     }
     event.preventDefault();
     analyticsShutdownDone = true;
+
+    // Stop the system-volume polling loop so we don't keep spawning child
+    // processes during shutdown.
+    stopSystemVolumeWatcher();
 
     capture('app_quit', {
         session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)
