@@ -137,8 +137,8 @@ function expandFromPill(count, orientation) {
  * Registers pill-related IPC handlers.
  *
  * @param {() => Electron.BrowserWindow|null} getWindow
- * @param {() => { count: number, orientation: string }} getState - Returns
- *   current participant count and orientation for expand sizing.
+ * @param {() => { count: number, minTiles: number, orientation: string }} getState - Returns
+ *   current participant count, pin-derived floor, and orientation for expand sizing.
  * @param {(() => void)=} restoreConstraints - Optional callback invoked after
  *   expanding back to panel mode so participant-window can reapply min/max.
  */

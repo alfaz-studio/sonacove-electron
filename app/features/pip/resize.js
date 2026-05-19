@@ -76,7 +76,7 @@ function isInternalActive() {
  * previously shrunk the visible count.
  *
  * @param {Electron.BrowserWindow} win
- * @param {() => { count: number, orientation: string }} getState
+ * @param {() => { count: number, minTiles: number, orientation: string }} getState
  * @param {() => boolean} isExternalActive - True when another subsystem
  *   (pill transition, drag) is mutating bounds; skip while true.
  */
@@ -90,9 +90,9 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
             return;
         }
 
-        const { count, orientation } = getState();
+        const { count, minTiles, orientation } = getState();
         const bounds = win.getBounds();
-        const { n } = snapToTileBoundary(bounds.width, bounds.height, orientation, count);
+        const { n } = snapToTileBoundary(bounds.width, bounds.height, orientation, count, minTiles);
 
         if (n !== _visibleTileCount) {
             _visibleTileCount = n;
@@ -119,9 +119,10 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
 
 /**
  * Given a proposed window size, computes how many tiles fit and returns
- * the snapped dimensions.
+ * the snapped dimensions. `minTiles` defaults to 1; pinning N participants
+ * raises it to N so the panel can't be shrunk past the pinned slots.
  */
-function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles) {
+function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1) {
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
     let n;
@@ -136,7 +137,7 @@ function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles
         n = Math.round(availableHeight / (V_TILE_H + TILE_GAP));
     }
 
-    n = Math.max(1, Math.min(n, maxTiles));
+    n = Math.max(minTiles, Math.min(n, maxTiles));
 
     const { width, height } = computeWindowSize(n, orientation);
 
@@ -184,7 +185,7 @@ function startEdgeResize(edge) {
         }
 
         const pos = screen.getCursorScreenPoint();
-        const { count, orientation } = _getState();
+        const { count, minTiles, orientation } = _getState();
 
         let proposedWidth = _startWindowSize;
         let proposedHeight = _startWindowSize;
@@ -213,7 +214,7 @@ function startEdgeResize(edge) {
         }
 
         const { n, width, height } = snapToTileBoundary(
-            proposedWidth, proposedHeight, orientation, count
+            proposedWidth, proposedHeight, orientation, count, minTiles
         );
 
         // Compute target position — anchor to opposite edge.
@@ -337,7 +338,7 @@ function stopEdgeResize() {
  * Registers edge-resize IPC handlers.
  *
  * @param {() => Electron.BrowserWindow|null} getWindow
- * @param {() => { count: number, orientation: string }} getState
+ * @param {() => { count: number, minTiles: number, orientation: string }} getState
  * @param {(() => void)=} restoreConstraints - Optional callback invoked when
  *   the lerp animation completes so participant-window can reapply min/max.
  */

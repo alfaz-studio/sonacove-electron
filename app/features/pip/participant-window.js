@@ -48,7 +48,18 @@ function saveOrientation(orientation) {
 let participantWindow = null;
 let currentOrientation = loadOrientation();
 let currentParticipantCount = 1;
+let currentPinnedCount = 0;
 let lastParticipantsData = null;
+
+/**
+ * Floor for the visible-tile count. Pinning N participants means the user
+ * explicitly wants those N visible — resize must not shrink past that.
+ * Capped at the participant count so leaving participants can't strand the
+ * minimum above the available tiles.
+ */
+function getMinTiles() {
+    return Math.max(1, Math.min(currentPinnedCount, currentParticipantCount));
+}
 
 // See suppressUnreadChatCount() for the rationale. 15s is the safety floor;
 // suppression normally drops earlier via the signals in sendParticipantsUpdate.
@@ -59,7 +70,7 @@ let suppressBaseline = 0;
 // ── Wire up drag and pill subsystems ─────────────────────────────────────────
 
 const getWindow = () => participantWindow;
-const getState = () => ({ count: currentParticipantCount, orientation: currentOrientation });
+const getState = () => ({ count: currentParticipantCount, minTiles: getMinTiles(), orientation: currentOrientation });
 
 // Pill expand and the resize lerp both relax min/max to (1,1)/(0,0); without
 // this restore the next OS-native resize can shrink past the single-tile
@@ -86,8 +97,14 @@ function applyOrientation() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
 
-    // Clamp visible count to current participant count after orientation change.
-    const visibleCount = Math.min(getVisibleTileCount(), currentParticipantCount);
+    // Clamp visible count to the pin floor as a lower bound and the
+    // participant count as an upper bound, so the data layer can't drift
+    // below the floor even when called from paths that bypass the
+    // PIN_STATE_CHANGED handler.
+    const visibleCount = Math.max(
+        getMinTiles(),
+        Math.min(getVisibleTileCount(), currentParticipantCount)
+    );
 
     setVisibleTileCount(visibleCount);
 
@@ -116,10 +133,12 @@ function updateSizeConstraints() {
         return;
     }
 
-    // Min = 1 tile, max = all participants.
+    // Min = floor enforced by pin count (else 1 tile), max = all participants.
+    // Pinning protects the tile slot — the user shouldn't be able to drag the
+    // panel past the point where pinned participants would be hidden.
     // Horizontal: height locked (min == max), width varies.
     // Vertical: width locked (min == max), height varies.
-    const minSize = computeWindowSize(1, currentOrientation);
+    const minSize = computeWindowSize(getMinTiles(), currentOrientation);
     const maxSize = computeWindowSize(currentParticipantCount, currentOrientation);
 
     participantWindow.setMinimumSize(minSize.width, minSize.height);
@@ -132,6 +151,39 @@ ipcMain.on(IPC.TOGGLE_ORIENTATION, () => {
     currentOrientation = currentOrientation === 'horizontal' ? 'vertical' : 'horizontal';
     saveOrientation(currentOrientation);
     applyOrientation();
+});
+
+// Track pin count so resize handlers can honor it as a floor. ipc.js
+// already forwards pin state to the main renderer for dominant-speaker
+// protection — this is an additional listener, not a replacement.
+ipcMain.on(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
+    if (pinnedIds && typeof pinnedIds === 'object' && !Array.isArray(pinnedIds)) {
+        currentPinnedCount = Object.keys(pinnedIds).length;
+    } else {
+        currentPinnedCount = 0;
+    }
+
+    if (!participantWindow || participantWindow.isDestroyed()) {
+        return;
+    }
+
+    // Grow visible count up to the new floor if pinning just expanded it.
+    // Shrinking past the floor is handled by setMinimumSize via
+    // updateSizeConstraints — the OS won't allow it.
+    //
+    // Skip the auto-expand while a drag/resize is in flight: applyOrientation
+    // silently no-ops in that state, so mutating _visibleTileCount here
+    // would leave the data layer out of sync with the window bounds.
+    // updateSizeConstraints picks up the new floor on the next tick when
+    // the resize completes and restoreSizeConstraints fires.
+    const min = getMinTiles();
+
+    if (!isDragging() && !isResizing() && getVisibleTileCount() < min) {
+        setVisibleTileCount(min);
+        applyOrientation();
+    } else {
+        updateSizeConstraints();
+    }
 });
 
 ipcMain.on(IPC.RESIZE, (_event, { count }) => {
@@ -185,6 +237,7 @@ function openParticipantWindow() {
     }
 
     currentParticipantCount = 1;
+    currentPinnedCount = 0;
     setVisibleTileCount(1);
 
     const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
