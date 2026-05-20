@@ -17,7 +17,9 @@ const { IPC } = require('./pip/constants');
 const { getParticipantWindow } = require('./pip/helpers');
 const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
-    sendCurrentSystemVolume
+    IPC_SET_MUTED_CHANNEL: SYSTEM_VOLUME_SET_MUTED,
+    sendCurrentSystemVolume,
+    setSystemMuted
 } = require('./system-volume');
 
 /**
@@ -290,6 +292,13 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // hasn't happened yet.
     register(SYSTEM_VOLUME_REQUEST, event => {
         sendCurrentSystemVolume(event.sender);
+    });
+
+    // Renderer toggling the speaker mute button — flips the OS-level
+    // mute. system-volume.js force-broadcasts on success so the UI
+    // doesn't lag behind the actual state.
+    register(SYSTEM_VOLUME_SET_MUTED, (_, muted) => {
+        setSystemMuted(muted);
     });
 }
 

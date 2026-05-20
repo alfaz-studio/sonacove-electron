@@ -54,7 +54,8 @@ const whitelistedIpcChannels = [
     'deeplink-modal-action',
     'cross-window-notification',
     'system-volume-changed',
-    'request-system-volume'
+    'request-system-volume',
+    'set-system-volume-muted'
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app

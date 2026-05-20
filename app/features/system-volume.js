@@ -17,6 +17,7 @@ const loudness = require('loudness');
 const POLL_INTERVAL_MS = 200;
 const IPC_BROADCAST_CHANNEL = 'system-volume-changed';
 const IPC_REQUEST_CHANNEL = 'request-system-volume';
+const IPC_SET_MUTED_CHANNEL = 'set-system-volume-muted';
 
 let _pollTimer = null;
 let _last = {
@@ -110,6 +111,25 @@ function stopSystemVolumeWatcher() {
 }
 
 /**
+ * Sets the OS-output mute state. Broadcasts the new state directly
+ * without re-reading from the OS — the round-trip would otherwise
+ * include two extra native CLI spawns (getVolume + getMuted) on top of
+ * setMuted, each ~50-150ms on Windows. The 200ms polling watcher
+ * catches any drift between our optimistic value and the real OS state.
+ *
+ * @param {boolean} muted - Target mute state.
+ */
+async function setSystemMuted(muted) {
+    try {
+        await loudness.setMuted(Boolean(muted));
+        _last = { volume: _last.volume, muted: Boolean(muted) };
+        _broadcast(_last);
+    } catch (err) {
+        console.warn('⚠️ system-volume setMuted failed:', err?.message || err);
+    }
+}
+
+/**
  * Replies to the sender with the current cached value. Re-reads the OS
  * if the cache is still empty (first call before the first poll has
  * landed).
@@ -139,6 +159,8 @@ module.exports = {
     startSystemVolumeWatcher,
     stopSystemVolumeWatcher,
     sendCurrentSystemVolume,
+    setSystemMuted,
     IPC_BROADCAST_CHANNEL,
-    IPC_REQUEST_CHANNEL
+    IPC_REQUEST_CHANNEL,
+    IPC_SET_MUTED_CHANNEL
 };
