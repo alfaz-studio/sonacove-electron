@@ -18,8 +18,10 @@ const { getParticipantWindow } = require('./pip/helpers');
 const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
     IPC_SET_MUTED_CHANNEL: SYSTEM_VOLUME_SET_MUTED,
+    IPC_SET_VOLUME_CHANNEL: SYSTEM_VOLUME_SET_VOLUME,
     sendCurrentSystemVolume,
-    setSystemMuted
+    setSystemMuted,
+    setSystemVolume
 } = require('./system-volume');
 
 /**
@@ -297,8 +299,46 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer toggling the speaker mute button — flips the OS-level
     // mute. system-volume.js force-broadcasts on success so the UI
     // doesn't lag behind the actual state.
-    register(SYSTEM_VOLUME_SET_MUTED, (_, muted) => {
+    //
+    // Origin-validated: only the top frame can mute the OS. Without this
+    // any iframe Jitsi loads (etherpad, whiteboard, YouTube embed) could
+    // silence the user's machine. Sub-frames are dropped silently after
+    // a console.warn — they have no business calling this channel.
+    register(SYSTEM_VOLUME_SET_MUTED, (event, muted) => {
+        if (event.senderFrame !== event.sender.mainFrame) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_MUTED} rejected: non-main frame`);
+
+            return;
+        }
+        if (typeof muted !== 'boolean') {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_MUTED} rejected: payload not a boolean`);
+
+            return;
+        }
         setSystemMuted(muted);
+    });
+
+    // Renderer "fix-it" quick action on the low-volume warning — bumps
+    // the OS output volume to a reasonable level.
+    //
+    // Same origin validation as set-system-volume-muted. Payload must be
+    // a finite number; clamped to 0..100 before forwarding so a hostile
+    // sub-frame can't drive the volume to MAX_SAFE_INTEGER even if the
+    // origin check were ever bypassed.
+    register(SYSTEM_VOLUME_SET_VOLUME, (event, volume) => {
+        if (event.senderFrame !== event.sender.mainFrame) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_VOLUME} rejected: non-main frame`);
+
+            return;
+        }
+        if (typeof volume !== 'number' || !Number.isFinite(volume)) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_VOLUME} rejected: payload not a finite number`);
+
+            return;
+        }
+        const clamped = Math.max(0, Math.min(100, volume));
+
+        setSystemVolume(clamped);
     });
 }
 

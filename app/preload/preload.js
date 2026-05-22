@@ -55,7 +55,8 @@ const whitelistedIpcChannels = [
     'cross-window-notification',
     'system-volume-changed',
     'request-system-volume',
-    'set-system-volume-muted'
+    'set-system-volume-muted',
+    'set-system-volume'
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app
@@ -130,6 +131,10 @@ window.sonacoveElectronAPI = {
     captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
     saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
+
+    // Capability flag — renderer uses it to gate UI that depends on the
+    // matching main-side IPC handler (currently: prejoin speaker mute).
+    systemVolumeMuteSupported: true,
 
     // Local recording — chunk-stream protocol. Keeps memory flat for long meetings:
     // the renderer streams each MediaRecorder chunk to disk via main, instead of

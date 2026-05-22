@@ -747,9 +747,9 @@ function createJitsiMeetWindow() {
         capture
     });
 
-    // Poll the OS output volume + muted state and broadcast changes to all
-    // renderer windows. Drives the prejoin speaker-low warning icon.
-    startSystemVolumeWatcher();
+    // Poll the OS output volume + muted state and broadcast changes to
+    // the jitsi window. Drives the prejoin speaker-low warning icon.
+    startSystemVolumeWatcher(mainWindow);
 
     // Cross-window OS notifications are gated off for macOS. The dock.bounce /
     // setBadgeCount / Notification permission paths are implemented but need
