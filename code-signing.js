@@ -249,32 +249,20 @@ async function checkAndInstallDotNetTools() {
             console.log(`   ✅ .NET SDK found (${version.trim()})`);
             console.log('   Checking sign tool...');
 
-            const signCheck = spawn('sign', [ '--version' ], { shell: true,
-                stdio: 'pipe' });
-            let signFound = false;
+            // Same fs.existsSync probe as the main flow — avoids both
+            // the cwd-PATH cmd.exe collision and the stderr-as-success
+            // false-positive that the previous spawn-based check had.
+            const userProfile = process.env.USERPROFILE || process.env.HOME;
+            const toolsDir = path.join(userProfile, '.dotnet', 'tools');
+            const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
 
-            signCheck.stdout.on('data', () => {
-                signFound = true;
-            });
-
-            signCheck.stderr.on('data', () => {
-                signFound = true;
-            });
-
-            signCheck.on('close', signCode => {
-                if (signFound || signCode === 0) {
-                    console.log('   ✅ Sign tool found\n');
-                    resolve();
-                } else {
-                    installSignTool().then(resolve)
-.catch(reject);
-                }
-            });
-
-            signCheck.on('error', () => {
+            if (fs.existsSync(signExe)) {
+                console.log('   ✅ Sign tool found\n');
+                resolve();
+            } else {
                 installSignTool().then(resolve)
 .catch(reject);
-            });
+            }
         });
 
         check.on('error', error => {
@@ -319,25 +307,25 @@ exports.default = async function(context) {
     });
 
     console.log('   Checking sign tool...');
-    await new Promise((resolve, reject) => {
-      const check = spawn('sign', ['--version'], { shell: true, stdio: 'pipe' });
-      let found = false;
-      check.stdout.on('data', () => { found = true; });
-      check.stderr.on('data', () => { found = true; });
-      check.on('close', () => {
-        if (found) {
-          console.log('   ✅ Sign tool found\n');
-          resolve();
-        } else {
-          // Try to install
-          installSignTool().then(resolve).catch(reject);
-        }
-      });
-      check.on('error', () => {
-        // Try to install
-        installSignTool().then(resolve).catch(reject);
-      });
-    });
+    {
+      // Probe the dotnet-tools install location directly. The previous
+      // `spawn('sign', ['--version'], { shell: true })` had two problems
+      // on the windows-2022 runner image: (1) cmd.exe's cwd-first PATH
+      // lookup matched this file when it was named `sign.js`, invoked
+      // it via wscript and hung forever; (2) when the tool is absent
+      // cmd writes `'sign' is not recognized...` to stderr, which the
+      // old handler treated as "found", so installSignTool() was
+      // skipped and the later signWithAzure call hit `spawn sign ENOENT`.
+      const userProfile = process.env.USERPROFILE || process.env.HOME;
+      const toolsDir = path.join(userProfile, '.dotnet', 'tools');
+      const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
+
+      if (fs.existsSync(signExe)) {
+        console.log('   ✅ Sign tool found\n');
+      } else {
+        await installSignTool();
+      }
+    }
 
     // HANDLE AFTER_SIGN (Unpacked executables)
     if (context.appOutDir) {
