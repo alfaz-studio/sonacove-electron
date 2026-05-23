@@ -2,7 +2,7 @@
   "name": "sonacove-meets",
   "productName": "Sonacove Meets",
   "author": "Alfaz Studio",
-  "version": "2025.15.114",
+  "version": "2025.15.115",
   "description": "Sonacove Meeting App",
   "main": "./build/main.js",
   "repository": {
@@ -86,8 +86,8 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico"
     },
-    "afterPack": "sign.js",
-    "afterAllArtifactBuild": "sign.js",
+    "afterPack": "code-signing.js",
+    "afterAllArtifactBuild": "code-signing.js",
     "directories": {
       "buildResources": "resources"
     }
