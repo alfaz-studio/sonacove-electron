@@ -46,6 +46,12 @@ let _targetWindow = null;
 // Suppress repeated warnings while reads are failing back-to-back (broken
 // amixer, locked-down PowerShell policy). Flips back when a read recovers.
 let _readFailing = false;
+// Set during stopSystemVolumeWatcher() so any IPC request arriving in the
+// narrow window between stop and full IPC-listener teardown can't trigger
+// a `_read()` spawn — `stop` resets `_supported = true` (for dev hot-reload
+// re-probe), which would otherwise let `sendCurrentSystemVolume` past its
+// gate. Cleared by `startSystemVolumeWatcher`.
+let _stopped = false;
 
 /**
  * Reads the current system output volume + muted state. Silent — callers
@@ -161,6 +167,7 @@ async function startSystemVolumeWatcher(targetWindow) {
     if (_pollTimer) {
         return;
     }
+    _stopped = false;
     // Sentinel: claim the slot before awaiting the probe so a re-entrant call
     // that arrives during `_read()` bails out at the guard above instead of
     // racing a second OS probe + duplicate setInterval.
@@ -216,6 +223,7 @@ function stopSystemVolumeWatcher() {
     _supported = true;
     _targetWindow = null;
     _readFailing = false;
+    _stopped = true;
 }
 
 /**
@@ -309,12 +317,21 @@ async function sendCurrentSystemVolume(webContents) {
         return;
     }
 
-    // OS-volume layer is unavailable (probe failed at startup). Skip the
-    // extra spawn — the renderer's `supported: false` contract makes a
-    // payload meaningless here. `_supported` only flips false when the
-    // initial probe fails, and `_last` is `{ volume: null, muted: null }`
-    // at that point, so the volume-null check was redundant.
+    // App is shutting down — `stopSystemVolumeWatcher` resets `_supported = true`
+    // (for dev hot-reload re-probe) but the IPC listeners aren't torn down
+    // until the window closes. Without this guard a request arriving in the
+    // narrow window would spawn a `_read()` we just stopped to prevent.
+    if (_stopped) {
+        return;
+    }
+
+    // OS-volume layer is unavailable (probe failed at startup). Still send
+    // a reply so the renderer's request-system-volume call doesn't hang
+    // waiting — `_send` bakes in `supported: _supported` (false here), so
+    // the hook learns the capability state and hides the feature UI.
     if (!_supported) {
+        _send(webContents, { volume: null, muted: null });
+
         return;
     }
 
