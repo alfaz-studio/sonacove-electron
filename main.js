@@ -749,6 +749,9 @@ function createJitsiMeetWindow() {
 
     // Poll the OS output volume + muted state and broadcast changes to
     // the jitsi window. Drives the prejoin speaker-low warning icon.
+    // Fire-and-forget: the initial OS probe takes ~50-200ms and we don't
+    // want to block main-window setup on it. The watcher has its own
+    // re-entry guard (_pollTimer), so a duplicate call is a safe no-op.
     startSystemVolumeWatcher(mainWindow);
 
     // Cross-window OS notifications are gated off for macOS. The dock.bounce /

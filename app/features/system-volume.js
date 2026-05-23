@@ -77,7 +77,15 @@ function _broadcast(payload) {
     if (!_targetWindow || _targetWindow.isDestroyed() || _targetWindow.webContents.isDestroyed()) {
         return;
     }
-    _targetWindow.webContents.send(IPC_BROADCAST_CHANNEL, payload);
+    // `supported` is threaded into every payload because preload.js still
+    // exposes the static `systemVolumeMuteSupported: true` for back-compat,
+    // which lies on platforms where the OS probe failed. The renderer trusts
+    // this runtime flag over the preload constant.
+    _targetWindow.webContents.send(IPC_BROADCAST_CHANNEL, {
+        volume: payload.volume,
+        muted: payload.muted,
+        supported: _supported
+    });
 }
 
 /**
@@ -142,6 +150,10 @@ async function startSystemVolumeWatcher(targetWindow) {
     if (_pollTimer) {
         return;
     }
+    // Sentinel: claim the slot before awaiting the probe so a re-entrant call
+    // that arrives during `_read()` bails out at the guard above instead of
+    // racing a second OS probe + duplicate setInterval.
+    _pollTimer = true;
     _targetWindow = targetWindow || null;
 
     // Probe + cold-start broadcast in one call so we don't pay two reads
@@ -149,8 +161,10 @@ async function startSystemVolumeWatcher(targetWindow) {
     const initial = await _read();
 
     if (!initial || typeof initial.volume !== 'number') {
-        console.warn('⚠️ system-volume read unavailable on this system, disabling feature');
+        // Reset the sentinel so a future call (e.g. dev hot-reload) can retry.
+        _pollTimer = null;
         _supported = false;
+        console.warn('⚠️ system-volume read unavailable on this system, disabling feature');
 
         return;
     }
@@ -195,7 +209,7 @@ function stopSystemVolumeWatcher() {
  * Sets the OS-output mute state. Broadcasts the new state directly
  * without re-reading from the OS — the round-trip would otherwise
  * include two extra native CLI spawns (getVolume + getMuted) on top of
- * setMuted, each ~50-150ms on Windows. The 200ms polling watcher
+ * setMuted, each ~50-150ms on Windows. The 1s polling watcher
  * catches any drift between our optimistic value and the real OS state.
  *
  * @param {boolean} muted - Target mute state.
@@ -232,18 +246,30 @@ async function setSystemVolume(volume) {
 
     try {
         await loudness.setVolume(clamped);
-        let muted = _last.muted;
+    } catch (err) {
+        // Primary action failed — OS state is unchanged, surface and bail.
+        console.warn('⚠️ system-volume setVolume failed:', err?.message || err);
 
-        if (clamped > 0 && _last.muted) {
+        return;
+    }
+
+    // setVolume succeeded — `clamped` is now the authoritative OS volume.
+    let muted = _last.muted;
+
+    if (clamped > 0 && _last.muted) {
+        try {
             await loudness.setMuted(false);
             muted = false;
+        } catch (innerErr) {
+            // Unmute is a courtesy follow-up; the volume change is still
+            // valid and the renderer needs to see it. The next poll tick
+            // will reconcile the actual muted state.
+            console.warn('⚠️ system-volume setMuted(false) failed after setVolume succeeded:', innerErr?.message || innerErr);
         }
-        _version++;
-        _last = { volume: clamped, muted };
-        _broadcast(_last);
-    } catch (err) {
-        console.warn('⚠️ system-volume setVolume failed:', err?.message || err);
     }
+    _version++;
+    _last = { volume: clamped, muted };
+    _broadcast(_last);
 }
 
 /**
@@ -263,6 +289,13 @@ async function sendCurrentSystemVolume(webContents) {
         return;
     }
 
+    // OS-volume layer is unavailable (probe failed at startup and we never
+    // got a value). Skip the extra spawn — the renderer's `supported: false`
+    // contract makes a payload meaningless here.
+    if (!_supported && _last.volume === null) {
+        return;
+    }
+
     let payload = _last;
 
     if (payload.volume === null && payload.muted === null) {
@@ -273,7 +306,11 @@ async function sendCurrentSystemVolume(webContents) {
     }
 
     if (payload && !webContents.isDestroyed()) {
-        webContents.send(IPC_BROADCAST_CHANNEL, payload);
+        webContents.send(IPC_BROADCAST_CHANNEL, {
+            volume: payload.volume,
+            muted: payload.muted,
+            supported: _supported
+        });
     }
 }
 
