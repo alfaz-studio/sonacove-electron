@@ -10,7 +10,7 @@ const {
     IPC_REQUEST_CHANNEL,
     IPC_SET_MUTED_CHANNEL,
     IPC_SET_VOLUME_CHANNEL
-} = require('../features/system-volume');
+} = require('../features/system-volume-channels');
 
 // Load Polyfills
 require('./polyfills');

@@ -13,11 +13,14 @@
 
 const loudness = require('loudness');
 
+const {
+    IPC_BROADCAST_CHANNEL,
+    IPC_REQUEST_CHANNEL,
+    IPC_SET_MUTED_CHANNEL,
+    IPC_SET_VOLUME_CHANNEL
+} = require('./system-volume-channels');
+
 const POLL_INTERVAL_MS = 1000;
-const IPC_BROADCAST_CHANNEL = 'system-volume-changed';
-const IPC_REQUEST_CHANNEL = 'request-system-volume';
-const IPC_SET_MUTED_CHANNEL = 'set-system-volume-muted';
-const IPC_SET_VOLUME_CHANNEL = 'set-system-volume';
 
 let _pollTimer = null;
 let _last = {
@@ -308,9 +311,14 @@ async function sendCurrentSystemVolume(webContents) {
         return;
     }
 
-    // A poll tick is already reading — let it broadcast the result.
-    // Avoids two concurrent OS-CLI spawns competing on cold start.
+    // A poll tick is already reading — send the cached value (the tick
+    // may not broadcast if nothing changed). Cold start (no cache yet)
+    // just falls through — the tick's first broadcast is what the
+    // renderer's recovery path waits on.
     if (_inFlight) {
+        if (_last.volume !== null) {
+            _send(webContents, _last);
+        }
         return;
     }
 
