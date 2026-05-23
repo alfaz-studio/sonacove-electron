@@ -1,0 +1,45 @@
+name: Test Windows build (no publish)
+
+# End-to-end build test for the Windows installer on the fix branch.
+# Builds + signs without creating tags, draft releases, or uploading
+# anything. If `dist/Sonacove-Meets-Setup.exe` appears in the artifact
+# listing within ~15 minutes, the sign.js -> code-signing.js rename
+# fixed the hang.
+#
+# Delete this file once verified and the rename ships.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build + sign (no publish)
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        timeout-minutes: 25
+        run: npm run dist -- --publish=never
+
+      - name: List build artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path dist) {
+              Get-ChildItem -Path dist -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
+          } else {
+              Write-Host "No dist directory produced"
+          }
