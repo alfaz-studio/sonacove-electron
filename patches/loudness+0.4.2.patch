@@ -1,0 +1,18 @@
+diff --git a/node_modules/loudness/impl/windows/index.js b/node_modules/loudness/impl/windows/index.js
+index 53fde78..b03954c 100644
+--- a/node_modules/loudness/impl/windows/index.js
++++ b/node_modules/loudness/impl/windows/index.js
+@@ -3,7 +3,12 @@ const path = require('path')
+ const util = require('util')
+ 
+ const execFile = util.promisify(childProcess.execFile)
+-const executablePath = path.join(__dirname, 'adjust_get_current_system_volume_vista_plus.exe')
++// In packaged Electron builds the .exe sits inside app.asar, and child_process
++// cannot spawn binaries from inside an asar archive — swap to the unpacked
++// twin (paired with `asarUnpack: ["node_modules/loudness/**/*"]` in the host
++// app's electron-builder config). In dev `__dirname` doesn't contain app.asar
++// so the replace is a no-op.
++const executablePath = path.join(__dirname, 'adjust_get_current_system_volume_vista_plus.exe').replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep)
+ 
+ async function runProgram (...args) {
+   return (await execFile(executablePath, args)).stdout
