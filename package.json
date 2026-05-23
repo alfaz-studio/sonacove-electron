@@ -86,8 +86,8 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico"
     },
-    "afterPack": "sign.js",
-    "afterAllArtifactBuild": "sign.js",
+    "afterPack": "code-signing.js",
+    "afterAllArtifactBuild": "code-signing.js",
     "directories": {
       "buildResources": "resources"
     }
