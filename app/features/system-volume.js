@@ -23,6 +23,11 @@ const {
 const POLL_INTERVAL_MS = 1000;
 
 let _pollTimer = null;
+// Set while `startSystemVolumeWatcher` is awaiting its initial probe but
+// before `_pollTimer` is a real `setInterval` handle. Lets a re-entrant
+// start call bail at the guard, and lets the post-probe race check detect
+// a stop that landed during the await.
+let _starting = false;
 let _last = {
     volume: null,
     muted: null
@@ -68,10 +73,12 @@ async function _read() {
         ]);
 
         return {
-            volume: typeof volume === 'number' ? volume : null,
+            volume: Number.isFinite(volume) ? volume : null,
             muted: Boolean(muted)
         };
     } catch {
+        // Silent catch is deliberate — `_tick` surfaces the first failure via
+        // `_readFailing` (suppressing repeats); logging here would double-warn.
         return null;
     }
 }
@@ -164,14 +171,14 @@ async function _tick() {
  *   `system-volume-changed`. Broadcasts go only here.
  */
 async function startSystemVolumeWatcher(targetWindow) {
-    if (_pollTimer) {
+    if (_pollTimer || _starting) {
         return;
     }
     _stopped = false;
-    // Sentinel: claim the slot before awaiting the probe so a re-entrant call
-    // that arrives during `_read()` bails out at the guard above instead of
+    // Claim the slot before awaiting the probe so a re-entrant call that
+    // arrives during `_read()` bails out at the guard above instead of
     // racing a second OS probe + duplicate setInterval.
-    _pollTimer = true;
+    _starting = true;
     // `_targetWindow` is fixed for the lifetime of the watcher. If the main
     // BrowserWindow is ever destroyed and recreated (dev reload, error
     // recovery), broadcasts will silently no-op against the destroyed-window
@@ -184,16 +191,16 @@ async function startSystemVolumeWatcher(targetWindow) {
     const initial = await _read();
 
     // stopSystemVolumeWatcher() raced the probe — bail out cleanly. The stop
-    // call already cleared _targetWindow / set _pollTimer = null and reset
-    // module state; we just need to not install the interval (and not stomp
-    // on _supported, which stop intentionally reset to true).
-    if (_pollTimer !== true) {
+    // call already cleared _targetWindow / _starting and reset module state;
+    // we just need to not install the interval (and not stomp on _supported,
+    // which stop intentionally reset to true).
+    if (!_starting) {
         return;
     }
 
-    if (!initial || typeof initial.volume !== 'number') {
-        // Reset the sentinel so a future call (e.g. dev hot-reload) can retry.
-        _pollTimer = null;
+    if (!initial || !Number.isFinite(initial.volume)) {
+        // Clear the flag so a future call (e.g. dev hot-reload) can retry.
+        _starting = false;
         _supported = false;
         console.warn('⚠️ system-volume read unavailable on this system, disabling feature');
 
@@ -203,6 +210,7 @@ async function startSystemVolumeWatcher(targetWindow) {
     _last = initial;
     _broadcast(initial);
 
+    _starting = false;
     _pollTimer = setInterval(() => _tick(), POLL_INTERVAL_MS);
 }
 
@@ -217,6 +225,7 @@ function stopSystemVolumeWatcher() {
         clearInterval(_pollTimer);
         _pollTimer = null;
     }
+    _starting = false;
     _last = { volume: null, muted: null };
     _version = 0;
     _inFlight = false;
@@ -236,7 +245,7 @@ function stopSystemVolumeWatcher() {
  * @param {boolean} muted - Target mute state.
  */
 async function setSystemMuted(muted) {
-    if (!_supported) {
+    if (!_supported || _stopped) {
         return;
     }
 
@@ -259,7 +268,7 @@ async function setSystemMuted(muted) {
  * @param {number} volume - Target volume, 0–100. Clamped.
  */
 async function setSystemVolume(volume) {
-    if (!_supported) {
+    if (!_supported || _stopped) {
         return;
     }
 
@@ -330,7 +339,7 @@ async function sendCurrentSystemVolume(webContents) {
     // waiting — `_send` bakes in `supported: _supported` (false here), so
     // the hook learns the capability state and hides the feature UI.
     if (!_supported) {
-        _send(webContents, { volume: null, muted: null });
+        _send(webContents, { volume: null, muted: false });
 
         return;
     }

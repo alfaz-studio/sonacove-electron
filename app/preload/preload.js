@@ -15,6 +15,8 @@ const {
 // Load Polyfills
 require('./polyfills');
 
+// Channels the renderer is allowed to both send to main AND receive from main.
+// Most app channels are roundtrip — request/response or symmetric command flows.
 const whitelistedIpcChannels = [
     'protocol-data-msg',
     'renderer-ready',
@@ -59,10 +61,16 @@ const whitelistedIpcChannels = [
     'leave-modal-action',
     'deeplink-modal-action',
     'cross-window-notification',
-    IPC_BROADCAST_CHANNEL,
     IPC_REQUEST_CHANNEL,
     IPC_SET_MUTED_CHANNEL,
     IPC_SET_VOLUME_CHANNEL
+];
+
+// Receive-only channels: main → renderer broadcasts. The renderer must be
+// able to subscribe via ipc.on, but must not be allowed to ipc.send on them
+// (main has no listener — the send would silently go nowhere).
+const receiveOnlyIpcChannels = [
+    IPC_BROADCAST_CHANNEL
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app
@@ -158,7 +166,7 @@ window.sonacoveElectronAPI = {
     },
     ipc: {
         on: (channel, listener) => {
-            if (!whitelistedIpcChannels.includes(channel)) {
+            if (!whitelistedIpcChannels.includes(channel) && !receiveOnlyIpcChannels.includes(channel)) {
                 return () => {};
             }
             const cb = (_event, ...args) => listener(...args);
@@ -168,7 +176,7 @@ window.sonacoveElectronAPI = {
             return () => ipcRenderer.removeListener(channel, cb);
         },
         addListener: (channel, listener) => {
-            if (!whitelistedIpcChannels.includes(channel)) {
+            if (!whitelistedIpcChannels.includes(channel) && !receiveOnlyIpcChannels.includes(channel)) {
                 return;
             }
             const cb = (_event, ...args) => {
@@ -184,6 +192,7 @@ window.sonacoveElectronAPI = {
         },
 
         send: (channel, ...args) => {
+            // Receive-only channels are intentionally not sendable from the renderer.
             if (!whitelistedIpcChannels.includes(channel)) {
                 return;
             }
