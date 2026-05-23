@@ -315,16 +315,16 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
             return;
         }
-        setSystemMuted(muted);
+        // Fire-and-forget: errors are caught and logged inside setSystemMuted.
+        void setSystemMuted(muted);
     });
 
     // Renderer "fix-it" quick action on the low-volume warning — bumps
     // the OS output volume to a reasonable level.
     //
-    // Same origin validation as set-system-volume-muted. Payload must be
-    // a finite number; clamped to 0..100 before forwarding so a hostile
-    // sub-frame can't drive the volume to MAX_SAFE_INTEGER even if the
-    // origin check were ever bypassed.
+    // Same origin validation as set-system-volume-muted. Payload must be a
+    // finite number; setSystemVolume internally clamps to 0..100, so we
+    // don't double-clamp here.
     register(SYSTEM_VOLUME_SET_VOLUME, (event, volume) => {
         if (event.senderFrame !== event.sender.mainFrame) {
             console.warn(`⚠️ ${SYSTEM_VOLUME_SET_VOLUME} rejected: non-main frame`);
@@ -336,9 +336,8 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
             return;
         }
-        const clamped = Math.max(0, Math.min(100, volume));
-
-        setSystemVolume(clamped);
+        // Fire-and-forget: errors are caught and logged inside setSystemVolume.
+        void setSystemVolume(volume);
     });
 }
 

@@ -68,23 +68,32 @@ async function _read() {
 }
 
 /**
- * Sends the payload to the target window only. `_targetWindow.isDestroyed()`
- * catches the BrowserWindow shell going away; `webContents.isDestroyed()`
- * catches the renderer being torn down independently (mid-navigation, dev
+ * Sends the payload to a renderer. `supported` is the single source of
+ * truth for whether the OS-volume layer is usable on this host — the
+ * renderer flips its capability state from this field on every payload
+ * (no static preload flag). One helper for both the broadcast path
+ * (`_broadcast`) and the on-mount request path (`sendCurrentSystemVolume`)
+ * so the payload shape can only ever drift in one place.
+ */
+function _send(webContents, payload) {
+    webContents.send(IPC_BROADCAST_CHANNEL, {
+        volume: payload.volume,
+        muted: payload.muted,
+        supported: _supported
+    });
+}
+
+/**
+ * Broadcasts to the target window. `_targetWindow.isDestroyed()` catches
+ * the BrowserWindow shell going away; `webContents.isDestroyed()` catches
+ * the renderer being torn down independently (mid-navigation, dev
  * reload). Either guard alone is insufficient.
  */
 function _broadcast(payload) {
     if (!_targetWindow || _targetWindow.isDestroyed() || _targetWindow.webContents.isDestroyed()) {
         return;
     }
-    // `supported` is the single source of truth for whether the OS-volume
-    // layer is usable on this host — the renderer flips its capability
-    // state from this field on every payload (no static preload flag).
-    _targetWindow.webContents.send(IPC_BROADCAST_CHANNEL, {
-        volume: payload.volume,
-        muted: payload.muted,
-        supported: _supported
-    });
+    _send(_targetWindow.webContents, payload);
 }
 
 /**
@@ -153,6 +162,11 @@ async function startSystemVolumeWatcher(targetWindow) {
     // that arrives during `_read()` bails out at the guard above instead of
     // racing a second OS probe + duplicate setInterval.
     _pollTimer = true;
+    // `_targetWindow` is fixed for the lifetime of the watcher. If the main
+    // BrowserWindow is ever destroyed and recreated (dev reload, error
+    // recovery), broadcasts will silently no-op against the destroyed-window
+    // guard in `_broadcast`. Call `stopSystemVolumeWatcher()` + `startSystemVolumeWatcher(newWindow)`
+    // if the window is replaced.
     _targetWindow = targetWindow || null;
 
     // Probe + cold-start broadcast in one call so we don't pay two reads
@@ -180,17 +194,6 @@ async function startSystemVolumeWatcher(targetWindow) {
     _broadcast(initial);
 
     _pollTimer = setInterval(() => _tick(), POLL_INTERVAL_MS);
-}
-
-/**
- * Whether the OS-volume layer is usable on this host. The renderer
- * doesn't currently consume this — `setSystemMuted` / `setSystemVolume`
- * already no-op when unsupported — but it's exported for diagnostics.
- *
- * @returns {boolean}
- */
-function isSupported() {
-    return _supported;
 }
 
 /**
@@ -315,11 +318,7 @@ async function sendCurrentSystemVolume(webContents) {
     }
 
     if (payload && !webContents.isDestroyed()) {
-        webContents.send(IPC_BROADCAST_CHANNEL, {
-            volume: payload.volume,
-            muted: payload.muted,
-            supported: _supported
-        });
+        _send(webContents, payload);
     }
 }
 
@@ -329,7 +328,6 @@ module.exports = {
     sendCurrentSystemVolume,
     setSystemMuted,
     setSystemVolume,
-    isSupported,
     IPC_BROADCAST_CHANNEL,
     IPC_REQUEST_CHANNEL,
     IPC_SET_MUTED_CHANNEL,
