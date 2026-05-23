@@ -5,6 +5,12 @@ const {
     setupPowerMonitorRender
 } = require('@jitsi/electron-sdk');
 const { ipcRenderer } = require('electron');
+const {
+    IPC_BROADCAST_CHANNEL,
+    IPC_REQUEST_CHANNEL,
+    IPC_SET_MUTED_CHANNEL,
+    IPC_SET_VOLUME_CHANNEL
+} = require('../features/system-volume');
 
 // Load Polyfills
 require('./polyfills');
@@ -53,10 +59,10 @@ const whitelistedIpcChannels = [
     'leave-modal-action',
     'deeplink-modal-action',
     'cross-window-notification',
-    'system-volume-changed',
-    'request-system-volume',
-    'set-system-volume-muted',
-    'set-system-volume'
+    IPC_BROADCAST_CHANNEL,
+    IPC_REQUEST_CHANNEL,
+    IPC_SET_MUTED_CHANNEL,
+    IPC_SET_VOLUME_CHANNEL
 ];
 
 // Raise the listener cap — the preload subscribes to many channels across the app

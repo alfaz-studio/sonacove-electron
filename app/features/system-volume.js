@@ -308,6 +308,12 @@ async function sendCurrentSystemVolume(webContents) {
         return;
     }
 
+    // A poll tick is already reading — let it broadcast the result.
+    // Avoids two concurrent OS-CLI spawns competing on cold start.
+    if (_inFlight) {
+        return;
+    }
+
     let payload = _last;
 
     if (payload.volume === null && payload.muted === null) {

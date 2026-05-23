@@ -293,6 +293,11 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // this handler covers the cold-start case where the first broadcast
     // hasn't happened yet.
     register(SYSTEM_VOLUME_REQUEST, event => {
+        if (event.senderFrame !== event.sender.mainFrame) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_REQUEST} rejected: non-main frame`);
+
+            return;
+        }
         sendCurrentSystemVolume(event.sender);
     });
 

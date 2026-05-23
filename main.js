@@ -999,6 +999,12 @@ function createJitsiMeetWindow() {
         // ticking against a destroyed window.
         cleanupDeeplinkState();
 
+        // Stop the system-volume polling loop so we don't keep spawning child
+        // processes against a destroyed window. `before-quit` is a backstop;
+        // this handles the case where the window closes well before quit
+        // (e.g. future macOS dock-click window recreation).
+        stopSystemVolumeWatcher();
+
         ipcMain.removeListener('retry-load', onRetryLoad);
         ipcMain.removeListener('update-toast-action', onUpdateToast);
         ipcMain.removeListener('leave-modal-action', onLeaveModal);
