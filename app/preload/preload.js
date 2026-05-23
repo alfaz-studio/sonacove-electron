@@ -132,10 +132,6 @@ window.sonacoveElectronAPI = {
     saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
 
-    // Capability flag — renderer uses it to gate UI that depends on the
-    // matching main-side IPC handler (currently: prejoin speaker mute).
-    systemVolumeMuteSupported: true,
-
     // Local recording — chunk-stream protocol. Keeps memory flat for long meetings:
     // the renderer streams each MediaRecorder chunk to disk via main, instead of
     // buffering the whole recording in memory or relying on showSaveFilePicker.

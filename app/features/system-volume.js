@@ -77,10 +77,9 @@ function _broadcast(payload) {
     if (!_targetWindow || _targetWindow.isDestroyed() || _targetWindow.webContents.isDestroyed()) {
         return;
     }
-    // `supported` is threaded into every payload because preload.js still
-    // exposes the static `systemVolumeMuteSupported: true` for back-compat,
-    // which lies on platforms where the OS probe failed. The renderer trusts
-    // this runtime flag over the preload constant.
+    // `supported` is the single source of truth for whether the OS-volume
+    // layer is usable on this host — the renderer flips its capability
+    // state from this field on every payload (no static preload flag).
     _targetWindow.webContents.send(IPC_BROADCAST_CHANNEL, {
         volume: payload.volume,
         muted: payload.muted,
@@ -159,6 +158,14 @@ async function startSystemVolumeWatcher(targetWindow) {
     // Probe + cold-start broadcast in one call so we don't pay two reads
     // (each a child-process spawn) before the renderer sees its first value.
     const initial = await _read();
+
+    // stopSystemVolumeWatcher() raced the probe — bail out cleanly. The stop
+    // call already cleared _targetWindow / set _pollTimer = null and reset
+    // module state; we just need to not install the interval (and not stomp
+    // on _supported, which stop intentionally reset to true).
+    if (_pollTimer !== true) {
+        return;
+    }
 
     if (!initial || typeof initial.volume !== 'number') {
         // Reset the sentinel so a future call (e.g. dev hot-reload) can retry.
@@ -289,10 +296,12 @@ async function sendCurrentSystemVolume(webContents) {
         return;
     }
 
-    // OS-volume layer is unavailable (probe failed at startup and we never
-    // got a value). Skip the extra spawn — the renderer's `supported: false`
-    // contract makes a payload meaningless here.
-    if (!_supported && _last.volume === null) {
+    // OS-volume layer is unavailable (probe failed at startup). Skip the
+    // extra spawn — the renderer's `supported: false` contract makes a
+    // payload meaningless here. `_supported` only flips false when the
+    // initial probe fails, and `_last` is `{ volume: null, muted: null }`
+    // at that point, so the volume-null check was redundant.
+    if (!_supported) {
         return;
     }
 
