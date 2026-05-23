@@ -269,6 +269,13 @@ async function setSystemVolume(volume) {
     // setVolume succeeded — `clamped` is now the authoritative OS volume.
     let muted = _last.muted;
 
+    // Intentional side effect: bumping a muted system to a non-zero volume
+    // also unmutes it. A "muted-at-50%" state is a confusing in-between
+    // the UI can land in (icon shows muted, slider shows 50%), so the
+    // renderer-side fix-volume action's contract is "lift the system to
+    // a working state". Callers (e.g. the renderer "fix-it" pill) MUST
+    // make this visible in the UI so the user doesn't see their explicit
+    // OS mute disappear silently.
     if (clamped > 0 && _last.muted) {
         try {
             await loudness.setMuted(false);
@@ -312,13 +319,13 @@ async function sendCurrentSystemVolume(webContents) {
     }
 
     // A poll tick is already reading — send the cached value (the tick
-    // may not broadcast if nothing changed). Cold start (no cache yet)
-    // just falls through — the tick's first broadcast is what the
-    // renderer's recovery path waits on.
+    // may not broadcast if nothing changed). `_inFlight` only ever flips
+    // true inside `_tick()`, which only runs after `startSystemVolumeWatcher`
+    // has completed its initial probe and populated `_last` — so
+    // `_last.volume === null` is unreachable here. Just send `_last`.
     if (_inFlight) {
-        if (_last.volume !== null) {
-            _send(webContents, _last);
-        }
+        _send(webContents, _last);
+
         return;
     }
 
