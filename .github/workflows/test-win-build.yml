@@ -9,6 +9,8 @@ name: Test Windows build (no publish)
 # Delete this file once verified and the rename ships.
 
 on:
+  push:
+    branches: [ fix/windows-sign-collision ]
   workflow_dispatch:
 
 jobs:
