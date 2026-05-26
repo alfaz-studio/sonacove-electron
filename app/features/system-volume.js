@@ -358,14 +358,16 @@ async function sendCurrentSystemVolume(webContents) {
     let payload = _last;
 
     if (payload.volume === null && payload.muted === null) {
-        payload = await _read();
-        if (payload) {
-            _last = payload;
+        const read = await _read();
+
+        if (read) {
+            _last = read;
+            payload = read;
         }
     }
 
-    if (payload && !webContents.isDestroyed()) {
-        _send(webContents, payload);
+    if (!webContents.isDestroyed()) {
+        _send(webContents, payload || { volume: null, muted: false });
     }
 }
 
