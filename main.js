@@ -64,6 +64,10 @@ const { closeOverlay } = require('./app/features/overlay/overlay-window');
 const { setupScreenshotIPC } = require('./app/features/screenshot');
 const { setupRecordingIPC } = require('./app/features/recording');
 const { setupSavePathsIPC } = require('./app/features/savePathsIpc');
+const {
+    startSystemVolumeWatcher,
+    stopSystemVolumeWatcher
+} = require('./app/features/system-volume');
 const { openExternalLink } = require('./app/features/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
@@ -743,6 +747,13 @@ function createJitsiMeetWindow() {
         capture
     });
 
+    // Poll the OS output volume + muted state and broadcast changes to
+    // the jitsi window. Drives the prejoin speaker-low warning icon.
+    // Fire-and-forget: the initial OS probe takes ~50-200ms and we don't
+    // want to block main-window setup on it. The watcher has its own
+    // re-entry guard (_pollTimer), so a duplicate call is a safe no-op.
+    startSystemVolumeWatcher(mainWindow);
+
     // Cross-window OS notifications are gated off for macOS. The dock.bounce /
     // setBadgeCount / Notification permission paths are implemented but need
     // end-to-end verification (permission prompt flow, signed-build behavior,
@@ -988,6 +999,12 @@ function createJitsiMeetWindow() {
         // ticking against a destroyed window.
         cleanupDeeplinkState();
 
+        // Stop the system-volume polling loop so we don't keep spawning child
+        // processes against a destroyed window. `before-quit` is a backstop;
+        // this handles the case where the window closes well before quit
+        // (e.g. future macOS dock-click window recreation).
+        stopSystemVolumeWatcher();
+
         ipcMain.removeListener('retry-load', onRetryLoad);
         ipcMain.removeListener('update-toast-action', onUpdateToast);
         ipcMain.removeListener('leave-modal-action', onLeaveModal);
@@ -1189,6 +1206,10 @@ app.on('before-quit', event => {
     }
     event.preventDefault();
     analyticsShutdownDone = true;
+
+    // Stop the system-volume polling loop so we don't keep spawning child
+    // processes during shutdown.
+    stopSystemVolumeWatcher();
 
     capture('app_quit', {
         session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)

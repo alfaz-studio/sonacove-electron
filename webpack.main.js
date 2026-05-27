@@ -33,7 +33,13 @@ module.exports = {
         '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
         'electron-context-menu': 'require(\'electron-context-menu\')',
         'electron-reload': 'require(\'electron-reload\')',
-        'posthog-node': 'require(\'posthog-node\')'
+        'posthog-node': 'require(\'posthog-node\')',
+        // Must stay external so its Windows impl's `__dirname` resolves at
+        // runtime to the real on-disk loudness/impl/windows/ folder. Webpack
+        // would otherwise inline `__dirname` as a compile-time relative path,
+        // breaking the bundled .exe lookup in packaged builds.
+        // Pairs with `asarUnpack` in package.json and patches/loudness+0.4.2.patch.
+        'loudness': 'require(\'loudness\')'
     } ],
     resolve: {
         modules: [

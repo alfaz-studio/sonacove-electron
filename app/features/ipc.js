@@ -15,6 +15,14 @@ const {
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
 const { getParticipantWindow } = require('./pip/helpers');
+const {
+    IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
+    IPC_SET_MUTED_CHANNEL: SYSTEM_VOLUME_SET_MUTED,
+    IPC_SET_VOLUME_CHANNEL: SYSTEM_VOLUME_SET_VOLUME,
+    sendCurrentSystemVolume,
+    setSystemMuted,
+    setSystemVolume
+} = require('./system-volume');
 
 /**
  * Previously registered listeners as [channel, fn] pairs.
@@ -278,6 +286,63 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         if (event && typeof event === 'string' && handlers.capture) {
             handlers.capture(event, properties || {});
         }
+    });
+
+    // Renderer asks for the current OS-output volume on mount of the
+    // prejoin speaker-warning hook. The watcher broadcasts on changes;
+    // this handler covers the cold-start case where the first broadcast
+    // hasn't happened yet.
+    register(SYSTEM_VOLUME_REQUEST, event => {
+        if (event.senderFrame !== event.sender.mainFrame) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_REQUEST} rejected: non-main frame`);
+
+            return;
+        }
+        sendCurrentSystemVolume(event.sender);
+    });
+
+    // Renderer toggling the speaker mute button — flips the OS-level
+    // mute. system-volume.js force-broadcasts on success so the UI
+    // doesn't lag behind the actual state.
+    //
+    // Origin-validated: only the top frame can mute the OS. Without this
+    // any iframe Jitsi loads (etherpad, whiteboard, YouTube embed) could
+    // silence the user's machine. Sub-frames are dropped silently after
+    // a console.warn — they have no business calling this channel.
+    register(SYSTEM_VOLUME_SET_MUTED, (event, muted) => {
+        if (event.senderFrame !== event.sender.mainFrame) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_MUTED} rejected: non-main frame`);
+
+            return;
+        }
+        if (typeof muted !== 'boolean') {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_MUTED} rejected: payload not a boolean`);
+
+            return;
+        }
+        // Fire-and-forget: errors are caught and logged inside setSystemMuted.
+        void setSystemMuted(muted);
+    });
+
+    // Renderer "fix-it" quick action on the low-volume warning — bumps
+    // the OS output volume to a reasonable level.
+    //
+    // Same origin validation as set-system-volume-muted. Payload must be a
+    // finite number; setSystemVolume internally clamps to 0..100, so we
+    // don't double-clamp here.
+    register(SYSTEM_VOLUME_SET_VOLUME, (event, volume) => {
+        if (event.senderFrame !== event.sender.mainFrame) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_VOLUME} rejected: non-main frame`);
+
+            return;
+        }
+        if (typeof volume !== 'number' || !Number.isFinite(volume)) {
+            console.warn(`⚠️ ${SYSTEM_VOLUME_SET_VOLUME} rejected: payload not a finite number`);
+
+            return;
+        }
+        // Fire-and-forget: errors are caught and logged inside setSystemVolume.
+        void setSystemVolume(volume);
     });
 }
 
