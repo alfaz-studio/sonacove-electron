@@ -14,9 +14,6 @@
     <div class="resize-edge resize-edge-top" data-edge="top"></div>
     <div class="resize-edge resize-edge-bottom" data-edge="bottom"></div>
 
-    <!-- Tiles -->
-    <div class="tiles-container" id="tilesContainer"></div>
-
     <!-- Control Bar -->
     <div class="control-bar">
       <div class="control-left" id="dragHandle">
@@ -43,6 +40,9 @@
         </button>
       </div>
     </div>
+
+    <!-- Tiles -->
+    <div class="tiles-container" id="tilesContainer"></div>
   </div>
 
   <!-- Pill -->
@@ -159,6 +159,7 @@
         for (var id in existingMap) {
           if (!newIds[id]) {
             existingMap[id].remove();
+            delete existingMap[id];
           }
         }
 
@@ -168,17 +169,39 @@
 
           if (!tile) {
             tile = createTile(p);
+            existingMap[p.id] = tile;
             tilesContainer.appendChild(tile);
           } else {
             updateTile(tile, p);
+          }
+        }
+
+        // Reorder DOM nodes to match the ranked `visible` order (dominant
+        // speaker first, etc.). Only when the order actually changed — moving
+        // nodes is a layout cost we don't want on every metadata tick, and the
+        // entry animation is guarded by the one-shot tile-enter class above.
+        var domTiles = tilesContainer.querySelectorAll('.tile');
+        var orderChanged = false;
+        for (var d = 0; d < visible.length; d++) {
+          if (!domTiles[d] || domTiles[d].getAttribute('data-participant-id') !== visible[d].id) {
+            orderChanged = true;
+            break;
+          }
+        }
+        if (orderChanged) {
+          for (var r = 0; r < visible.length; r++) {
+            tilesContainer.appendChild(existingMap[visible[r].id]);
           }
         }
       }
 
       function createTile(p) {
         var tile = document.createElement('div');
-        tile.className = 'tile';
+        tile.className = 'tile tile-enter';
         tile.setAttribute('data-participant-id', p.id);
+        tile.addEventListener('animationend', function () {
+          tile.classList.remove('tile-enter');
+        });
 
         var videoImg = document.createElement('img');
         videoImg.className = 'tile-video';
@@ -431,11 +454,21 @@
           window.panelAPI.updatePinState(pinnedIds);
         }
 
-        // Clean up pins for participants who left.
+        // Clean up pins for participants who left. If any were removed, push
+        // the new pin state to main so currentPinnedCount (the resize floor)
+        // and the jitsi renderer's dominant-speaker protection don't keep a
+        // ghost pin for someone who's gone.
         var currentIds = {};
         for (var i = 0; i < participants.length; i++) currentIds[participants[i].id] = true;
+        var pinsPruned = false;
         for (var pid in pinnedIds) {
-          if (!currentIds[pid]) delete pinnedIds[pid];
+          if (!currentIds[pid]) {
+            delete pinnedIds[pid];
+            pinsPruned = true;
+          }
+        }
+        if (pinsPruned) {
+          window.panelAPI.updatePinState(pinnedIds);
         }
 
         renderTiles();
@@ -500,8 +533,15 @@
       var panelStartX = 0;
       var panelStartY = 0;
 
-      document.getElementById('dragHandle').addEventListener('mousedown', function (e) {
+      // The whole panel acts as a drag surface so the window can be moved by
+      // grabbing anywhere — tiles, empty space, or the control bar. Mousedowns
+      // that land on an interactive control (buttons, pin/status toggles,
+      // resize edges) are ignored so those still work as clicks/resizes.
+      var DRAG_IGNORE_SELECTOR = '.ctrl-btn, .tile-status-btn, .tile-pin-btn, .resize-edge';
+
+      panel.addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;
+        if (e.target.closest(DRAG_IGNORE_SELECTOR)) return;
         panelDragPending = true;
         panelDragging = false;
         panelStartX = e.screenX;

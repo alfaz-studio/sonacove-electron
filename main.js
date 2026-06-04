@@ -605,6 +605,14 @@ function createJitsiMeetWindow() {
         }
         pipMinimizedSent = false;
         restoredSent = true;
+
+        // The meeting window is back in front — tear down the PiP overlay
+        // unconditionally. The renderer's screenshare-stop path can't reach
+        // the window while it's in pill mode (the stop handler guards on
+        // isPillMode), so closing here is the only thing that clears an
+        // orphaned pill. Idempotent: a no-op when no PiP window exists.
+        closeParticipantWindow(false);
+
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('pip-window-restored');
         }
@@ -616,6 +624,10 @@ function createJitsiMeetWindow() {
             blurTimer = null;
         }
         pipMinimizedSent = false;
+
+        // Meeting window focused (alt-tab back, etc.) — close any PiP overlay,
+        // including an orphaned pill the renderer can't reach. Idempotent.
+        closeParticipantWindow(false);
 
         // If restore already sent the event (taskbar click), skip.
         if (restoredSent) {
@@ -1140,6 +1152,10 @@ app.on('activate', () => {
     }
     mainWindow.show();
     mainWindow.focus();
+
+    // Clear any PiP overlay (panel or orphaned pill) now the app is back.
+    closeParticipantWindow(false);
+
     mainWindow.webContents.send('pip-window-restored');
 });
 

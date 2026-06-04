@@ -52,6 +52,11 @@ html, body {
   gap: 6px;
   padding: 6px;
   overflow: hidden;
+  cursor: grab;
+}
+
+.tiles-container:active {
+  cursor: grabbing;
 }
 
 .tiles-container.vertical {
@@ -68,6 +73,11 @@ html, body {
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
+}
+
+/* Entry animation lives on a one-shot class (removed on animationend) so that
+   re-ordering tiles — which re-inserts the DOM node — doesn't replay it. */
+.tile.tile-enter {
   animation: tileIn 0.18s ease-out;
 }
 
@@ -462,8 +472,8 @@ html, body {
 
 .resize-edge-left,
 .resize-edge-right {
-  top: 0;
-  bottom: 32px; /* above control bar */
+  top: 32px; /* below control bar */
+  bottom: 0;
   width: 6px;
   cursor: ew-resize;
 }
@@ -479,8 +489,8 @@ html, body {
   cursor: ns-resize;
 }
 
-.resize-edge-top { top: 0; }
-.resize-edge-bottom { bottom: 32px; }
+.resize-edge-top { top: 32px; } /* below control bar */
+.resize-edge-bottom { bottom: 0; }
 
 /* Show the correct edges based on orientation */
 .panel.resize-horizontal .resize-edge-left,
