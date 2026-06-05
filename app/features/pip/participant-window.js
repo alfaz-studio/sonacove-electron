@@ -88,7 +88,11 @@ setupResizeHandlers(getWindow, getState, restoreSizeConstraints);
  * Notifies both the panel renderer and the main renderer.
  */
 function applyOrientation() {
-    if (!participantWindow || participantWindow.isDestroyed() || isDragging() || isResizing()) {
+    if (!participantWindow || participantWindow.isDestroyed()
+            || isDragging() || isResizing() || isPillMode()) {
+        // isPillMode: the pill is locked to PILL_SIZE; resizing/repositioning
+        // here would yank it out of its fixed shape. expandFromPill reapplies
+        // orientation and size when the user reopens.
         return;
     }
 
@@ -167,6 +171,15 @@ ipcMain.on(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
         return;
     }
 
+    // Skip all window mutations while in pill mode: both branches below
+    // (applyOrientation / updateSizeConstraints) would override the pill's
+    // fixed PILL_SIZE lock. currentPinnedCount is already updated above, and
+    // expandFromPill → restoreSizeConstraints reapplies the correct floor when
+    // the user reopens the panel.
+    if (isPillMode()) {
+        return;
+    }
+
     // Grow visible count up to the new floor if pinning just expanded it.
     // Shrinking past the floor is handled by setMinimumSize via
     // updateSizeConstraints — the OS won't allow it.
@@ -187,7 +200,7 @@ ipcMain.on(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
 });
 
 ipcMain.on(IPC.RESIZE, (_event, { count }) => {
-    if (!participantWindow || participantWindow.isDestroyed() || isPillMode() || isDragging() || isResizing()) {
+    if (!participantWindow || participantWindow.isDestroyed()) {
         return;
     }
 
@@ -208,6 +221,14 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
     if (visibleCount === prevCount && currentParticipantCount > prevCount) {
         visibleCount = currentParticipantCount;
         setVisibleTileCount(visibleCount);
+    }
+
+    // While in pill mode or mid drag/resize we still keep the count/visible
+    // data in sync above (so expandFromPill and gesture-end restore size to
+    // the fresh count) — but we must not move the window or touch size
+    // constraints: that would fight the pill size lock and the resize lerp.
+    if (isPillMode() || isDragging() || isResizing()) {
+        return;
     }
 
     const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
@@ -316,6 +337,16 @@ function openParticipantWindow() {
     participantWindow.webContents.on('did-finish-load', () => {
         if (participantWindow && !participantWindow.isDestroyed()) {
             participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
+
+            // Also tell the jitsi renderer the active orientation now, not just
+            // on toggle. Its orientationRef defaults to 'horizontal'; without
+            // this the frame capture uses the wrong tile aspect until the user
+            // first toggles when the persisted orientation is 'vertical'.
+            const mw = getMainWindow();
+
+            if (mw && !mw.isDestroyed()) {
+                mw.webContents.send(IPC.ORIENTATION_CHANGED_RENDERER, currentOrientation);
+            }
 
             // Direct send: the cache is already suppression-applied (via
             // sendParticipantsUpdate, the only writer); re-routing would

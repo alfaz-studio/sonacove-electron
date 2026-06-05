@@ -14,12 +14,9 @@
     <div class="resize-edge resize-edge-top" data-edge="top"></div>
     <div class="resize-edge resize-edge-bottom" data-edge="bottom"></div>
 
-    <!-- Tiles -->
-    <div class="tiles-container" id="tilesContainer"></div>
-
     <!-- Control Bar -->
     <div class="control-bar">
-      <div class="control-left" id="dragHandle">
+      <div class="control-left">
         <span id="gripIcon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></svg>
         </span>
@@ -28,21 +25,24 @@
       <div class="control-right">
         <button class="ctrl-btn" id="toggleBtn" title="Toggle layout" style="display: none;">
           <span id="toggleIcon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+            <svg width="15" height="15" viewBox="2 2 20 20" fill="currentColor"><path d="M6.227 2.071c-.275.146-.471.512-.435.805.041.284.174.471.512.718.165.114.284.229.261.242-.018.018-.137.073-.265.119-.366.128-1.052.503-1.46.787-.535.38-1.326 1.19-1.67 1.706-.777 1.167-1.166 2.347-1.17 3.573 0 .613 0 .622.133.792.503.663 1.491.288 1.491-.572 0-.402.128-1.116.275-1.564.439-1.313 1.372-2.37 2.653-3.006.206-.105.384-.178.394-.169.013.014-.083.183-.211.38-.233.357-.238.366-.219.659.018.357.137.549.425.686.247.119.504.114.755-.014.183-.091.297-.233 1.039-1.312.837-1.226.96-1.464.901-1.729-.082-.357-.197-.462-1.432-1.304-.654-.444-1.244-.832-1.308-.855-.197-.073-.453-.05-.668.06"/><path d="M13.089 4.852c-.302.041-.64.165-.942.339-.288.165-6.802 6.674-7.031 7.022-.247.38-.357.737-.384 1.217-.023.503.036.819.247 1.258.151.316.274.453 1.93 2.118 1.043 1.048 1.88 1.848 2.036 1.954.43.279.796.384 1.358.384.567 0 .943-.11 1.364-.389.151-.105 1.66-1.583 3.627-3.554 3.111-3.12 3.376-3.399 3.514-3.683.389-.81.348-1.706-.11-2.461-.1-.165-.782-.874-1.953-2.04-1.999-1.985-2.04-2.018-2.772-2.15-.393-.069-.508-.069-.883-.014"/><path d="M20.952 12.853c-.357.105-.585.448-.585.874 0 .631-.238 1.619-.531 2.2-.348.695-.961 1.423-1.597 1.903-.334.247-1.148.682-1.198.636-.014-.014.045-.128.137-.247.242-.334.306-.49.306-.746 0-.48-.352-.823-.837-.823-.389 0-.485.1-1.39 1.418-.453.668-.851 1.29-.883 1.386-.06.206-.028.398.105.64.078.138.338.339 1.235.957 1.39.956 1.404.961 1.711.938.517-.037.864-.517.741-1.02-.06-.234-.22-.417-.567-.654-.224-.156-.229-.156-.114-.202 1.02-.412 1.802-.92 2.521-1.633 1.221-1.217 1.916-2.758 1.994-4.414.023-.54.018-.613-.069-.778-.114-.229-.228-.334-.452-.416-.197-.069-.343-.073-.526-.019"/></svg>
           </span>
         </button>
         <button class="ctrl-btn" id="chatBtn" title="Back to meeting" style="position: relative;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>
             <span class="chat-badge-count hidden" id="chatBadgeCount">0</span>
         </button>
-        <button class="ctrl-btn" id="closeBtn" title="Minimize to pill">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6 18 18"/><path d="M18 6 6 18"/></svg>
-        </button>
         <button class="ctrl-btn ctrl-btn-danger" id="endMeetingBtn" title="End meeting">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 2.59 3.4Z"/><line x1="20" x2="4" y1="4" y2="20" stroke="currentColor" stroke-width="2.5"/></svg>
         </button>
+        <button class="ctrl-btn" id="closeBtn" title="Minimize to pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6 18 18"/><path d="M18 6 6 18"/></svg>
+        </button>
       </div>
     </div>
+
+    <!-- Tiles -->
+    <div class="tiles-container" id="tilesContainer"></div>
   </div>
 
   <!-- Pill -->
@@ -58,8 +58,9 @@
       // ── Icons ──────────────────────────────────────────────────────────────
 
       var GRIP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="19" r="1"/></svg>';
-      var TOGGLE_COLUMNS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>';
-      var TOGGLE_ROWS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>';
+      // Phone-rotate ("auto-rotate") icon — same glyph for both layout states;
+      // only the button tooltip changes to describe the next orientation.
+      var TOGGLE_ICON = '<svg width="15" height="15" viewBox="2 2 20 20" fill="currentColor"><path d="M6.227 2.071c-.275.146-.471.512-.435.805.041.284.174.471.512.718.165.114.284.229.261.242-.018.018-.137.073-.265.119-.366.128-1.052.503-1.46.787-.535.38-1.326 1.19-1.67 1.706-.777 1.167-1.166 2.347-1.17 3.573 0 .613 0 .622.133.792.503.663 1.491.288 1.491-.572 0-.402.128-1.116.275-1.564.439-1.313 1.372-2.37 2.653-3.006.206-.105.384-.178.394-.169.013.014-.083.183-.211.38-.233.357-.238.366-.219.659.018.357.137.549.425.686.247.119.504.114.755-.014.183-.091.297-.233 1.039-1.312.837-1.226.96-1.464.901-1.729-.082-.357-.197-.462-1.432-1.304-.654-.444-1.244-.832-1.308-.855-.197-.073-.453-.05-.668.06"/><path d="M13.089 4.852c-.302.041-.64.165-.942.339-.288.165-6.802 6.674-7.031 7.022-.247.38-.357.737-.384 1.217-.023.503.036.819.247 1.258.151.316.274.453 1.93 2.118 1.043 1.048 1.88 1.848 2.036 1.954.43.279.796.384 1.358.384.567 0 .943-.11 1.364-.389.151-.105 1.66-1.583 3.627-3.554 3.111-3.12 3.376-3.399 3.514-3.683.389-.81.348-1.706-.11-2.461-.1-.165-.782-.874-1.953-2.04-1.999-1.985-2.04-2.018-2.772-2.15-.393-.069-.508-.069-.883-.014"/><path d="M20.952 12.853c-.357.105-.585.448-.585.874 0 .631-.238 1.619-.531 2.2-.348.695-.961 1.423-1.597 1.903-.334.247-1.148.682-1.198.636-.014-.014.045-.128.137-.247.242-.334.306-.49.306-.746 0-.48-.352-.823-.837-.823-.389 0-.485.1-1.39 1.418-.453.668-.851 1.29-.883 1.386-.06.206-.028.398.105.64.078.138.338.339 1.235.957 1.39.956 1.404.961 1.711.938.517-.037.864-.517.741-1.02-.06-.234-.22-.417-.567-.654-.224-.156-.229-.156-.114-.202 1.02-.412 1.802-.92 2.521-1.633 1.221-1.217 1.916-2.758 1.994-4.414.023-.54.018-.613-.069-.778-.114-.229-.228-.334-.452-.416-.197-.069-.343-.073-.526-.019"/></svg>';
       var USER_FALLBACK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
       var MIC_ON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
       var MIC_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
@@ -159,6 +160,7 @@
         for (var id in existingMap) {
           if (!newIds[id]) {
             existingMap[id].remove();
+            delete existingMap[id];
           }
         }
 
@@ -168,17 +170,43 @@
 
           if (!tile) {
             tile = createTile(p);
+            existingMap[p.id] = tile;
             tilesContainer.appendChild(tile);
           } else {
             updateTile(tile, p);
+          }
+        }
+
+        // Reorder DOM nodes to match the ranked `visible` order (dominant
+        // speaker first, etc.). Only when the order actually changed — moving
+        // nodes is a layout cost we don't want on every metadata tick, and the
+        // entry animation is guarded by the one-shot tile-enter class above.
+        var domTiles = tilesContainer.querySelectorAll('.tile');
+        var orderChanged = false;
+        for (var d = 0; d < visible.length; d++) {
+          if (!domTiles[d] || domTiles[d].getAttribute('data-participant-id') !== visible[d].id) {
+            orderChanged = true;
+            break;
+          }
+        }
+        if (orderChanged) {
+          for (var r = 0; r < visible.length; r++) {
+            // Guard: a ranked id without a created tile (e.g. visible not yet a
+            // strict subset of participants) would appendChild(undefined).
+            if (existingMap[visible[r].id]) {
+              tilesContainer.appendChild(existingMap[visible[r].id]);
+            }
           }
         }
       }
 
       function createTile(p) {
         var tile = document.createElement('div');
-        tile.className = 'tile';
+        tile.className = 'tile tile-enter';
         tile.setAttribute('data-participant-id', p.id);
+        tile.addEventListener('animationend', function () {
+          tile.classList.remove('tile-enter');
+        });
 
         var videoImg = document.createElement('img');
         videoImg.className = 'tile-video';
@@ -370,13 +398,10 @@
 
         gripIcon.innerHTML = GRIP_ICON;
 
-        if (currentOrientation === 'horizontal') {
-          toggleIcon.innerHTML = TOGGLE_COLUMNS;
-          document.getElementById('toggleBtn').title = 'Switch to vertical layout';
-        } else {
-          toggleIcon.innerHTML = TOGGLE_ROWS;
-          document.getElementById('toggleBtn').title = 'Switch to horizontal layout';
-        }
+        toggleIcon.innerHTML = TOGGLE_ICON;
+        document.getElementById('toggleBtn').title = currentOrientation === 'horizontal'
+          ? 'Switch to vertical layout'
+          : 'Switch to horizontal layout';
       }
 
       function updateParticipantCount() {
@@ -431,11 +456,21 @@
           window.panelAPI.updatePinState(pinnedIds);
         }
 
-        // Clean up pins for participants who left.
+        // Clean up pins for participants who left. If any were removed, push
+        // the new pin state to main so currentPinnedCount (the resize floor)
+        // and the jitsi renderer's dominant-speaker protection don't keep a
+        // ghost pin for someone who's gone.
         var currentIds = {};
         for (var i = 0; i < participants.length; i++) currentIds[participants[i].id] = true;
+        var pinsPruned = false;
         for (var pid in pinnedIds) {
-          if (!currentIds[pid]) delete pinnedIds[pid];
+          if (!currentIds[pid]) {
+            delete pinnedIds[pid];
+            pinsPruned = true;
+          }
+        }
+        if (pinsPruned) {
+          window.panelAPI.updatePinState(pinnedIds);
         }
 
         renderTiles();
@@ -500,8 +535,15 @@
       var panelStartX = 0;
       var panelStartY = 0;
 
-      document.getElementById('dragHandle').addEventListener('mousedown', function (e) {
+      // The whole panel acts as a drag surface so the window can be moved by
+      // grabbing anywhere — tiles, empty space, or the control bar. Mousedowns
+      // that land on an interactive control (buttons, pin/status toggles,
+      // resize edges) are ignored so those still work as clicks/resizes.
+      var DRAG_IGNORE_SELECTOR = '.ctrl-btn, .tile-status-btn, .tile-pin-btn, .resize-edge';
+
+      panel.addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;
+        if (e.target.closest(DRAG_IGNORE_SELECTOR)) return;
         panelDragPending = true;
         panelDragging = false;
         panelStartX = e.screenX;
