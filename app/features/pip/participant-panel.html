@@ -16,7 +16,7 @@
 
     <!-- Control Bar -->
     <div class="control-bar">
-      <div class="control-left" id="dragHandle">
+      <div class="control-left">
         <span id="gripIcon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></svg>
         </span>
@@ -190,7 +190,11 @@
         }
         if (orderChanged) {
           for (var r = 0; r < visible.length; r++) {
-            tilesContainer.appendChild(existingMap[visible[r].id]);
+            // Guard: a ranked id without a created tile (e.g. visible not yet a
+            // strict subset of participants) would appendChild(undefined).
+            if (existingMap[visible[r].id]) {
+              tilesContainer.appendChild(existingMap[visible[r].id]);
+            }
           }
         }
       }
