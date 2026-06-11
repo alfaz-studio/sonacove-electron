@@ -784,6 +784,16 @@ function createJitsiMeetWindow() {
 
     if (isDev) {
         mainWindow.webContents.session.clearCache();
+    } else {
+        // Warm the DNS/TCP/TLS connection to the dashboard origin while the
+        // splash is on screen, so the real navigation (on ready-to-show) reuses
+        // a hot socket instead of doing a cold handshake. preconnect() opens a
+        // socket without an HTTP request (no body download); best-effort.
+        try {
+            mainWindow.webContents.session.preconnect({ url: config.currentConfig.landing });
+        } catch (e) {
+            // Never let a warm-up failure affect startup.
+        }
     }
 
     mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
