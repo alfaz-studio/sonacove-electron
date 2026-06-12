@@ -87,6 +87,18 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Register a callback that fires when the host theme changes, so the panel
+     * can recolour live (accent / danger / warn) instead of using hardcoded
+     * defaults.
+     *
+     * @param {function(Object): void} cb - Called with the theme token map.
+     * @returns {void}
+     */
+    onThemeUpdate(cb) {
+        ipcRenderer.on('pp-theme-update', (_event, theme) => cb(theme));
+    },
+
+    /**
      * Register a callback that fires when the visible tile count changes
      * (user resized the window, or participants changed).
      *

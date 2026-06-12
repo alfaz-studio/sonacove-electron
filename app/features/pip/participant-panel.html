@@ -63,10 +63,10 @@
       var TOGGLE_ICON = '<svg width="15" height="15" viewBox="2 2 20 20" fill="currentColor"><path d="M6.227 2.071c-.275.146-.471.512-.435.805.041.284.174.471.512.718.165.114.284.229.261.242-.018.018-.137.073-.265.119-.366.128-1.052.503-1.46.787-.535.38-1.326 1.19-1.67 1.706-.777 1.167-1.166 2.347-1.17 3.573 0 .613 0 .622.133.792.503.663 1.491.288 1.491-.572 0-.402.128-1.116.275-1.564.439-1.313 1.372-2.37 2.653-3.006.206-.105.384-.178.394-.169.013.014-.083.183-.211.38-.233.357-.238.366-.219.659.018.357.137.549.425.686.247.119.504.114.755-.014.183-.091.297-.233 1.039-1.312.837-1.226.96-1.464.901-1.729-.082-.357-.197-.462-1.432-1.304-.654-.444-1.244-.832-1.308-.855-.197-.073-.453-.05-.668.06"/><path d="M13.089 4.852c-.302.041-.64.165-.942.339-.288.165-6.802 6.674-7.031 7.022-.247.38-.357.737-.384 1.217-.023.503.036.819.247 1.258.151.316.274.453 1.93 2.118 1.043 1.048 1.88 1.848 2.036 1.954.43.279.796.384 1.358.384.567 0 .943-.11 1.364-.389.151-.105 1.66-1.583 3.627-3.554 3.111-3.12 3.376-3.399 3.514-3.683.389-.81.348-1.706-.11-2.461-.1-.165-.782-.874-1.953-2.04-1.999-1.985-2.04-2.018-2.772-2.15-.393-.069-.508-.069-.883-.014"/><path d="M20.952 12.853c-.357.105-.585.448-.585.874 0 .631-.238 1.619-.531 2.2-.348.695-.961 1.423-1.597 1.903-.334.247-1.148.682-1.198.636-.014-.014.045-.128.137-.247.242-.334.306-.49.306-.746 0-.48-.352-.823-.837-.823-.389 0-.485.1-1.39 1.418-.453.668-.851 1.29-.883 1.386-.06.206-.028.398.105.64.078.138.338.339 1.235.957 1.39.956 1.404.961 1.711.938.517-.037.864-.517.741-1.02-.06-.234-.22-.417-.567-.654-.224-.156-.229-.156-.114-.202 1.02-.412 1.802-.92 2.521-1.633 1.221-1.217 1.916-2.758 1.994-4.414.023-.54.018-.613-.069-.778-.114-.229-.228-.334-.452-.416-.197-.069-.343-.073-.526-.019"/></svg>';
       var USER_FALLBACK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
       var MIC_ON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
-      var MIC_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
+      var MIC_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f15a4d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
       var VIDEO_ON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>';
-      var VIDEO_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.66 5H14a2 2 0 0 1 2 2v2.34l1 1L22 7v10"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
-      var HAND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>';
+      var VIDEO_OFF = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f15a4d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.66 5H14a2 2 0 0 1 2 2v2.34l1 1L22 7v10"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>';
+      var HAND_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>';
       var PIN_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
 
       // ── State ──────────────────────────────────────────────────────────────
@@ -247,15 +247,12 @@
         });
         tile.appendChild(pinBtn);
 
-        var nameBar = document.createElement('div');
-        nameBar.className = 'tile-name-bar';
         var nameSpan = document.createElement('span');
         nameSpan.className = 'tile-name';
-        nameBar.appendChild(nameSpan);
+        tile.appendChild(nameSpan);
         var statusIcons = document.createElement('div');
         statusIcons.className = 'tile-status-icons';
-        nameBar.appendChild(statusIcons);
-        tile.appendChild(nameBar);
+        tile.appendChild(statusIcons);
 
         updateTile(tile, p);
         return tile;
@@ -297,8 +294,15 @@
           });
           statusIcons.appendChild(camBtn);
         } else {
-          statusIcons.insertAdjacentHTML('beforeend', p.hasAudio ? MIC_ON : MIC_OFF);
-          statusIcons.insertAdjacentHTML('beforeend', p.hasVideo ? VIDEO_ON : VIDEO_OFF);
+          var micChip = document.createElement('span');
+          micChip.className = 'tile-status-btn tile-status-static';
+          micChip.innerHTML = p.hasAudio ? MIC_ON : MIC_OFF;
+          statusIcons.appendChild(micChip);
+
+          var camChip = document.createElement('span');
+          camChip.className = 'tile-status-btn tile-status-static';
+          camChip.innerHTML = p.hasVideo ? VIDEO_ON : VIDEO_OFF;
+          statusIcons.appendChild(camChip);
         }
 
         // Speaking indicator.
@@ -493,6 +497,19 @@
       window.panelAPI.onOrientationChanged(function (orientation) {
         currentOrientation = orientation;
         applyOrientation();
+      });
+
+      // Host theme → live recolour. Only the base accent/danger/warn colours
+      // are sent; participant-panel.css derives the translucent variants
+      // (glow/bloom/soft) from these via color-mix.
+      window.panelAPI.onThemeUpdate(function (t) {
+        if (!t) return;
+        var root = document.documentElement.style;
+        if (t.accent) root.setProperty('--accent', t.accent);
+        if (t.accentHover) root.setProperty('--accent-hover', t.accentHover);
+        if (t.danger) root.setProperty('--danger', t.danger);
+        if (t.dangerIcon) root.setProperty('--danger-icon', t.dangerIcon);
+        if (t.warn) root.setProperty('--warn', t.warn);
       });
 
       window.panelAPI.onVisibleCountChanged(function (data) {

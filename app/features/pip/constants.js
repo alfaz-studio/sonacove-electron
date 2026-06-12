@@ -10,8 +10,8 @@
 const TILE_W = 250;   // tile width — same for both orientations
 const H_TILE_H = 130; // tile height in horizontal mode (landscape)
 const V_TILE_H = 160; // tile height in vertical mode (squarish)
-const TILE_GAP = 6;
-const TILE_PAD = 6;   // padding inside the tiles container (each side)
+const TILE_GAP = 8;
+const TILE_PAD = 8;   // padding inside the tiles container (each side)
 
 // ── Panel chrome ─────────────────────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ const MARGIN = 20;    // gap between panel and screen edges
 
 // ── Pill ─────────────────────────────────────────────────────────────────────
 
-const PILL_SIZE = 56;
+const PILL_SIZE = 60;
 
 // ── IPC channels ─────────────────────────────────────────────────────────────
 
@@ -46,6 +46,9 @@ const IPC = {
     END_MEETING: 'pp-end-meeting',
     START_EDGE_RESIZE: 'pp-start-edge-resize',
     STOP_EDGE_RESIZE: 'pp-stop-edge-resize',
+
+    // Renderer → main → panel renderer (host theme tokens for live recolour)
+    THEME_UPDATE: 'pp-theme-update',
 
     // Main → panel renderer
     FRAME: 'pp-frame',

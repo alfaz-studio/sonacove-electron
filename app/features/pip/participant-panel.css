@@ -17,6 +17,37 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Sonacove overlay palette ──────────────────────────────────────────────
+   Colours match the design export's PiP mini-view (design-handoff desktop-
+   overlay kit). The accent / danger family is meant to be overridden live by
+   the theme bridge (added later); surfaces stay dark since the panel floats
+   over a shared screen. */
+
+:root {
+  /* Base accent / status colours — overridden live by the theme bridge
+     (panel `onThemeUpdate`). Defaults mirror the design export. */
+  --accent: #f05023;
+  --accent-hover: #f86f4d;
+  --danger: #e0483b;
+  --danger-icon: #f15a4d;
+  --warn: #f8ae1a;
+
+  /* Derived translucent variants — follow the base colours above, so a single
+     theme push recolours the glows/blooms too. */
+  --accent-glow: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-bloom: color-mix(in srgb, var(--accent) 42%, transparent);
+  --danger-soft: color-mix(in srgb, var(--danger) 15%, transparent);
+  --warn-glow: color-mix(in srgb, var(--warn) 30%, transparent);
+
+  /* Surfaces — fixed dark (the panel floats over a shared screen). */
+  --panel-bg: #1b1c1f;
+  --tile-bg: #0c0d0f;
+  --border: rgba(255, 255, 255, 0.10);
+  --chip-bg: rgba(0, 0, 0, 0.45);
+  --txt: #ffffff;
+  --txt-2: #9a9aa0;
+}
+
 /* ── Panel ────────────────────────────────────────────────────────────────── */
 
 .panel {
@@ -24,10 +55,10 @@ html, body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: rgba(20, 20, 20, 0.9);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  background: var(--panel-bg);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   opacity: 1;
   transform: scale(1);
@@ -49,8 +80,8 @@ html, body {
   flex: 1;
   display: flex;
   flex-direction: row;
-  gap: 6px;
-  padding: 6px;
+  gap: 8px;
+  padding: 8px;
   overflow: hidden;
   cursor: grab;
 }
@@ -68,8 +99,8 @@ html, body {
 .tile {
   width: 250px;
   height: 130px;
-  background: #040404;
-  border-radius: 10px;
+  background: var(--tile-bg);
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
@@ -112,32 +143,32 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #040404;
+  background: var(--tile-bg);
 }
 
 .tile-avatar-img {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .tile-avatar-initials {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #FFFFFF;
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 700;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .tile-avatar-fallback {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: #333;
   display: flex;
@@ -165,7 +196,7 @@ html, body {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #44A5FF;
+  background: var(--accent);
   opacity: 0;
   transition: opacity 0.15s ease-in-out;
 }
@@ -177,17 +208,18 @@ html, body {
   top: 6px;
   left: 6px;
   z-index: 3;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--chip-bg);
   color: rgba(255, 255, 255, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   opacity: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   transition: opacity 0.15s, background 0.12s, color 0.12s;
 }
 
@@ -197,8 +229,8 @@ html, body {
 
 .tile-pin-btn.pinned {
   opacity: 1;
-  background: rgba(70, 135, 237, 0.85);
-  color: #FFFFFF;
+  background: var(--accent);
+  color: var(--txt);
 }
 
 .tile-pin-btn:hover {
@@ -207,100 +239,126 @@ html, body {
 }
 
 .tile-pin-btn.pinned:hover {
-  background: rgba(70, 135, 237, 1);
+  background: var(--accent-hover);
 }
 
-/* ── Tile Name Bar ────────────────────────────────────────────────────────── */
-
-.tile-name-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  height: 32px;
-  background: linear-gradient(to bottom, transparent, rgba(4, 4, 4, 0.93));
-  padding: 0 8px 6px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-.tiles-container.vertical .tile-name-bar {
-  height: 34px;
-}
+/* ── Tile Name + Status (design: floated, no scrim bar) ───────────────────── */
 
 .tile-name {
-  font-size: 11px;
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  right: 78px;
+  z-index: 2;
+  font-size: 14px;
   font-weight: 600;
-  color: #FFFFFF;
+  color: var(--txt);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 /* ── Tile Status Icons ────────────────────────────────────────────────────── */
 
 .tile-status-icons {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
+  gap: 6px;
 }
 
 .tile-status-btn {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 4px;
-  border-radius: 5px;
+  width: 30px;
+  height: 30px;
+  background: var(--chip-bg);
+  backdrop-filter: blur(4px);
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  flex-shrink: 0;
+  transition: background 0.12s, transform 0.1s;
+}
+
+.tile-status-btn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .tile-status-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .tile-status-btn:active {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.7);
   transform: scale(0.9);
+}
+
+/* Remote tiles reuse the same chip, but non-interactive. */
+.tile-status-btn.tile-status-static {
+  cursor: default;
+  pointer-events: none;
 }
 
 /* ── Tile Indicators ──────────────────────────────────────────────────────── */
 
-/* Speaking — matches filmstrip theme blue */
+/* Speaking — Sonacove accent */
 .tile.speaking {
-  box-shadow: 0 0 0 2px #4687ED, 0 0 12px rgba(70, 135, 237, 0.4);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 12px var(--accent-glow);
 }
 
-/* Raised hand — matches filmstrip warning-02 */
+/* Raised hand — warning */
 .tile.raised-hand {
-  box-shadow: 0 0 0 2px #FFD600, 0 0 8px rgba(255, 214, 0, 0.3);
+  box-shadow: 0 0 0 2px var(--warn), 0 0 8px var(--warn-glow);
 }
 
 /* Speaking + raised hand — hand takes priority for border color */
 .tile.speaking.raised-hand {
-  box-shadow: 0 0 0 2px #FFD600, 0 0 12px rgba(70, 135, 237, 0.4);
+  box-shadow: 0 0 0 2px var(--warn), 0 0 12px var(--accent-glow);
 }
 
+/* Raised-hand badge — copied from the jitsi filmstrip thumbnail rebrand:
+   translucent warning-01 circle + amber Hand glyph with the handBounce wave. */
 .tile-hand-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 10px;
+  right: 10px;
   z-index: 3;
-  width: 22px;
-  height: 22px;
-  background: #FFD600;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.tile-hand-badge svg {
+  width: 17px;
+  height: 17px;
+  animation: handBounce 2s ease-in-out infinite;
+}
+
+@keyframes handBounce {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25%      { transform: translateY(-5px) rotate(-12deg); }
+  55%      { transform: translateY(-2px) rotate(10deg); }
+  80%      { transform: translateY(-1px) rotate(-4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-hand-badge svg {
+    animation: none;
+  }
 }
 
 /* ── Control Bar ──────────────────────────────────────────────────────────── */
@@ -320,7 +378,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #858585;
+  color: var(--txt-2);
   cursor: grab;
   flex: 1;
 }
@@ -336,7 +394,7 @@ html, body {
 .participant-count {
   font-size: 11px;
   font-weight: 400;
-  color: #858585;
+  color: var(--txt-2);
 }
 
 .control-right {
@@ -350,8 +408,8 @@ html, body {
   height: 24px;
   border: none;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -361,15 +419,16 @@ html, body {
 }
 
 .ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.10);
 }
 
 .ctrl-btn-danger {
-  color: #FF6B6B;
+  background: var(--danger);
+  color: #fff;
 }
 
 .ctrl-btn-danger:hover {
-  background: rgba(255, 107, 107, 0.15);
+  background: var(--danger-icon);
 }
 
 /* ── Chat Badge ───────────────────────────────────────────────────────────── */
@@ -380,7 +439,7 @@ html, body {
   right: -4px;
   min-width: 14px;
   height: 14px;
-  background: #165ECC;
+  background: var(--danger);
   border-radius: 7px;
   font-size: 9px;
   font-weight: 700;
@@ -412,21 +471,26 @@ html, body {
 }
 
 .pill-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(to bottom, #6C5CE7, #4834D4);
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, var(--accent-hover), var(--accent));
   color: #FFFFFFEE;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 24px rgba(108, 92, 231, 0.2), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 14px 32px var(--accent-bloom), 0 2px 6px rgba(0, 0, 0, 0.3);
   opacity: 0;
   transform: scale(0.5);
   transition: opacity 0.2s ease, transform 0.2s ease;
   position: relative;
+}
+
+.pill-btn svg {
+  width: 28px;
+  height: 28px;
 }
 
 /* macOS shows a rounded-square window background behind transparent windows;
@@ -442,19 +506,20 @@ html, body {
 
 .pill-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 20px;
-  height: 20px;
-  background: #E04848;
-  border-radius: 50%;
-  font-size: 10px;
+  top: -5px;
+  right: -5px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: var(--danger);
+  border: 2px solid #08090b;
+  border-radius: 9999px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
