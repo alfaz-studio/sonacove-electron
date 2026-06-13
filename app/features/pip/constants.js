@@ -19,6 +19,12 @@ const HEADER_H = 32;  // control bar height
 const BORDER = 1;     // panel border width (each side)
 const MARGIN = 20;    // gap between panel and screen edges
 
+// Transparent padding the window carries around the visible panel so the panel's
+// rounded CSS drop-shadow has room to render instead of being clipped to the
+// window rectangle (which, with the native window shadow, looked sharp-cornered).
+// The panel is inset by this much via `body { padding }`.
+const WINDOW_PAD = 18;
+
 // ── Pill ─────────────────────────────────────────────────────────────────────
 
 // Larger than the visible 60px pill (which is centred in it via .pill-overlay)
@@ -77,6 +83,7 @@ module.exports = {
     HEADER_H,
     BORDER,
     MARGIN,
+    WINDOW_PAD,
     PILL_SIZE,
     IPC,
 };

@@ -11,7 +11,7 @@ const { ipcMain, screen } = require('electron');
 
 const {
     TILE_W, H_TILE_H, V_TILE_H, TILE_GAP, TILE_PAD,
-    HEADER_H, BORDER, IPC,
+    HEADER_H, BORDER, WINDOW_PAD, IPC,
 } = require('./constants');
 const { computeWindowSize } = require('./sizing');
 
@@ -127,12 +127,14 @@ function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles
     const bdr2 = BORDER * 2;
     let n;
 
+    const win2 = WINDOW_PAD * 2;
+
     if (orientation === 'horizontal') {
-        const availableWidth = proposedWidth - pad2 - bdr2 + TILE_GAP;
+        const availableWidth = proposedWidth - pad2 - bdr2 - win2 + TILE_GAP;
 
         n = Math.round(availableWidth / (TILE_W + TILE_GAP));
     } else {
-        const availableHeight = proposedHeight - pad2 - bdr2 - HEADER_H + TILE_GAP;
+        const availableHeight = proposedHeight - pad2 - bdr2 - HEADER_H - win2 + TILE_GAP;
 
         n = Math.round(availableHeight / (V_TILE_H + TILE_GAP));
     }

@@ -83,12 +83,6 @@ function shrinkToPill() {
             width: PILL_SIZE,
             height: PILL_SIZE,
         });
-
-        // The pill window is larger than the visible pill (transparent padding),
-        // so the native rectangular window shadow would float detached around
-        // that padding with sharp corners. Drop it — the pill's own rounded CSS
-        // box-shadow provides the shadow.
-        win.setHasShadow(false);
     }, 220);
 }
 
@@ -126,7 +120,6 @@ function expandFromPill(count, orientation) {
     win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
     win.setBounds({ x: posX, y: posY, width: W, height: H });
-    win.setHasShadow(true); // restore the panel's native window shadow
 
     if (_restoreConstraints) {
         _restoreConstraints();

@@ -5,7 +5,7 @@
 
 const {
     TILE_W, H_TILE_H, V_TILE_H, TILE_GAP, TILE_PAD,
-    HEADER_H, BORDER, MARGIN,
+    HEADER_H, BORDER, MARGIN, WINDOW_PAD,
 } = require('./constants');
 
 /**
@@ -21,17 +21,19 @@ function computeWindowSize(count, orientation) {
     const tileH = orientation === 'horizontal' ? H_TILE_H : V_TILE_H;
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
+    // Transparent shadow padding the window carries around the visible panel.
+    const win2 = WINDOW_PAD * 2;
 
     if (orientation === 'horizontal') {
         return {
-            width: n * TILE_W + (n - 1) * TILE_GAP + pad2 + bdr2,
-            height: tileH + pad2 + HEADER_H + bdr2,
+            width: n * TILE_W + (n - 1) * TILE_GAP + pad2 + bdr2 + win2,
+            height: tileH + pad2 + HEADER_H + bdr2 + win2,
         };
     }
 
     return {
-        width: TILE_W + pad2 + bdr2,
-        height: n * tileH + (n - 1) * TILE_GAP + pad2 + HEADER_H + bdr2,
+        width: TILE_W + pad2 + bdr2 + win2,
+        height: n * tileH + (n - 1) * TILE_GAP + pad2 + HEADER_H + bdr2 + win2,
     };
 }
 
@@ -46,15 +48,18 @@ function computeWindowSize(count, orientation) {
 function getWindowPosition(count, orientation, workArea) {
     const { width: W, height: H } = computeWindowSize(count, orientation);
 
+    // W/H include WINDOW_PAD on each side; offsetting the window out by that much
+    // keeps the *visible* panel anchored MARGIN from the screen edge (the padding
+    // overhangs into the margin, where the soft shadow renders).
     if (orientation === 'horizontal') {
         return {
-            x: workArea.x + workArea.width - W - MARGIN,
-            y: workArea.y + workArea.height - H - MARGIN,
+            x: workArea.x + workArea.width - W - MARGIN + WINDOW_PAD,
+            y: workArea.y + workArea.height - H - MARGIN + WINDOW_PAD,
         };
     }
 
     return {
-        x: workArea.x + workArea.width - W - MARGIN,
+        x: workArea.x + workArea.width - W - MARGIN + WINDOW_PAD,
         y: workArea.y + Math.round((workArea.height - H) / 2),
     };
 }

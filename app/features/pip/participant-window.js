@@ -10,7 +10,7 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
+const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, WINDOW_PAD, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
@@ -292,12 +292,15 @@ function openParticipantWindow() {
             y: posY,
             width: W,
             height: H,
-            minWidth: TILE_W + TILE_PAD * 2 + BORDER * 2,
-            minHeight: H_TILE_H + TILE_PAD * 2 + HEADER_H + BORDER * 2,
+            minWidth: TILE_W + TILE_PAD * 2 + BORDER * 2 + WINDOW_PAD * 2,
+            minHeight: H_TILE_H + TILE_PAD * 2 + HEADER_H + BORDER * 2 + WINDOW_PAD * 2,
             transparent: true,
             frame: false,
             alwaysOnTop: true,
-            hasShadow: true,
+            // No native window shadow: it's rectangular (sharp corners) on the
+            // rounded panel. The window carries WINDOW_PAD of transparent padding
+            // so the panel's own rounded CSS box-shadow renders instead.
+            hasShadow: false,
             resizable: true,
             skipTaskbar: true,
             show: false,
