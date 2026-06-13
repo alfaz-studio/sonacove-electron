@@ -23,6 +23,8 @@ const MARGIN = 20;    // gap between panel and screen edges
 // rounded CSS drop-shadow has room to render instead of being clipped to the
 // window rectangle (which, with the native window shadow, looked sharp-cornered).
 // The panel is inset by this much via `body { padding }`.
+// ⚠ Mirrored as the `body { padding }` literal in participant-panel.css (the
+//   sandboxed panel can't import this module) — update both together.
 const WINDOW_PAD = 18;
 
 // ── Pill ─────────────────────────────────────────────────────────────────────

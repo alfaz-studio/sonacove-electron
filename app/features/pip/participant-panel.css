@@ -299,6 +299,10 @@ body {
 .tile-status-btn {
   width: 30px;
   height: 30px;
+  /* Off-state mic/cam icons stroke with currentColor so they recolour live
+     with the host danger theme; the on-state icons set their own (white)
+     stroke and are unaffected. */
+  color: var(--danger-icon);
   background: var(--chip-bg);
   backdrop-filter: blur(4px);
   border: none;

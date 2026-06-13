@@ -10,7 +10,7 @@
 const { ipcMain, screen } = require('electron');
 
 const {
-    TILE_GAP, TILE_PAD, HEADER_H, BORDER, WINDOW_PAD, IPC,
+    TILE_W, TILE_GAP, TILE_PAD, HEADER_H, BORDER, WINDOW_PAD, IPC,
 } = require('./constants');
 const { computeWindowSize } = require('./sizing');
 
@@ -129,7 +129,7 @@ function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles
     const win2 = WINDOW_PAD * 2;
     // Per-video tiles vary in size; use the panel-reported average main-axis
     // size so the snap step matches the tiles the user is actually dragging past.
-    const tm = tileMain || 250;
+    const tm = tileMain || TILE_W;
 
     if (orientation === 'horizontal') {
         const availableWidth = proposedWidth - pad2 - bdr2 - win2 + TILE_GAP;
