@@ -1,6 +1,15 @@
 /**
  * Pure sizing/positioning functions for the participant PiP panel.
  * No side effects, no module state — all inputs are parameters.
+ *
+ * Tiles are sized per-video in the panel (a portrait video gets a tall/narrow
+ * tile, a landscape video a wide one — see participant-panel.html). The cross
+ * axis is fixed per orientation (tile height in horizontal, tile width in
+ * vertical); only the main axis varies. So the window's main-axis size is the
+ * panel-reported sum of the visible tiles' main-axis extents, and the cross
+ * axis stays constant. windowFromMainExtent() is the source of truth for the
+ * chrome around that extent; computeWindowSize() is the uniform-tile estimate
+ * used before the panel has reported (and for resize snapping).
  */
 
 const {
@@ -9,48 +18,78 @@ const {
 } = require('./constants');
 
 /**
- * Computes the BrowserWindow dimensions for a given participant count and
- * orientation.  Accounts for tile container padding, gaps, and panel border.
+ * Wraps the tiles' main-axis extent (sum of visible tile main sizes + the gaps
+ * between them) in the panel chrome to produce the BrowserWindow dimensions.
+ * The cross axis is fixed by the orientation.
  *
- * @param {number} count - Number of participant tiles.
+ * @param {number} mainExtent - Tiles' main-axis extent in px (tiles + gaps).
  * @param {string} orientation - 'horizontal' or 'vertical'.
  * @returns {{ width: number, height: number }}
  */
-function computeWindowSize(count, orientation) {
-    const n = Math.max(1, count);
-    const tileH = orientation === 'horizontal' ? H_TILE_H : V_TILE_H;
+function windowFromMainExtent(mainExtent, orientation) {
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
     // Transparent shadow padding the window carries around the visible panel.
     const win2 = WINDOW_PAD * 2;
+    const main = Math.max(0, Math.round(mainExtent));
 
     if (orientation === 'horizontal') {
         return {
-            width: n * TILE_W + (n - 1) * TILE_GAP + pad2 + bdr2 + win2,
-            height: tileH + pad2 + HEADER_H + bdr2 + win2,
+            width: main + pad2 + bdr2 + win2,
+            height: H_TILE_H + pad2 + HEADER_H + bdr2 + win2,
         };
     }
 
     return {
         width: TILE_W + pad2 + bdr2 + win2,
-        height: n * tileH + (n - 1) * TILE_GAP + pad2 + HEADER_H + bdr2 + win2,
+        height: main + pad2 + HEADER_H + bdr2 + win2,
     };
 }
 
 /**
- * Computes the (x, y) position for the panel relative to a display work area.
+ * Uniform main-axis extent for `count` tiles that are each `tileMain` px along
+ * the main axis, plus the inter-tile gaps.
+ *
+ * @param {number} count - Number of tiles.
+ * @param {number} tileMain - Per-tile main-axis size in px.
+ * @returns {number}
+ */
+function uniformMainExtent(count, tileMain) {
+    const n = Math.max(1, count);
+
+    return (n * tileMain) + ((n - 1) * TILE_GAP);
+}
+
+/**
+ * Uniform-tile window estimate. Used before the panel has reported its real
+ * content extent (initial open, orientation toggle) and by the resize engine
+ * for snapping. `tileMain` defaults to the legacy fixed tile size so callers
+ * that don't track a per-video average keep the old behaviour.
  *
  * @param {number} count - Number of participant tiles.
+ * @param {string} orientation - 'horizontal' or 'vertical'.
+ * @param {number} [tileMain] - Effective per-tile main-axis size in px.
+ * @returns {{ width: number, height: number }}
+ */
+function computeWindowSize(count, orientation, tileMain) {
+    const tm = tileMain || (orientation === 'horizontal' ? TILE_W : V_TILE_H);
+
+    return windowFromMainExtent(uniformMainExtent(count, tm), orientation);
+}
+
+/**
+ * Computes the (x, y) position for a window of the given size relative to a
+ * display work area. Horizontal anchors bottom-right; vertical anchors
+ * right-centre. W/H include WINDOW_PAD on each side; offsetting the window out
+ * by that much keeps the *visible* panel anchored MARGIN from the screen edge.
+ *
+ * @param {number} W - Window width.
+ * @param {number} H - Window height.
  * @param {string} orientation - 'horizontal' or 'vertical'.
  * @param {Electron.Rectangle} workArea - The display work area.
  * @returns {{ x: number, y: number }}
  */
-function getWindowPosition(count, orientation, workArea) {
-    const { width: W, height: H } = computeWindowSize(count, orientation);
-
-    // W/H include WINDOW_PAD on each side; offsetting the window out by that much
-    // keeps the *visible* panel anchored MARGIN from the screen edge (the padding
-    // overhangs into the margin, where the soft shadow renders).
+function getWindowPosition(W, H, orientation, workArea) {
     if (orientation === 'horizontal') {
         return {
             x: workArea.x + workArea.width - W - MARGIN + WINDOW_PAD,
@@ -65,6 +104,8 @@ function getWindowPosition(count, orientation, workArea) {
 }
 
 module.exports = {
+    windowFromMainExtent,
+    uniformMainExtent,
     computeWindowSize,
     getWindowPosition,
 };

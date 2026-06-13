@@ -171,6 +171,22 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Report the panel's per-video content size so the main process can fit the
+     * window. Tiles vary in size with each video's aspect ratio, so the main
+     * process can't compute the window from a tile count alone.
+     *
+     * @param {Object} size - { orientation, mainExtent, avgTileMain, count }.
+     *   mainExtent is the main-axis extent of the visible tiles (px, incl. gaps);
+     *   avgTileMain is the average per-tile main-axis size.
+     */
+    reportContentSize(size) {
+        if (size && typeof size === 'object') {
+            // Keep in sync with IPC.CONTENT_SIZE in constants.js
+            ipcRenderer.send('pp-content-size', size);
+        }
+    },
+
+    /**
      * Notify the main process that pin state changed.
      * Forwarded to jitsi-meet renderer so it can protect pinned
      * participants from dominant speaker swapping.

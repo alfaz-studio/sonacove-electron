@@ -10,9 +10,9 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, WINDOW_PAD, IPC } = require('./constants');
+const { TILE_W, TILE_PAD, H_TILE_H, V_TILE_H, HEADER_H, BORDER, WINDOW_PAD, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
-const { computeWindowSize, getWindowPosition } = require('./sizing');
+const { computeWindowSize, windowFromMainExtent, uniformMainExtent, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
 const {
@@ -52,6 +52,30 @@ let currentPinnedCount = 0;
 let lastParticipantsData = null;
 let lastThemeData = null;
 
+// Per-video tile sizing. Tiles vary in size with each video's aspect ratio
+// (portrait videos get tall/narrow tiles, landscape wide ones), so the panel
+// reports the main-axis extent of its visible tiles and the window fits them
+// exactly (contentMainExtent). effTileMain is the reported average per-tile
+// main-axis size, used for the uniform estimates the resize engine still needs
+// (snapping, and the pre-size shown before the panel's first report).
+let contentMainExtent = null;
+let effTileMain = null;
+
+// Timestamp (ms) until which a programmatic content-fit owns the bounds. The
+// native-resize listener skips while this is in the future so it doesn't
+// re-snap (with uniform-tile math) the exact per-video size we just applied.
+let fittingUntil = 0;
+
+/**
+ * Effective per-tile main-axis size: the panel-reported average, or the legacy
+ * fixed tile size before the panel has reported.
+ *
+ * @returns {number}
+ */
+function effectiveTileMain() {
+    return effTileMain || (currentOrientation === 'horizontal' ? TILE_W : V_TILE_H);
+}
+
 /**
  * Floor for the visible-tile count. Pinning N participants means the user
  * explicitly wants those N visible — resize must not shrink past that.
@@ -71,7 +95,12 @@ let suppressBaseline = 0;
 // ── Wire up drag and pill subsystems ─────────────────────────────────────────
 
 const getWindow = () => participantWindow;
-const getState = () => ({ count: currentParticipantCount, minTiles: getMinTiles(), orientation: currentOrientation });
+const getState = () => ({
+    count: currentParticipantCount,
+    minTiles: getMinTiles(),
+    orientation: currentOrientation,
+    tileMain: effectiveTileMain(),
+});
 
 // Pill expand and the resize lerp both relax min/max to (1,1)/(0,0); without
 // this restore the next OS-native resize can shrink past the single-tile
@@ -113,8 +142,15 @@ function applyOrientation() {
 
     setVisibleTileCount(visibleCount);
 
+    // An orientation toggle reshapes every tile (the cross and main axes swap),
+    // so the panel-reported per-video extent no longer applies — clear it and
+    // pre-size with the uniform estimate. The panel reports the exact extent
+    // once it re-renders, and the CONTENT_SIZE handler refits.
+    contentMainExtent = null;
+    effTileMain = null;
+
     const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
-    const { x, y } = getWindowPosition(visibleCount, currentOrientation, display.workArea);
+    const { x, y } = getWindowPosition(W, H, currentOrientation, display.workArea);
 
     updateSizeConstraints();
     participantWindow.setMinimumSize(1, 1);
@@ -138,16 +174,29 @@ function updateSizeConstraints() {
         return;
     }
 
-    // Min = floor enforced by pin count (else 1 tile), max = all participants.
-    // Pinning protects the tile slot — the user shouldn't be able to drag the
-    // panel past the point where pinned participants would be hidden.
-    // Horizontal: height locked (min == max), width varies.
-    // Vertical: width locked (min == max), height varies.
-    const minSize = computeWindowSize(getMinTiles(), currentOrientation);
-    const maxSize = computeWindowSize(currentParticipantCount, currentOrientation);
+    // Min = floor enforced by pin count (else 1 tile). The cross axis is locked
+    // (min == max) so resize stays on one axis: height in horizontal, width in
+    // vertical. The main axis is left generous (up to the work area) rather than
+    // clamped to a uniform all-participants estimate — with per-video tiles the
+    // exact content extent can exceed that estimate, and clamping it here would
+    // crop the panel. The pin floor (min) and tile-count ceiling are enforced by
+    // the resize engine's snapping instead.
+    const eff = effectiveTileMain();
+    const minSize = computeWindowSize(getMinTiles(), currentOrientation, eff);
+    const mainWindow = getMainWindow();
+    const workArea = (mainWindow
+        ? screen.getDisplayMatching(mainWindow.getBounds())
+        : screen.getPrimaryDisplay()).workArea;
 
-    participantWindow.setMinimumSize(minSize.width, minSize.height);
-    participantWindow.setMaximumSize(maxSize.width, maxSize.height);
+    if (currentOrientation === 'horizontal') {
+        // Height locked, width free up to the work area.
+        participantWindow.setMinimumSize(minSize.width, minSize.height);
+        participantWindow.setMaximumSize(Math.max(minSize.width, workArea.width), minSize.height);
+    } else {
+        // Width locked, height free up to the work area.
+        participantWindow.setMinimumSize(minSize.width, minSize.height);
+        participantWindow.setMaximumSize(minSize.width, Math.max(minSize.height, workArea.height));
+    }
 }
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
@@ -232,13 +281,13 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
         return;
     }
 
-    const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
+    const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation, effectiveTileMain());
 
     const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x, y } = getWindowPosition(visibleCount, currentOrientation, display.workArea);
+    const { x, y } = getWindowPosition(W, H, currentOrientation, display.workArea);
 
     updateSizeConstraints();
     participantWindow.setMinimumSize(1, 1);
@@ -246,6 +295,71 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
     updateSizeConstraints();
 
     participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
+});
+
+/**
+ * Fits the window to the panel's reported per-video content extent (the exact
+ * main-axis size of the visible tiles) and re-anchors it. Falls back to the
+ * uniform estimate before the panel has reported. No-ops while a gesture or
+ * pill transition owns the bounds — those paths refit when they finish.
+ */
+function fitWindowToContent() {
+    if (!participantWindow || participantWindow.isDestroyed()
+            || isDragging() || isResizing() || isPillMode()) {
+        return;
+    }
+
+    const visibleCount = Math.max(
+        getMinTiles(),
+        Math.min(getVisibleTileCount(), currentParticipantCount)
+    );
+    const mainExtent = contentMainExtent !== null
+        ? contentMainExtent
+        : uniformMainExtent(visibleCount, effectiveTileMain());
+    const { width: W, height: H } = windowFromMainExtent(mainExtent, currentOrientation);
+
+    const mainWindow = getMainWindow();
+    const display = mainWindow
+        ? screen.getDisplayMatching(mainWindow.getBounds())
+        : screen.getPrimaryDisplay();
+    const { x, y } = getWindowPosition(W, H, currentOrientation, display.workArea);
+
+    // Relax constraints so the exact extent isn't clamped by a stale max, set
+    // bounds, then reapply the locked-cross-axis constraints. Mark the window as
+    // self-fitting so the native-resize listener doesn't re-snap these bounds.
+    fittingUntil = Date.now() + 150;
+    participantWindow.setMinimumSize(1, 1);
+    participantWindow.setMaximumSize(0, 0);
+    participantWindow.setBounds({ x, y, width: W, height: H });
+    updateSizeConstraints();
+}
+
+// The panel reports the main-axis extent of its visible tiles whenever they
+// change (new frame aspect ratio, participant add/remove, layout switch). Fit
+// the window to it so per-video tiles are never cropped or left with dead space.
+ipcMain.on(IPC.CONTENT_SIZE, (_event, data) => {
+    if (!data || typeof data.mainExtent !== 'number' || !isFinite(data.mainExtent)) {
+        return;
+    }
+
+    // Ignore reports for a stale orientation (arriving mid-toggle).
+    if (data.orientation && data.orientation !== currentOrientation) {
+        return;
+    }
+
+    if (typeof data.avgTileMain === 'number' && data.avgTileMain > 0) {
+        effTileMain = data.avgTileMain;
+    }
+
+    const next = Math.round(data.mainExtent);
+
+    // Skip negligible deltas to avoid setBounds churn from sub-pixel jitter.
+    if (contentMainExtent !== null && Math.abs(next - contentMainExtent) < 2) {
+        return;
+    }
+
+    contentMainExtent = next;
+    fitWindowToContent();
 });
 
 // ── Window lifecycle ─────────────────────────────────────────────────────────
@@ -260,6 +374,8 @@ function openParticipantWindow() {
 
     currentParticipantCount = 1;
     currentPinnedCount = 0;
+    contentMainExtent = null;
+    effTileMain = null;
     setVisibleTileCount(1);
 
     const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
@@ -284,7 +400,7 @@ function openParticipantWindow() {
         : screen.getPrimaryDisplay();
 
     const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const { x: posX, y: posY } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
+    const { x: posX, y: posY } = getWindowPosition(W, H, currentOrientation, display.workArea);
 
     try {
         participantWindow = new BrowserWindow({
@@ -335,7 +451,7 @@ function openParticipantWindow() {
     });
 
     attachNativeResizeListener(
-        participantWindow, getState, () => isPillMode() || isDragging()
+        participantWindow, getState, () => isPillMode() || isDragging() || Date.now() < fittingUntil
     );
 
     participantWindow.webContents.on('did-finish-load', () => {

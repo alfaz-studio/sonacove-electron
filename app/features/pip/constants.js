@@ -44,6 +44,7 @@ const IPC = {
     RESIZE: 'pip-resize',
 
     // Panel renderer → main (sent from participant-panel.html via preload)
+    CONTENT_SIZE: 'pp-content-size',
     PIN_STATE_CHANGED: 'pp-pin-state-changed',
     START_DRAG: 'pp-start-window-drag',
     STOP_DRAG: 'pp-stop-window-drag',

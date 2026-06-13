@@ -110,7 +110,7 @@ function expandFromPill(count, orientation) {
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x: posX, y: posY } = getWindowPosition(count, orientation, display.workArea);
+    const { x: posX, y: posY } = getWindowPosition(W, H, orientation, display.workArea);
 
     // Release the pill size lock (min back to 1×1, max back to "no limit"),
     // set bounds, then restore the participant-window panel constraints.

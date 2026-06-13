@@ -10,8 +10,7 @@
 const { ipcMain, screen } = require('electron');
 
 const {
-    TILE_W, H_TILE_H, V_TILE_H, TILE_GAP, TILE_PAD,
-    HEADER_H, BORDER, WINDOW_PAD, IPC,
+    TILE_GAP, TILE_PAD, HEADER_H, BORDER, WINDOW_PAD, IPC,
 } = require('./constants');
 const { computeWindowSize } = require('./sizing');
 
@@ -90,9 +89,9 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
             return;
         }
 
-        const { count, minTiles, orientation } = getState();
+        const { count, minTiles, orientation, tileMain } = getState();
         const bounds = win.getBounds();
-        const { n } = snapToTileBoundary(bounds.width, bounds.height, orientation, count, minTiles);
+        const { n } = snapToTileBoundary(bounds.width, bounds.height, orientation, count, minTiles, tileMain);
 
         if (n !== _visibleTileCount) {
             _visibleTileCount = n;
@@ -107,9 +106,9 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
             return;
         }
 
-        const { orientation } = getState();
+        const { orientation, tileMain } = getState();
         const bounds = win.getBounds();
-        const { width, height } = computeWindowSize(_visibleTileCount, orientation);
+        const { width, height } = computeWindowSize(_visibleTileCount, orientation, tileMain);
 
         if (bounds.width !== width || bounds.height !== height) {
             win.setBounds({ x: bounds.x, y: bounds.y, width, height });
@@ -122,26 +121,29 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
  * the snapped dimensions. `minTiles` defaults to 1; pinning N participants
  * raises it to N so the panel can't be shrunk past the pinned slots.
  */
-function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1) {
+function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1, tileMain) {
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
     let n;
 
     const win2 = WINDOW_PAD * 2;
+    // Per-video tiles vary in size; use the panel-reported average main-axis
+    // size so the snap step matches the tiles the user is actually dragging past.
+    const tm = tileMain || 250;
 
     if (orientation === 'horizontal') {
         const availableWidth = proposedWidth - pad2 - bdr2 - win2 + TILE_GAP;
 
-        n = Math.round(availableWidth / (TILE_W + TILE_GAP));
+        n = Math.round(availableWidth / (tm + TILE_GAP));
     } else {
         const availableHeight = proposedHeight - pad2 - bdr2 - HEADER_H - win2 + TILE_GAP;
 
-        n = Math.round(availableHeight / (V_TILE_H + TILE_GAP));
+        n = Math.round(availableHeight / (tm + TILE_GAP));
     }
 
     n = Math.max(minTiles, Math.min(n, maxTiles));
 
-    const { width, height } = computeWindowSize(n, orientation);
+    const { width, height } = computeWindowSize(n, orientation, tileMain);
 
     return { n, width, height };
 }
@@ -187,7 +189,7 @@ function startEdgeResize(edge) {
         }
 
         const pos = screen.getCursorScreenPoint();
-        const { count, minTiles, orientation } = _getState();
+        const { count, minTiles, orientation, tileMain } = _getState();
 
         let proposedWidth = _startWindowSize;
         let proposedHeight = _startWindowSize;
@@ -210,13 +212,13 @@ function startEdgeResize(edge) {
 
         // Fill in the locked axis so snapToTileBoundary gets valid values.
         if (orientation === 'horizontal' && proposedHeight === 0) {
-            proposedHeight = computeWindowSize(1, orientation).height;
+            proposedHeight = computeWindowSize(1, orientation, tileMain).height;
         } else if (orientation === 'vertical' && proposedWidth === 0) {
-            proposedWidth = computeWindowSize(1, orientation).width;
+            proposedWidth = computeWindowSize(1, orientation, tileMain).width;
         }
 
         const { n, width, height } = snapToTileBoundary(
-            proposedWidth, proposedHeight, orientation, count, minTiles
+            proposedWidth, proposedHeight, orientation, count, minTiles, tileMain
         );
 
         // Compute target position — anchor to opposite edge.
