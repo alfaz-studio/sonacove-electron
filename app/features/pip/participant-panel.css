@@ -40,11 +40,10 @@ body {
   --warn: #f8ae1a;
 
   /* Derived translucent variants — follow the base colours above, so a single
-     theme push recolours the glows/blooms too. */
+     theme push recolours the glows too. */
   --accent-glow: color-mix(in srgb, var(--accent) 40%, transparent);
-  --accent-bloom: color-mix(in srgb, var(--accent) 42%, transparent);
-  --danger-soft: color-mix(in srgb, var(--danger) 15%, transparent);
   --warn-glow: color-mix(in srgb, var(--warn) 30%, transparent);
+  --warn-soft: color-mix(in srgb, var(--warn) 20%, transparent);
 
   /* Surfaces — fixed dark (the panel floats over a shared screen). */
   --panel-bg: #1b1c1f;
@@ -350,7 +349,7 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  background: var(--warn-soft);
   color: var(--warn);
   display: flex;
   align-items: center;
@@ -497,7 +496,7 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 8px 22px var(--accent-bloom), 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 22px var(--accent-glow), 0 2px 6px rgba(0, 0, 0, 0.3);
   opacity: 0;
   transform: scale(0.5);
   transition: opacity 0.2s ease, transform 0.2s ease;
