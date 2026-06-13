@@ -91,14 +91,18 @@
       // Each tile follows its video's aspect ratio so a portrait phone video
       // shows portrait instead of being cropped into a landscape strip. The
       // cross axis is fixed per orientation (tile height in horizontal, tile
-      // width in vertical); the main axis follows the AR, clamped. These mirror
-      // the constants in constants.js so the window (sized by main) fits exactly.
+      // width in vertical); the main axis follows the AR, clamped. The MIN is a
+      // normal (no-video) tile — derived from DEFAULT_AR below — so a tile never
+      // shrinks below the default tile size; portrait/wide videos only ever grow
+      // the main axis past it. (Tiles are sized from the AR alone, never the
+      // window size, and never flex-shrink, so a small screen can't shrink them.)
       var TILE_GAP = 8;          // matches .tiles-container gap + main TILE_GAP
       var H_TILE_H = 130;        // horizontal: fixed tile height (cross axis)
       var V_TILE_W = 250;        // vertical: fixed tile width (cross axis)
-      var H_MIN_W = 96, H_MAX_W = 320;   // horizontal: tile width clamp
-      var V_MIN_H = 120, V_MAX_H = 360;  // vertical: tile height clamp
-      var DEFAULT_AR = 16 / 9;   // no-video / not-yet-known tiles
+      var DEFAULT_AR = 16 / 9;   // no-video / not-yet-known tiles = a "normal" tile
+      // Floors = a normal tile's main-axis size. Caps allow growth past it.
+      var H_MIN_W = Math.round(H_TILE_H * DEFAULT_AR), H_MAX_W = 320;  // horizontal: tile width
+      var V_MIN_H = Math.round(V_TILE_W / DEFAULT_AR), V_MAX_H = 360;  // vertical: tile height
 
       // { participantId: aspectRatio } — last AR seen in a frame, drives tile shape.
       var arById = {};

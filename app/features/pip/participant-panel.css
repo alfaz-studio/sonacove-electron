@@ -114,12 +114,22 @@ body {
 .tile {
   /* Width/height are set inline per video aspect ratio (see participant-panel.html
      tileDimsFor). The cross axis is fixed per orientation, the main axis follows
-     the AR — so portrait videos get tall/narrow tiles, landscape wide ones. */
+     the AR — so portrait videos get tall/narrow tiles, landscape wide ones.
+     min-width/min-height are a hard-floor backstop mirroring the JS clamps: a
+     tile never renders below a normal (no-video) tile — 231x130 horizontal,
+     250x141 vertical — regardless of aspect ratio or screen size. */
   background: var(--tile-bg);
   border-radius: 12px;
   overflow: hidden;
   position: relative;
   flex: 0 0 auto;
+  min-width: 231px;
+  min-height: 130px;
+}
+
+.tiles-container.vertical .tile {
+  /* Vertical tiles are never shorter than a normal tile (portrait videos grow taller). */
+  min-height: 141px;
 }
 
 /* Entry animation lives on a one-shot class (removed on animationend) so that
