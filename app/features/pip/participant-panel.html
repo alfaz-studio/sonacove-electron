@@ -497,6 +497,9 @@
       window.panelAPI.onOrientationChanged(function (orientation) {
         currentOrientation = orientation;
         applyOrientation();
+        // Fade the new layout back in (no-op when not mid-switch, e.g. the
+        // initial orientation sync on load).
+        panel.classList.remove('switching');
       });
 
       // Host theme → live recolour. Only the base accent/danger/warn colours
@@ -649,7 +652,12 @@
       });
 
       document.getElementById('toggleBtn').addEventListener('click', function () {
-        window.panelAPI.toggleOrientation();
+        // Cross-fade: hide the panel, let the window reshape for the new layout
+        // off-screen, then onOrientationChanged fades it back in.
+        panel.classList.add('switching');
+        setTimeout(function () {
+          window.panelAPI.toggleOrientation();
+        }, 160);
       });
 
       document.getElementById('chatBtn').addEventListener('click', function () {
