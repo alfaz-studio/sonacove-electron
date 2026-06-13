@@ -21,7 +21,11 @@ const MARGIN = 20;    // gap between panel and screen edges
 
 // ── Pill ─────────────────────────────────────────────────────────────────────
 
-const PILL_SIZE = 60;
+// Larger than the visible 60px pill (which is centred in it via .pill-overlay)
+// so the pill's drop shadow and unread badge have transparent room and don't
+// clip against the window edge. The extra padding also acts as the screen-edge
+// inset (see pill.js — no MARGIN is subtracted for the pill).
+const PILL_SIZE = 110;
 
 // ── IPC channels ─────────────────────────────────────────────────────────────
 

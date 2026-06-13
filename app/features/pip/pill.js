@@ -6,7 +6,7 @@
  */
 
 const { ipcMain, screen } = require('electron');
-const { PILL_SIZE, MARGIN, IPC } = require('./constants');
+const { PILL_SIZE, IPC } = require('./constants');
 const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setVisibleTileCount } = require('./resize');
@@ -57,8 +57,10 @@ function shrinkToPill() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
     const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
-    const pillX = waX + waW - PILL_SIZE - MARGIN;
-    const pillY = waY + waH - PILL_SIZE - MARGIN;
+    // No screen-edge margin here: PILL_SIZE includes transparent padding around
+    // the visible pill, which doubles as the visual inset from the screen edge.
+    const pillX = waX + waW - PILL_SIZE;
+    const pillY = waY + waH - PILL_SIZE;
 
     const mw = getMainWindow();
 
@@ -81,6 +83,12 @@ function shrinkToPill() {
             width: PILL_SIZE,
             height: PILL_SIZE,
         });
+
+        // The pill window is larger than the visible pill (transparent padding),
+        // so the native rectangular window shadow would float detached around
+        // that padding with sharp corners. Drop it — the pill's own rounded CSS
+        // box-shadow provides the shadow.
+        win.setHasShadow(false);
     }, 220);
 }
 
@@ -118,6 +126,7 @@ function expandFromPill(count, orientation) {
     win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
     win.setBounds({ x: posX, y: posY, width: W, height: H });
+    win.setHasShadow(true); // restore the panel's native window shadow
 
     if (_restoreConstraints) {
         _restoreConstraints();
