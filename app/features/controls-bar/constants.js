@@ -36,11 +36,11 @@ const IPC = {
     // cached + replayed to the bar by the main process (controls-bar-window.js).
     CONFERENCE_TIMESTAMP: 'cb-conference-timestamp',
 
-    // renderer → main (sent from controls-bar.html via the preload bridge)
+    // renderer → main (sent from controls-bar.html via the preload bridge).
+    // Note: cb-stop-share (Stop button) is handled in app/features/ipc.js.
     HOVER: 'cb-hover', // payload: boolean — expand (true) / collapse (false)
     START_DRAG: 'cb-start-window-drag',
-    STOP_DRAG: 'cb-stop-window-drag',
-    STOP_SHARE: 'cb-stop-share' // Phase 2 — currently a no-op listener
+    STOP_DRAG: 'cb-stop-window-drag'
 };
 
 module.exports = {

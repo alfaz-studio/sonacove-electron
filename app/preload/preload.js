@@ -48,6 +48,7 @@ const whitelistedIpcChannels = [
     'pip-end-meeting',
     'cb-show',
     'cb-hide',
+    'cb-stop-screenshare',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',

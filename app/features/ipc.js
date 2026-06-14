@@ -249,6 +249,17 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         closeControlsBarWindow();
     });
 
+    // User clicked Stop on the controls bar — bring the meeting back and tell the
+    // renderer to stop screensharing (the track ending then closes the bar via
+    // cb-hide). Use the direct mainWindow ref (not getMainWindow, which can pick
+    // the bar window when the main window is minimized).
+    register('cb-stop-share', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-stop-screenshare');
+        }
+    });
+
     // User toggled pin state in the PiP panel — forward to main renderer
     // so jitsi-meet can protect pinned participants from dominant speaker swapping.
     register(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {

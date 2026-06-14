@@ -197,9 +197,9 @@ function wireIpcOnce() {
     ipcMain.on(IPC.HOVER, (_e, expanded) => setExpanded(Boolean(expanded)));
     ipcMain.on(IPC.START_DRAG, startDrag);
     ipcMain.on(IPC.STOP_DRAG, stopDrag);
-    ipcMain.on(IPC.STOP_SHARE, () => {
-        // Phase 2: forward to the renderer to actually stop the screenshare.
-    });
+
+    // cb-stop-share (Stop button) is handled in app/features/ipc.js, which has
+    // the direct main-window reference needed to forward the stop to the renderer.
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
