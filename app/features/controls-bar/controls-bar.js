@@ -16,6 +16,7 @@
     const videoBtn = document.getElementById('cbVideo');
     const participantsBtn = document.getElementById('cbParticipants');
     const chatBtn = document.getElementById('cbChat');
+    const annotateBtn = document.getElementById('cbAnnotate');
     const partBadge = document.getElementById('cbPartBadge');
     const chatBadge = document.getElementById('cbChatBadge');
     const timerVal = document.querySelector('.cb-timer-val');
@@ -103,6 +104,28 @@
     api.onCounts?.(applyCounts);
     participantsBtn?.addEventListener('click', () => api.openParticipants?.());
     chatBtn?.addEventListener('click', () => api.openChat?.());
+
+    // ── Annotate ─────────────────────────────────────────────────────────────
+    // Highlights when annotation is on (which the desktop picker's "Open
+    // annotation tools" toggle drives on share start); clicking toggles it.
+
+    /** Reflect the live annotation on/off state on the Annotate button. */
+    function applyAnnotate(state) {
+        const on = Boolean(state && state.annotating);
+
+        annotateBtn?.classList.toggle('cb-btn--active', on);
+
+        // Tooltip flips to "Stop annotating" while on (read on next hover by
+        // showTip); refresh it live if the button is currently hovered, since
+        // the toggle happens with the cursor on it.
+        annotateBtn?.setAttribute('data-tip', on ? 'Stop annotating' : 'Annotate');
+        if (annotateBtn?.matches(':hover')) {
+            showTip(annotateBtn);
+        }
+    }
+
+    api.onAnnotate?.(applyAnnotate);
+    annotateBtn?.addEventListener('click', () => api.toggleAnnotate?.());
 
     // ── Recording label ──────────────────────────────────────────────────────
     const recordLabel = document.getElementById('cbRecordLabel');

@@ -22,6 +22,7 @@ const {
     setAvState,
     setCounts,
     setRecording,
+    setAnnotateState,
     showToast
 } = require('./controls-bar/controls-bar-window');
 const {
@@ -246,6 +247,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             setAvState(data);
             setCounts(data);
             setRecording(data);
+            setAnnotateState(data);
         } catch (err) {
             console.error('❌ ControlsBar: Failed to open window:', err);
         }
@@ -287,9 +289,22 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
+    // Annotate button — forward to the renderer to start/stop the annotation
+    // overlay (runs over the shared screen, so the meeting window is not restored).
+    register('cb-toggle-annotate', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-annotate');
+        }
+    });
+
     // Renderer reports the live mic/cam muted state — cache + forward to the bar.
     register('cb-av-state', (_event, data) => {
         setAvState(data);
+    });
+
+    // Renderer reports annotation on/off — cache + forward to the bar.
+    register('cb-annotate-state', (_event, data) => {
+        setAnnotateState(data);
     });
 
     // Participants / Chat buttons — restore the meeting + open the pane there.

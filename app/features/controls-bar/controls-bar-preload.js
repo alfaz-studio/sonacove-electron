@@ -50,6 +50,12 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     // Toggle local recording.
     toggleRecord: () => ipcRenderer.send('cb-toggle-record'),
 
+    // Toggle the annotation overlay.
+    toggleAnnotate: () => ipcRenderer.send('cb-toggle-annotate'),
+
+    // Annotation on/off ({ annotating }) → Annotate button highlight.
+    onAnnotate: onChannel('cb-annotate-state'),
+
     // Local recording on/off ({ recording }) → Record menu label.
     onRecording: onChannel('cb-recording'),
 

@@ -56,6 +56,8 @@ const whitelistedIpcChannels = [
     'cb-open-chat',
     'cb-counts',
     'cb-toggle-record',
+    'cb-toggle-annotate',
+    'cb-annotate-state',
     'cb-recording',
     'cb-toast',
     'cb-open-recording',

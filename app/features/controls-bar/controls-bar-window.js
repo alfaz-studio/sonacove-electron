@@ -98,6 +98,20 @@ function setRecording(data) {
     sendToBar('cb-recording', { recording });
 }
 
+// Latest annotation on/off state (cached + replayed on load).
+let annotating = false;
+
+/**
+ * Caches the annotation on/off state and forwards it to the bar.
+ *
+ * @param {{ annotating?: boolean }} [data] - The annotation flag.
+ * @returns {void}
+ */
+function setAnnotateState(data) {
+    annotating = Boolean(data?.annotating);
+    sendToBar('cb-annotate-state', { annotating });
+}
+
 /**
  * Forwards a transient toast to the bar (not cached — it's a one-off event).
  *
@@ -350,6 +364,7 @@ function openControlsBarWindow(mainWindowGetter) {
         sendToBar('cb-av-state', avMuted);
         sendToBar('cb-counts', counts);
         sendToBar('cb-recording', { recording });
+        sendToBar('cb-annotate-state', { annotating });
     });
 
     attachMainWindowWatch();
@@ -374,5 +389,6 @@ module.exports = {
     setAvState,
     setCounts,
     setRecording,
+    setAnnotateState,
     showToast
 };
