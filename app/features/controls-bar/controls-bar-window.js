@@ -8,6 +8,8 @@
 
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
+const { t } = require('../i18n');
+
 const {
     WINDOW_W,
     COLLAPSED_H,
@@ -33,6 +35,31 @@ function sendToBar(channel, payload) {
     if (controlsBarWindow && !controlsBarWindow.isDestroyed()) {
         controlsBarWindow.webContents.send(channel, payload);
     }
+}
+
+/**
+ * Builds the bar's localized UI strings. The renderer (a separate window with
+ * no i18n runtime of its own) applies these on load — same approach the
+ * titlebar uses for its sandboxed renderer.
+ *
+ * @returns {Object} Map of string keys to translated text.
+ */
+function barStrings() {
+    return {
+        windowTitle: t('controlsBar.windowTitle'),
+        live: t('controlsBar.live'),
+        stop: t('controlsBar.stop'),
+        audio: t('controlsBar.audio'),
+        video: t('controlsBar.video'),
+        participants: t('controlsBar.participants'),
+        chat: t('controlsBar.chat'),
+        annotate: t('controlsBar.annotate'),
+        stopAnnotating: t('controlsBar.stopAnnotating'),
+        more: t('controlsBar.more'),
+        record: t('controlsBar.record'),
+        stopRecording: t('controlsBar.stopRecording'),
+        hint: t('controlsBar.hint')
+    };
 }
 
 /**
@@ -358,6 +385,10 @@ function openControlsBarWindow(mainWindowGetter) {
 
     controlsBarWindow.webContents.on('did-finish-load', () => {
         reveal(); // fallback in case ready-to-show didn't fire
+
+        // Localized UI strings first, so the Record / Annotate state replays
+        // below land their labels in the right language (IPC preserves order).
+        sendToBar('cb-strings', barStrings());
 
         // Replay cached state so a freshly-loaded bar reflects reality.
         sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);

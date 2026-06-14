@@ -19,7 +19,51 @@
     const annotateBtn = document.getElementById('cbAnnotate');
     const partBadge = document.getElementById('cbPartBadge');
     const chatBadge = document.getElementById('cbChatBadge');
+    const liveText = document.getElementById('cbLiveText');
+    const stopText = document.getElementById('cbStopText');
     const timerVal = document.querySelector('.cb-timer-val');
+
+    // ── Localized strings ─────────────────────────────────────────────────────
+    // This window has no i18n runtime of its own; main pushes the translated
+    // strings (cb-strings) on load. The HTML ships English as the initial paint;
+    // we overwrite it here and keep the map for the stateful Record / Annotate
+    // labels. cb-strings is sent before the state replays, so those land
+    // localized too (see applyRecording / applyAnnotate below).
+    let strings = {};
+
+    /** Set a button's tooltip text (read by showTip on hover). */
+    function setTip(btn, text) {
+        if (btn && text) {
+            btn.setAttribute('data-tip', text);
+        }
+    }
+
+    /** Apply the localized UI strings pushed from main. */
+    function applyStrings(s) {
+        if (!s) {
+            return;
+        }
+        strings = s;
+        if (s.windowTitle) {
+            document.title = s.windowTitle;
+        }
+        if (liveText && s.live) {
+            liveText.textContent = s.live;
+        }
+        if (stopText && s.stop) {
+            stopText.textContent = s.stop;
+        }
+        if (hint && s.hint) {
+            hint.textContent = s.hint;
+        }
+        setTip(audioBtn, s.audio);
+        setTip(videoBtn, s.video);
+        setTip(participantsBtn, s.participants);
+        setTip(chatBtn, s.chat);
+        setTip(moreBtn, s.more);
+    }
+
+    api.onStrings?.(applyStrings);
 
     // ── Meeting timer ───────────────────────────────────────────────────────
     // Main pushes the conference start timestamp (epoch ms); we tick locally,
@@ -118,7 +162,11 @@
         // Tooltip flips to "Stop annotating" while on (read on next hover by
         // showTip); refresh it live if the button is currently hovered, since
         // the toggle happens with the cursor on it.
-        annotateBtn?.setAttribute('data-tip', on ? 'Stop annotating' : 'Annotate');
+        const tip = on ? strings.stopAnnotating : strings.annotate;
+
+        if (tip) {
+            annotateBtn?.setAttribute('data-tip', tip);
+        }
         if (annotateBtn?.matches(':hover')) {
             showTip(annotateBtn);
         }
@@ -132,8 +180,10 @@
 
     /** Reflect local recording state on the Record menu label. */
     function applyRecording(state) {
-        if (recordLabel) {
-            recordLabel.textContent = state && state.recording ? 'Stop recording' : 'Record';
+        const label = state && state.recording ? strings.stopRecording : strings.record;
+
+        if (recordLabel && label) {
+            recordLabel.textContent = label;
         }
     }
 

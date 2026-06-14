@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     // shared screen / meeting). Reuses the shared overlay handler in ipc.js.
     setIgnoreMouse: ignore => ipcRenderer.send('set-ignore-mouse-events', Boolean(ignore)),
 
+    // Localized UI strings (tooltips, labels) pushed from main on load.
+    onStrings: onChannel('cb-strings'),
+
     // Conference start timestamp (epoch ms) for the meeting timer.
     onConferenceTimestamp: onChannel('cb-conference-timestamp'),
 
