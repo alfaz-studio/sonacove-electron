@@ -1,0 +1,371 @@
+/* Screenshare controls bar — Sonacove dark + orange language.
+   Ported from the design export (desktop-overlay/overlay.jsx — MeetingControls). */
+
+/* DM Sans (variable, OFL-1.1) — bundled locally so it renders offline, the same
+   font jitsi-meet uses. One woff2 per subset covers every weight. */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url(fonts/dm-sans-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url(fonts/dm-sans-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --action: #f05023;
+  --action-glyph: #f86f4d;
+  --danger: #e0483b;
+  --danger-hover: #f15a4d;
+  --share: #22a55a;
+  --share-2: #1d8f4d;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  /* Matches jitsi-meet's --font-family-sans (css/_theme.css). */
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button { font-family: inherit; }
+
+/* Column: controls on top, strip below, caret at the bottom. Collapsed, the
+   whole column is translated up by the controls' height so the controls sit
+   above the window/screen top (clipped) and the strip is at the top. On hover it
+   slides to 0 — the controls emerge from the top edge and the strip rides down.
+   --cb-slide ≈ the controls bar's height (incl. its 8px bottom gap); tune to
+   taste. */
+:root { --cb-slide: 84px; }
+.cb-root {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(calc(-1 * var(--cb-slide)));
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.cb-root.is-expanded { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .cb-root { transition: none; }
+}
+
+/* ── Controls bar (hover-revealed) ──────────────────────────────────────── */
+.cb-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgba(34, 35, 38, 0.97);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Shadow only while expanded — when collapsed the bar is clipped above the
+     screen top and its shadow would otherwise bleed down as a faint band. */
+  box-shadow: none;
+  transition: box-shadow 0.2s ease;
+}
+.cb-root.is-expanded .cb-controls {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Buttons copied from the in-meeting toolbox (.toolbox-icon): 13px radius,
+   overlay-light hover, scale(0.96) press, toggled = orange-tint + orange glyph.
+   Labels and the dark bar background are kept. */
+.cb-item {
+  position: relative;
+  /* min-width keeps short items uniform; long labels (e.g. "Show meeting")
+     grow the button instead of overflowing it. */
+  min-width: 66px;
+  padding: 8px 10px 7px;
+  border: 0;
+  border-radius: 13px;
+  cursor: pointer;
+  background: transparent;
+  color: #e9eaec;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+.cb-item:hover { background-color: rgba(255, 255, 255, 0.08); }
+.cb-item:active {
+  background-color: rgba(255, 255, 255, 0.12);
+  transform: scale(0.96);
+}
+.cb-item--danger { color: var(--danger-hover); }
+/* Toggled/active feature — orange-tint fill + orange glyph (toolbox .toggled). */
+.cb-item--active {
+  color: var(--action-glyph);
+  background-color: rgba(240, 80, 35, 0.18);
+}
+
+.cb-glyph { position: relative; display: flex; }
+/* All control-item glyphs render at the toolbox's 22px, regardless of each
+   SVG's own width/height. (SVGs are already stroke-width 2, like the toolbox.) */
+.cb-glyph > svg {
+  width: 22px;
+  height: 22px;
+}
+
+.cb-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #c9cacd;
+  white-space: nowrap;
+}
+.cb-item--danger .cb-label { color: var(--danger-hover); }
+.cb-chev { color: #8a8c92; }
+
+.cb-badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--action);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Share — green accent chip */
+.cb-accent {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--share);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cb-sep {
+  width: 1px;
+  height: 38px;
+  margin: 0 4px;
+  align-self: center;
+  background: rgba(255, 255, 255, 0.1);
+  flex: none;
+}
+
+/* More — hover dropdown */
+.cb-more { position: relative; display: flex; }
+.cb-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; /* opens to the bottom-right: extends right + down from More */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(34, 35, 38, 0.98);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Hidden via opacity/transform (not display) so it animates open. */
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  transform-origin: top left;
+  pointer-events: none;
+  transition: opacity 0.17s ease, transform 0.17s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.cb-more.is-open .cb-menu {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.cb-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  background: transparent;
+  color: #e9eaec;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s, transform 0.15s;
+}
+.cb-menu-item:hover { background: rgba(255, 255, 255, 0.08); }
+.cb-menu-item:active { transform: scale(0.95); }
+.cb-menu-icon { display: flex; color: #c9cacd; }
+.cb-menu-icon--rec { color: var(--danger); }
+
+/* ── Sharing strip (always visible, drag handle) ────────────────────────── */
+.cb-strip {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 5px 6px 5px 7px;
+  border-radius: 9999px;
+  cursor: grab;
+  background: linear-gradient(180deg, var(--share), var(--share-2));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.cb-strip:active { cursor: grabbing; }
+
+.cb-mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cb-mark-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 11px;
+  border: 2px solid #fff;
+  animation: liveRing 2.2s ease-out infinite;
+}
+.cb-mark-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(160deg, #fbfdfb, #e8efe8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  animation: breathe 2.2s ease-in-out infinite;
+}
+
+.cb-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+  margin-right: 2px;
+}
+.cb-wordmark {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.cb-sharing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+.cb-sharing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #eafff3;
+  animation: liveDot 1.4s infinite;
+}
+.cb-sharing-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cb-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+}
+.cb-timer-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.cb-stop {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+  transition: background 0.12s, transform 0.15s;
+}
+.cb-stop:hover { background: var(--danger-hover); }
+.cb-stop:active { transform: scale(0.95); }
+.cb-stop-square {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: #fff;
+  flex: none;
+}
+
+/* ── Hover caret ────────────────────────────────────────────────────────── */
+.cb-caret {
+  display: flex;
+  margin-top: 2px;
+  animation: caretNudge 1.6s ease-in-out infinite;
+}
+.cb-root.is-expanded .cb-caret { display: none; }
+
+/* ── Keyframes (from the design index.html) ─────────────────────────────── */
+@keyframes liveDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes liveRing {
+  0% { transform: scale(0.7); opacity: 0.55; }
+  70% { transform: scale(1.7); opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes caretNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-mark-ring, .cb-mark-chip, .cb-sharing-dot, .cb-caret {
+    animation: none !important;
+  }
+}

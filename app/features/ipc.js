@@ -15,6 +15,7 @@ const {
 } = require('./pip/participant-window');
 const { IPC } = require('./pip/constants');
 const { getParticipantWindow } = require('./pip/helpers');
+const { openControlsBarWindow, closeControlsBarWindow } = require('./controls-bar/controls-bar-window');
 const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
     IPC_SET_MUTED_CHANNEL: SYSTEM_VOLUME_SET_MUTED,
@@ -198,6 +199,16 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         } catch (err) {
             console.error('❌ ParticipantPiP: Failed to open window:', err);
         }
+
+        // Screenshare controls bar (Phase 1: static visuals).
+        // NOTE: this event currently fires only when there are remote
+        // participants. Broadening it to any local screenshare (incl. solo) is
+        // a Phase 2 trigger task.
+        try {
+            openControlsBarWindow(getMainWindow);
+        } catch (err) {
+            console.error('❌ ControlsBar: Failed to open window:', err);
+        }
     });
 
     // Renderer sends a per-participant JPEG frame — forward to the overlay.
@@ -221,6 +232,8 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         if (!isPillMode()) {
             closeParticipantWindow();
         }
+
+        closeControlsBarWindow();
     });
 
     // User toggled pin state in the PiP panel — forward to main renderer
