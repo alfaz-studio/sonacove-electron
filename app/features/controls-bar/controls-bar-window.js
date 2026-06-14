@@ -23,6 +23,73 @@ let controlsBarWindow = null;
 // display. Falls back to the primary display (e.g. the standalone preview).
 let getMainWindow = () => null;
 
+// Latest conference start timestamp (epoch ms) pushed from the jitsi renderer.
+// Cached at module scope so it survives the bar window opening *after* the
+// value was already set — replayed to the renderer on every load (no race).
+let conferenceTimestamp = null;
+
+/** Sends a message to the controls-bar renderer if the window is alive. */
+function sendToBar(channel, payload) {
+    if (controlsBarWindow && !controlsBarWindow.isDestroyed()) {
+        controlsBarWindow.webContents.send(channel, payload);
+    }
+}
+
+/**
+ * Caches the conference start timestamp and forwards it to the bar. Called from
+ * the main IPC layer (ipc.js) whenever the renderer reports it.
+ *
+ * @param {number|null} ts - Conference start time in epoch ms.
+ * @returns {void}
+ */
+function setConferenceTimestamp(ts) {
+    // Coerce: the renderer reports the conference timestamp as a numeric STRING,
+    // so a strict typeof-number check would drop it. Number() handles both.
+    const n = Number(ts);
+
+    conferenceTimestamp = Number.isFinite(n) && n > 0 ? n : null;
+    sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
+}
+
+// ── Crash safety ────────────────────────────────────────────────────────────
+// The bar is a separate always-on-top window. If the meeting's main window or
+// its renderer dies without sending cb-hide, the bar would be orphaned over the
+// screen — so we watch the main window and tear the bar down with it.
+
+let mainWindowWatch = null;
+
+/** Stops watching the main window for close/crash. */
+function detachMainWindowWatch() {
+    if (!mainWindowWatch) {
+        return;
+    }
+    const { win, onGone } = mainWindowWatch;
+
+    if (win && !win.isDestroyed()) {
+        win.removeListener('closed', closeControlsBarWindow);
+        if (win.webContents && !win.webContents.isDestroyed()) {
+            win.webContents.removeListener('render-process-gone', onGone);
+        }
+    }
+    mainWindowWatch = null;
+}
+
+/** Closes the bar if the meeting's main window closes or its renderer crashes. */
+function attachMainWindowWatch() {
+    detachMainWindowWatch();
+    const win = getMainWindow();
+
+    if (!win || win.isDestroyed()) {
+        return;
+    }
+    const onGone = () => closeControlsBarWindow();
+
+    win.once('closed', closeControlsBarWindow);
+    win.webContents.once('render-process-gone', onGone);
+    mainWindowWatch = { win,
+        onGone };
+}
+
 /** Pick the display the bar should live on. */
 function targetWorkArea() {
     const main = getMainWindow();
@@ -190,20 +257,41 @@ function openControlsBarWindow(mainWindowGetter) {
         controlsBarWindow.setAlwaysOnTop(true, 'normal');
     }
 
+    // Start click-through: the transparent margins around the capsule must not
+    // eat clicks meant for the shared screen behind. `forward: true` still
+    // delivers mousemove to the renderer, which re-enables interaction when the
+    // cursor is over the capsule (see controls-bar.js).
+    controlsBarWindow.setIgnoreMouseEvents(true, { forward: true });
+
     controlsBarWindow.on('closed', () => {
         controlsBarWindow = null;
+        detachMainWindowWatch();
         stopDrag();
     });
 
-    controlsBarWindow.webContents.on('did-finish-load', () => {
+    /** Reveals the window + (macOS) the dock icon. Idempotent. */
+    const reveal = () => {
         if (controlsBarWindow && !controlsBarWindow.isDestroyed()) {
             controlsBarWindow.show();
             if (process.platform === 'darwin') {
                 app.dock.show();
             }
         }
+    };
+
+    // Show as soon as the first frame is painted — far snappier than waiting on
+    // did-finish-load (which blocks on every subresource, incl. fonts).
+    controlsBarWindow.once('ready-to-show', reveal);
+
+    controlsBarWindow.webContents.on('did-finish-load', () => {
+        reveal(); // fallback in case ready-to-show didn't fire
+
+        // Replay the cached timestamp so the timer starts on a window that
+        // opened after the conference clock was already running.
+        sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
     });
 
+    attachMainWindowWatch();
     controlsBarWindow.loadFile(htmlPath);
 
     return controlsBarWindow;
@@ -220,5 +308,6 @@ function closeControlsBarWindow() {
 
 module.exports = {
     openControlsBarWindow,
-    closeControlsBarWindow
+    closeControlsBarWindow,
+    setConferenceTimestamp
 };

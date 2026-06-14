@@ -1,91 +1,241 @@
-/* Screenshare controls bar — renderer logic (Phase 1).
-   Handles hover expand/collapse and window dragging via the preload bridge.
-   Control actions (mute, stop share, etc.) are wired in Phase 2. */
+/* Screenshare controls bar — "Thread" renderer.
+   Hover reveals the inline controls (CSS only, no window resize). The window
+   grows taller solely to fit the More menu. Timer ticks from the conference
+   start timestamp pushed by the main process. */
 (function() {
     const api = window.controlsBarAPI || {};
     const root = document.getElementById('cbRoot');
-    const strip = document.getElementById('cbStrip');
+    const thread = document.getElementById('cbThread');
     const stopBtn = document.getElementById('cbStopShare');
-    const more = document.querySelector('.cb-more');
+    const controls = document.getElementById('cbControls');
+    const controlsInner = document.getElementById('cbControlsInner');
+    const more = document.getElementById('cbMore');
+    const moreBtn = document.getElementById('cbMoreBtn');
+    const hint = document.getElementById('cbHint');
+    const timerVal = document.querySelector('.cb-timer-val');
 
-    let expanded = false;
+    // ── Meeting timer ───────────────────────────────────────────────────────
+    // Main pushes the conference start timestamp (epoch ms); we tick locally,
+    // mirroring jitsi's ConferenceTimer formatting (mm:ss, or H:mm:ss past 1h).
 
-    /** Close the More dropdown. */
+    let startTimestamp = null;
+    let timerInterval = null;
+
+    /** Two-digit zero pad. */
+    function pad(n) {
+        return n < 10 ? `0${n}` : String(n);
+    }
+
+    /** Format elapsed milliseconds as mm:ss, or H:mm:ss once past an hour. */
+    function formatElapsed(ms) {
+        const totalSec = Math.floor(Math.max(0, ms) / 1000);
+        const hours = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        const secs = totalSec % 60;
+
+        return hours > 0
+            ? `${hours}:${pad(mins)}:${pad(secs)}`
+            : `${pad(mins)}:${pad(secs)}`;
+    }
+
+    /** Refresh the timer label from the current clock. */
+    function tickTimer() {
+        if (startTimestamp && timerVal) {
+            timerVal.textContent = formatElapsed(Date.now() - startTimestamp);
+        }
+    }
+
+    /** (Re)start the 1s timer loop from a conference start timestamp. */
+    function startTimer(ts) {
+        startTimestamp = typeof ts === 'number' ? ts : null;
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        if (!startTimestamp) {
+            return;
+        }
+        tickTimer();
+        timerInterval = setInterval(tickTimer, 1000);
+    }
+
+    api.onConferenceTimestamp?.(startTimer);
+
+    // ── More menu ─────────────────────────────────────────────────────────
+    // Opening the menu grows the window taller (top-fixed) so it isn't clipped;
+    // closing shrinks it back.
+
+    /** Closes the More dropdown and shrinks the window back. */
     function closeMore() {
-        more?.classList.remove('is-open');
-    }
-
-    /**
-     * Reveal the controls: grow the window FIRST (so there's room), then on the
-     * next frame slide the bar down into it.
-     */
-    function expand() {
-        if (expanded) {
-            return;
-        }
-        expanded = true;
-        api.setHover?.(true);
-        requestAnimationFrame(() => {
-            if (expanded) {
-                root.classList.add('is-expanded');
-            }
-        });
-    }
-
-    /**
-     * Hide the controls: slide the bar back up now; the window shrinks only once
-     * the slide finishes (see the transitionend handler), so nothing clips mid-
-     * animation.
-     */
-    function collapse() {
-        if (!expanded) {
-            return;
-        }
-        expanded = false;
-        closeMore();
-        root.classList.remove('is-expanded');
-    }
-
-    // Shrink the window once the collapse slide has finished.
-    root.addEventListener('transitionend', e => {
-        if (e.target === root && e.propertyName === 'transform' && !expanded) {
+        if (more?.classList.contains('is-open')) {
+            more.classList.remove('is-open');
             api.setHover?.(false);
         }
-    });
+    }
 
-    // Hovering the strip reveals the controls; leaving the whole bar hides them.
-    strip.addEventListener('mouseenter', expand);
-    root.addEventListener('mouseleave', collapse);
+    /** Opens the More dropdown and grows the window to fit it. */
+    function openMore() {
+        more?.classList.add('is-open');
+        api.setHover?.(true);
+    }
 
-    // Drag the window by the strip (but not when starting on the Stop-share btn).
-    strip.addEventListener('mousedown', e => {
-        if (e.target.closest('#cbStopShare')) {
+    // ── First-run intro ───────────────────────────────────────────────────
+    // Briefly open on load so the user sees the bar is expandable, then collapse
+    // and surface a one-time hint. Any hover ends the intro + dismisses the hint.
+    let introActive = true;
+    let introTimer = null;
+
+    /** Ends the intro: cancels the auto-collapse and hides the hint for good. */
+    function endIntro() {
+        if (!introActive) {
             return;
         }
-        api.startDrag?.();
-    });
-    window.addEventListener('mouseup', () => api.stopDrag?.());
+        introActive = false;
+        if (introTimer) {
+            clearTimeout(introTimer);
+        }
+        hint?.classList.remove('is-on');
+    }
 
+    // Appear already fully expanded (no grow-in) — disable transitions for the
+    // first paint, then re-enable them so only the collapse animates.
+    root.classList.add('no-anim');
+    thread.classList.add('is-expanded');
+    controlsInner?.classList.add('is-settled');
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('no-anim')));
+
+    introTimer = setTimeout(() => {
+        if (!introActive) {
+            return;
+        }
+        thread.classList.remove('is-expanded');
+        controlsInner?.classList.remove('is-settled');
+
+        // Reveal the hint once the collapse has settled.
+        setTimeout(() => {
+            if (introActive) {
+                hint?.classList.add('is-on');
+            }
+        }, 480);
+    }, 2600);
+
+    // ── Hover reveal ──────────────────────────────────────────────────────
+    // Expand/collapse are driven by the click-through hit-test below (mousemove),
+    // not mouseenter/leave — once the window goes click-through it stops getting
+    // those events, which would leave the bar stuck open.
+
+    /** Expand the capsule (reveal controls) and end any first-run intro. */
+    function expandBar() {
+        thread.classList.add('is-expanded');
+        endIntro();
+    }
+
+    /** Collapse the capsule and tidy up (clip controls, hide tip/menu). */
+    function collapseBar() {
+        thread.classList.remove('is-expanded');
+        controlsInner?.classList.remove('is-settled');
+        hideTip();
+        closeMore();
+    }
+
+    // Once the grow finishes, stop clipping so the chat badge + More menu (which
+    // overflow the row) can show. Guarded on is-expanded so the collapse
+    // transition doesn't re-enable overflow mid-shrink.
+    controls?.addEventListener('transitionend', e => {
+        if (e.propertyName === 'grid-template-columns' && thread.classList.contains('is-expanded')) {
+            controlsInner?.classList.add('is-settled');
+        }
+    });
+
+    // ── More toggle + outside-click close ─────────────────────────────────
+    moreBtn?.addEventListener('click', e => {
+        e.stopPropagation();
+        hideTip();
+        if (more.classList.contains('is-open')) {
+            closeMore();
+        } else {
+            openMore();
+        }
+    });
+    more?.querySelector('.cb-menu-item')?.addEventListener('click', closeMore);
+    document.addEventListener('click', e => {
+        if (more && !more.contains(e.target)) {
+            closeMore();
+        }
+    });
+
+    // ── Custom tooltip ────────────────────────────────────────────────────
+    // Replaces the OS-native title tooltip. One shared element, repositioned
+    // under whichever [data-tip] control is hovered.
+    const tip = document.createElement('div');
+
+    tip.className = 'cb-tip';
+    root.appendChild(tip);
+
+    /** Show the tooltip centred just below a control button. */
+    function showTip(btn) {
+        const text = btn.getAttribute('data-tip');
+
+        if (!text) {
+            return;
+        }
+        tip.textContent = text;
+        const r = btn.getBoundingClientRect();
+        const rootR = root.getBoundingClientRect();
+
+        tip.style.left = `${r.left - rootR.left + (r.width / 2)}px`;
+        tip.style.top = `${r.bottom - rootR.top + 8}px`;
+        tip.classList.add('is-on');
+    }
+
+    /** Hide the tooltip. */
+    function hideTip() {
+        tip.classList.remove('is-on');
+    }
+
+    document.querySelectorAll('[data-tip]').forEach(btn => {
+        btn.addEventListener('mouseenter', () => showTip(btn));
+        btn.addEventListener('mouseleave', hideTip);
+    });
+
+    // ── Stop share ────────────────────────────────────────────────────────
     stopBtn?.addEventListener('click', e => {
         e.stopPropagation();
         api.stopShare?.();
     });
 
-    // More dropdown: toggle on click, close on outside click / item select.
-    if (more) {
-        const moreBtn = more.querySelector('.cb-item');
+    // ── Drag the window by the capsule (but not its buttons) ──────────────
+    thread.addEventListener('mousedown', e => {
+        if (e.target.closest('button')) {
+            return;
+        }
+        thread.classList.add('is-dragging');
+        api.startDrag?.();
+    });
+    window.addEventListener('mouseup', () => {
+        thread.classList.remove('is-dragging');
+        api.stopDrag?.();
+    });
 
-        moreBtn?.addEventListener('click', e => {
-            e.stopPropagation();
-            more.classList.toggle('is-open');
-        });
+    // ── Click-through + hover ───────────────────────────────────────────────
+    // The window starts ignoring mouse events so the transparent margins fall
+    // through to the screen/meeting behind. Over the capsule (its expanded
+    // controls + open menu are inside #cbThread) we capture the mouse AND expand;
+    // off it we release (click-through) AND collapse. `forward: true` keeps
+    // mousemove flowing while ignored so we can detect the cursor returning.
+    let mouseIgnored = true;
 
-        more.querySelector('.cb-menu-item')?.addEventListener('click', closeMore);
+    document.addEventListener('mousemove', e => {
+        const overCapsule = Boolean(document.elementFromPoint(e.clientX, e.clientY)?.closest('#cbThread'));
 
-        document.addEventListener('click', e => {
-            if (!more.contains(e.target)) {
-                closeMore();
+        if (overCapsule === mouseIgnored) {
+            mouseIgnored = !overCapsule;
+            api.setIgnoreMouse?.(mouseIgnored);
+            if (overCapsule) {
+                expandBar();
+            } else {
+                collapseBar();
             }
-        });
-    }
+        }
+    });
 })();

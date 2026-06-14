@@ -9,19 +9,20 @@
 
 // ── Sizing ───────────────────────────────────────────────────────────────────
 
-// The window width is CONSTANT (only the height changes on hover) so resizing
-// never shifts the window's x — that shift caused a horizontal "glitch" — and so
-// the strip's drop shadow isn't clipped. Wide enough to also fit the More menu
-// opening to the right of the controls.
-const WINDOW_W = 980;
+// The "Thread" capsule is centred horizontally in a CONSTANT-width window and
+// reveals its controls inline (CSS only) — the window never resizes its width,
+// so it can't shift its x and flash. Wide enough for the fully-expanded capsule
+// (mark + timer + 6 controls + Stop) with margin for its drop shadow.
+const WINDOW_W = 560;
 
-// Collapsed height: the sharing strip + the hover caret beneath it. (The controls
-// are translated above the window top, clipped.)
-const COLLAPSED_H = 84;
+// Collapsed height: the capsule row + room above for the chat badge and below
+// for the drop shadow and the custom tooltip (which sits under the controls).
+// The capsule is top-anchored (see .cb-root).
+const COLLAPSED_H = 110;
 
-// Expanded height: room for the controls bar that slides in above the strip,
-// plus the controls' drop shadow below.
-const EXPANDED_H = 184;
+// Expanded height: only used when the More menu opens — the window grows
+// downward (top fixed) so the dropdown isn't clipped.
+const EXPANDED_H = 240;
 
 // Gap from the top edge of the work area when first opened.
 const TOP_MARGIN = 18;
@@ -29,8 +30,11 @@ const TOP_MARGIN = 18;
 // ── IPC channels ─────────────────────────────────────────────────────────────
 
 const IPC = {
-    // main → renderer
-    // (none needed in Phase 1 — static bar)
+    // main → controls-bar renderer
+    // Conference start timestamp (epoch ms). The bar ticks its meeting timer
+    // locally from this. Arrives on the cb-show payload (jitsi renderer) and is
+    // cached + replayed to the bar by the main process (controls-bar-window.js).
+    CONFERENCE_TIMESTAMP: 'cb-conference-timestamp',
 
     // renderer → main (sent from controls-bar.html via the preload bridge)
     HOVER: 'cb-hover', // payload: boolean — expand (true) / collapse (false)

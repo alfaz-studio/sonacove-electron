@@ -12,7 +12,10 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { openControlsBarWindow } = require('../app/features/controls-bar/controls-bar-window');
+const {
+    openControlsBarWindow,
+    setConferenceTimestamp
+} = require('../app/features/controls-bar/controls-bar-window');
 
 const FEATURE_DIR = path.join(__dirname, '../app/features/controls-bar');
 const WATCH_FILES = [ 'controls-bar.html', 'controls-bar.css', 'controls-bar.js' ];
@@ -31,6 +34,10 @@ app.whenReady().then(() => {
     if (wantsDevtools) {
         win.webContents.openDevTools({ mode: 'detach' });
     }
+
+    // No meeting in standalone preview — fake a conference start (~17 min ago)
+    // so the live timer ticks. Cached + replayed to the bar on (re)load.
+    setConferenceTimestamp(Date.now() - (((17 * 60) + 12) * 1000));
 
     // Live reload on asset edits.
     for (const file of WATCH_FILES) {

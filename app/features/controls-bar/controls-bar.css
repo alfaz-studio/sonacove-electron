@@ -1,5 +1,7 @@
-/* Screenshare controls bar — Sonacove dark + orange language.
-   Ported from the design export (desktop-overlay/overlay.jsx — MeetingControls). */
+/* Screenshare controls bar — "Thread" concept.
+   Ported from the design export (ui_kits/desktop-overlay/concepts.html →
+   ConceptThread): one slim capsule, status IS the bar. Mark + live timer lead,
+   compact Stop trails, icon-only controls reveal inline on hover. */
 
 /* DM Sans (variable, OFL-1.1) — bundled locally so it renders offline, the same
    font jitsi-meet uses. One woff2 per subset covers every weight. */
@@ -20,13 +22,22 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Design tokens — verbatim from concepts.html :root. */
 :root {
   --action: #f05023;
+  --action-hover: #f86f4d;
+  --action-soft: rgba(240, 80, 35, 0.16);
   --action-glyph: #f86f4d;
   --danger: #e0483b;
   --danger-hover: #f15a4d;
-  --share: #22a55a;
-  --share-2: #1d8f4d;
+  --success: #22a55a;
+  --ink: #e9eaec;
+  --ink-2: #9a9ca3;
+  --ink-3: #6b6d74;
+  --panel: #1a1b1f;
+  --panel-2: #232429;
+  --line: rgba(255, 255, 255, 0.09);
+  --capsule: rgba(20, 21, 24, 0.96);
 }
 
 * { box-sizing: border-box; }
@@ -46,160 +57,240 @@ html, body {
 
 button { font-family: inherit; }
 
-/* Column: controls on top, strip below, caret at the bottom. Collapsed, the
-   whole column is translated up by the controls' height so the controls sit
-   above the window/screen top (clipped) and the strip is at the top. On hover it
-   slides to 0 — the controls emerge from the top edge and the strip rides down.
-   --cb-slide ≈ the controls bar's height (incl. its 8px bottom gap); tune to
-   taste. */
-:root { --cb-slide: 84px; }
+/* The window is fixed-size and transparent; the capsule is centred horizontally
+   and anchored near the top, so the More menu has room to open downward without
+   any horizontal resize (which caused a flash on the old strip design). */
 .cb-root {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translateY(calc(-1 * var(--cb-slide)));
-  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-}
-.cb-root.is-expanded { transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) {
-  .cb-root { transition: none; }
+  justify-content: flex-start;
+  padding-top: 14px;
 }
 
-/* ── Controls bar (hover-revealed) ──────────────────────────────────────── */
-.cb-controls {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border-radius: 16px;
-  background: rgba(34, 35, 38, 0.97);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  /* Shadow only while expanded — when collapsed the bar is clipped above the
-     screen top and its shadow would otherwise bleed down as a faint band. */
-  box-shadow: none;
-  transition: box-shadow 0.2s ease;
+/* First-run hint — a subtle pill under the capsule. */
+.cb-hint {
+  margin-top: 9px;
+  padding: 3px 11px;
+  border-radius: 9999px;
+  background: rgba(10, 11, 13, 0.82);
+  border: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
-.cb-root.is-expanded .cb-controls {
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+.cb-hint.is-on {
+  opacity: 1;
+  transform: none;
 }
 
-/* Buttons copied from the in-meeting toolbox (.toolbox-icon): 13px radius,
-   overlay-light hover, scale(0.96) press, toggled = orange-tint + orange glyph.
-   Labels and the dark bar background are kept. */
-.cb-item {
-  position: relative;
-  /* min-width keeps short items uniform; long labels (e.g. "Show meeting")
-     grow the button instead of overflowing it. */
-  min-width: 66px;
-  padding: 8px 10px 7px;
-  border: 0;
-  border-radius: 13px;
-  cursor: pointer;
-  background: transparent;
-  color: #e9eaec;
+/* ── The capsule ────────────────────────────────────────────────────────── */
+.cb-thread {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 6px;
-  flex: none;
-  transition: background-color 0.15s ease, transform 0.12s ease;
+  padding: 6px 7px 6px 6px;
+  border-radius: 9999px;
+  background: var(--capsule);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  /* Normal cursor on hover (the bar is draggable, but a persistent grab cursor
+     flickered against the buttons' pointer cursor). Grabbing shows only while
+     actually dragging — see .is-dragging, toggled in controls-bar.js. */
+  cursor: default;
 }
-.cb-item:hover { background-color: rgba(255, 255, 255, 0.08); }
-.cb-item:active {
-  background-color: rgba(255, 255, 255, 0.12);
-  transform: scale(0.96);
-}
-.cb-item--danger { color: var(--danger-hover); }
-/* Toggled/active feature — orange-tint fill + orange glyph (toolbox .toggled). */
-.cb-item--active {
-  color: var(--action-glyph);
-  background-color: rgba(240, 80, 35, 0.18);
-}
+.cb-thread.is-dragging,
+.cb-thread.is-dragging * { cursor: grabbing; }
 
-.cb-glyph { position: relative; display: flex; }
-/* All control-item glyphs render at the toolbox's 22px, regardless of each
-   SVG's own width/height. (SVGs are already stroke-width 2, like the toolbox.) */
-.cb-glyph > svg {
-  width: 22px;
-  height: 22px;
-}
-
-.cb-label {
+/* ── Lead: mangrove mark + live timer (always visible) ──────────────────── */
+.cb-lead {
   display: flex;
   align-items: center;
-  gap: 3px;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: #c9cacd;
-  white-space: nowrap;
+  gap: 9px;
+  padding-right: 4px;
 }
-.cb-item--danger .cb-label { color: var(--danger-hover); }
-.cb-chev { color: #8a8c92; }
+.cb-mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cb-mark-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--success);
+  animation: liveRing 2.4s ease-out infinite;
+}
+.cb-mark-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: linear-gradient(160deg, #f4faf4, #dfeadf);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cb-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.cb-timer-val {
+  /* Fixed width + tabular figures so the ticking digits never reflow the
+     capsule. Sized for mm:ss; grows once past an hour (H:mm:ss). */
+  display: inline-block;
+  min-width: 48px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0.01em;
+}
+.cb-live {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--success);
+}
+.cb-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--success);
+  animation: liveDot 1.4s infinite;
+}
+
+/* ── Controls: icon-only, revealed inline on hover ──────────────────────── */
+/* The grid column animates 0fr → 1fr so the capsule's WIDTH grows smoothly; a
+   back-out (overshoot) easing gives it the bounce. The inner flex row is clipped
+   while it grows (overflow: hidden), then switched to visible once settled so the
+   chat badge and the More menu can escape (toggled in controls-bar.js). */
+.cb-controls {
+  display: grid;
+  grid-template-columns: 0fr;
+  /* Smooth ease-out for the WIDTH (no overshoot — overshoot would briefly open a
+     gap before the Stop button). The bounce lives on the inner content below. */
+  transition: grid-template-columns 0.44s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cb-thread.is-expanded .cb-controls {
+  grid-template-columns: 1fr;
+}
+/* First paint only: show the intro's expanded state instantly (no grow-in);
+   transitions are re-enabled on the next frame so the collapse still animates. */
+.cb-root.no-anim .cb-controls,
+.cb-root.no-anim .cb-controls-inner {
+  transition: none;
+}
+.cb-controls-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(-12px);
+  /* Back-out (overshoot) easing — the controls spring in past their resting spot
+     and settle: that's the bounce. */
+  transition: opacity 0.26s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cb-thread.is-expanded .cb-controls-inner {
+  opacity: 1;
+  transform: none;
+}
+/* Settled (post-grow) — let the badge + More menu overflow the clipped row. */
+.cb-controls-inner.is-settled {
+  overflow: visible;
+}
+
+.cb-divider {
+  width: 1px;
+  height: 26px;
+  background: var(--line);
+  flex: none;
+}
+
+.cb-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  transition: background 0.13s ease, transform 0.12s ease;
+}
+.cb-btn > svg { width: 18px; height: 18px; }
+.cb-btn:hover { background: rgba(255, 255, 255, 0.09); }
+.cb-btn:active { transform: scale(0.94); }
+.cb-btn--danger { color: var(--danger-hover); }
+.cb-btn--danger:hover { background: rgba(224, 72, 59, 0.14); }
+.cb-btn--active {
+  background: var(--action-soft);
+  color: var(--action-glyph);
+}
 
 .cb-badge {
   position: absolute;
-  top: -5px;
-  right: -9px;
+  top: -2px;
+  right: -2px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   border-radius: 9999px;
   background: var(--action);
   color: #fff;
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 2px solid #14151a;
+  box-sizing: content-box;
 }
 
-/* Share — green accent chip */
-.cb-accent {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--share);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cb-sep {
-  width: 1px;
-  height: 38px;
-  margin: 0 4px;
-  align-self: center;
-  background: rgba(255, 255, 255, 0.1);
-  flex: none;
-}
-
-/* More — hover dropdown */
+/* ── More — dropdown (opens downward; window grows to fit) ───────────────── */
 .cb-more { position: relative; display: flex; }
 .cb-menu {
   position: absolute;
-  top: calc(100% + 6px);
-  left: 0; /* opens to the bottom-right: extends right + down from More */
+  top: calc(100% + 8px);
+  right: 0; /* anchor right so a wide item never overflows the window edge */
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 168px;
   padding: 6px;
   border-radius: 12px;
-  background: rgba(34, 35, 38, 0.98);
+  background: rgba(26, 27, 31, 0.98);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   /* Hidden via opacity/transform (not display) so it animates open. */
   opacity: 0;
   transform: translateY(-6px) scale(0.97);
-  transform-origin: top left;
+  transform-origin: top right;
   pointer-events: none;
   transition: opacity 0.17s ease, transform 0.17s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -217,7 +308,7 @@ button { font-family: inherit; }
   border-radius: 9px;
   cursor: pointer;
   background: transparent;
-  color: #e9eaec;
+  color: var(--ink);
   font-size: 13.5px;
   font-weight: 500;
   white-space: nowrap;
@@ -225,106 +316,16 @@ button { font-family: inherit; }
 }
 .cb-menu-item:hover { background: rgba(255, 255, 255, 0.08); }
 .cb-menu-item:active { transform: scale(0.95); }
-.cb-menu-icon { display: flex; color: #c9cacd; }
+.cb-menu-icon { display: flex; color: var(--ink-2); }
 .cb-menu-icon--rec { color: var(--danger); }
 
-/* ── Sharing strip (always visible, drag handle) ────────────────────────── */
-.cb-strip {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 5px 6px 5px 7px;
-  border-radius: 9999px;
-  cursor: grab;
-  background: linear-gradient(180deg, var(--share), var(--share-2));
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-.cb-strip:active { cursor: grabbing; }
-
-.cb-mark {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.cb-mark-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 11px;
-  border: 2px solid #fff;
-  animation: liveRing 2.2s ease-out infinite;
-}
-.cb-mark-chip {
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
-  background: linear-gradient(160deg, #fbfdfb, #e8efe8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-  animation: breathe 2.2s ease-in-out infinite;
-}
-
-.cb-brand {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.05;
-  margin-right: 2px;
-}
-.cb-wordmark {
-  font-size: 15px;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-.cb-sharing {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 2px;
-}
-.cb-sharing-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background: #eafff3;
-  animation: liveDot 1.4s infinite;
-}
-.cb-sharing-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.cb-timer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.28);
-  color: #fff;
-}
-.cb-timer-val {
-  font-size: 12.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-}
-
+/* ── Stop share (always visible) ────────────────────────────────────────── */
 .cb-stop {
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 30px;
-  padding: 0 13px;
+  height: 38px;
+  padding: 0 15px;
   border: 0;
   border-radius: 9999px;
   cursor: pointer;
@@ -334,38 +335,55 @@ button { font-family: inherit; }
   font-weight: 700;
   white-space: nowrap;
   flex: none;
+  margin-left: 2px;
   transition: background 0.12s, transform 0.15s;
 }
+.cb-thread.is-expanded .cb-stop { margin-left: 0; }
 .cb-stop:hover { background: var(--danger-hover); }
-.cb-stop:active { transform: scale(0.95); }
+.cb-stop:active { transform: scale(0.96); }
 .cb-stop-square {
   width: 11px;
   height: 11px;
-  border-radius: 2px;
+  border-radius: 3px;
   background: #fff;
   flex: none;
 }
 
-/* ── Hover caret ────────────────────────────────────────────────────────── */
-.cb-caret {
-  display: flex;
-  margin-top: 2px;
-  animation: caretNudge 1.6s ease-in-out infinite;
+/* ── Custom tooltip ─────────────────────────────────────────────────────── */
+/* Replaces the OS-native title tooltip (which looks foreign in the overlay).
+   A single element, repositioned under the hovered control by controls-bar.js.
+   Sits below the button because the bar lives at the top edge of the screen. */
+.cb-tip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: rgba(10, 11, 13, 0.97);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, 3px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
 }
-.cb-root.is-expanded .cb-caret { display: none; }
+.cb-tip.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
 
-/* ── Keyframes (from the design index.html) ─────────────────────────────── */
-@keyframes liveDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+/* ── Keyframes (verbatim from concepts.html) ────────────────────────────── */
 @keyframes liveRing {
-  0% { transform: scale(0.7); opacity: 0.55; }
-  70% { transform: scale(1.7); opacity: 0; }
+  0% { transform: scale(0.7); opacity: 0.5; }
+  70% { transform: scale(1.75); opacity: 0; }
   100% { opacity: 0; }
 }
-@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-@keyframes caretNudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+@keyframes liveDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .cb-mark-ring, .cb-mark-chip, .cb-sharing-dot, .cb-caret {
-    animation: none !important;
-  }
+  .cb-mark-ring, .cb-live-dot { animation: none !important; }
+  .cb-controls, .cb-controls-inner { transition: none; }
 }
