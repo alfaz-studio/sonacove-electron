@@ -104,6 +104,54 @@
     participantsBtn?.addEventListener('click', () => api.openParticipants?.());
     chatBtn?.addEventListener('click', () => api.openChat?.());
 
+    // ── Recording label ──────────────────────────────────────────────────────
+    const recordLabel = document.getElementById('cbRecordLabel');
+
+    /** Reflect local recording state on the Record menu label. */
+    function applyRecording(state) {
+        if (recordLabel) {
+            recordLabel.textContent = state && state.recording ? 'Stop recording' : 'Record';
+        }
+    }
+
+    api.onRecording?.(applyRecording);
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+    // Mirrors jitsi's recording notifications: a message, an optional sub-line
+    // (e.g. "Saved to …"), and an optional action button ("Show in folder").
+    const toast = document.getElementById('cbToast');
+    const toastMsg = document.getElementById('cbToastMsg');
+    const toastSub = document.getElementById('cbToastSub');
+    const toastAction = document.getElementById('cbToastAction');
+    let toastTimer = null;
+
+    /** Show a transient toast ({ message, sub?, actionLabel? }) below the bar. */
+    function applyToast(data) {
+        if (!toast || !data || !data.message) {
+            return;
+        }
+        toastMsg.textContent = data.message;
+        toastSub.textContent = data.sub || '';
+        toastSub.hidden = !data.sub;
+        toastAction.hidden = !data.actionLabel;
+        if (data.actionLabel) {
+            toastAction.textContent = data.actionLabel;
+        }
+        toast.classList.add('is-on');
+        if (toastTimer) {
+            clearTimeout(toastTimer);
+        }
+
+        // Toasts with an action stay up longer so the button can be clicked.
+        toastTimer = setTimeout(() => toast.classList.remove('is-on'), data.actionLabel ? 6500 : 3000);
+    }
+
+    api.onToast?.(applyToast);
+    toastAction?.addEventListener('click', () => {
+        api.openRecording?.();
+        toast.classList.remove('is-on');
+    });
+
     // ── More menu ─────────────────────────────────────────────────────────
     // Opening the menu grows the window taller (top-fixed) so it isn't clipped;
     // closing shrinks it back.
@@ -200,7 +248,10 @@
             openMore();
         }
     });
-    more?.querySelector('.cb-menu-item')?.addEventListener('click', closeMore);
+    document.getElementById('cbRecord')?.addEventListener('click', () => {
+        api.toggleRecord?.();
+        closeMore();
+    });
     document.addEventListener('click', e => {
         if (more && !more.contains(e.target)) {
             closeMore();
@@ -267,13 +318,23 @@
     // off it we release (click-through) AND collapse. `forward: true` keeps
     // mousemove flowing while ignored so we can detect the cursor returning.
     let mouseIgnored = true;
+    let hoverExpanded = false;
 
     document.addEventListener('mousemove', e => {
-        const overCapsule = Boolean(document.elementFromPoint(e.clientX, e.clientY)?.closest('#cbThread'));
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const overCapsule = Boolean(el?.closest('#cbThread'));
 
-        if (overCapsule === mouseIgnored) {
-            mouseIgnored = !overCapsule;
+        // The toast's action button is outside the capsule but must stay clickable.
+        const interactive = overCapsule || Boolean(el?.closest('#cbToastAction'));
+
+        if (interactive === mouseIgnored) {
+            mouseIgnored = !interactive;
             api.setIgnoreMouse?.(mouseIgnored);
+        }
+
+        // Expand/collapse follows the capsule only (hovering the toast must not expand).
+        if (overCapsule !== hoverExpanded) {
+            hoverExpanded = overCapsule;
             if (overCapsule) {
                 expandBar();
             } else {

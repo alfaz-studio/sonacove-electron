@@ -84,6 +84,32 @@ function setCounts(data) {
     sendToBar('cb-counts', counts);
 }
 
+// Latest local-recording on/off state (cached + replayed on load).
+let recording = false;
+
+/**
+ * Caches the local recording on/off state and forwards it to the bar.
+ *
+ * @param {{ recording?: boolean }} [data] - The recording flag.
+ * @returns {void}
+ */
+function setRecording(data) {
+    recording = Boolean(data?.recording);
+    sendToBar('cb-recording', { recording });
+}
+
+/**
+ * Forwards a transient toast to the bar (not cached — it's a one-off event).
+ *
+ * @param {{ message: string, sub?: string, actionLabel?: string }} [data] - Toast.
+ * @returns {void}
+ */
+function showToast(data) {
+    if (data?.message) {
+        sendToBar('cb-toast', data);
+    }
+}
+
 // ── Crash safety ────────────────────────────────────────────────────────────
 // The bar is a separate always-on-top window. If the meeting's main window or
 // its renderer dies without sending cb-hide, the bar would be orphaned over the
@@ -323,6 +349,7 @@ function openControlsBarWindow(mainWindowGetter) {
         sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
         sendToBar('cb-av-state', avMuted);
         sendToBar('cb-counts', counts);
+        sendToBar('cb-recording', { recording });
     });
 
     attachMainWindowWatch();
@@ -345,5 +372,7 @@ module.exports = {
     closeControlsBarWindow,
     setConferenceTimestamp,
     setAvState,
-    setCounts
+    setCounts,
+    setRecording,
+    showToast
 };

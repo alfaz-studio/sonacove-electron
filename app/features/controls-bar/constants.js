@@ -15,10 +15,10 @@
 // (mark + timer + 6 controls + Stop) with margin for its drop shadow.
 const WINDOW_W = 560;
 
-// Collapsed height: the capsule row + room above for the chat badge and below
-// for the drop shadow and the custom tooltip (which sits under the controls).
-// The capsule is top-anchored (see .cb-root).
-const COLLAPSED_H = 110;
+// Collapsed height: the capsule row + room below for the tooltip and the
+// recording toast (which can be two lines + an action button). The capsule is
+// top-anchored; the empty area is click-through (see controls-bar.js).
+const COLLAPSED_H = 132;
 
 // Expanded height: only used when the More menu opens — the window grows
 // downward (top fixed) so the dropdown isn't clipped.

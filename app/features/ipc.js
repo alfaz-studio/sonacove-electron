@@ -20,7 +20,9 @@ const {
     closeControlsBarWindow,
     setConferenceTimestamp,
     setAvState,
-    setCounts
+    setCounts,
+    setRecording,
+    showToast
 } = require('./controls-bar/controls-bar-window');
 const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
@@ -243,6 +245,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             setConferenceTimestamp(data?.startTimestamp);
             setAvState(data);
             setCounts(data);
+            setRecording(data);
         } catch (err) {
             console.error('❌ ControlsBar: Failed to open window:', err);
         }
@@ -276,6 +279,14 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
+    // Record menu item — forward to the renderer (local recording runs in the
+    // background, so the meeting window is not restored).
+    register('cb-toggle-record', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-record');
+        }
+    });
+
     // Renderer reports the live mic/cam muted state — cache + forward to the bar.
     register('cb-av-state', (_event, data) => {
         setAvState(data);
@@ -298,6 +309,23 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer reports the live participant / unread counts — cache + forward.
     register('cb-counts', (_event, data) => {
         setCounts(data);
+    });
+
+    // Renderer reports local recording on/off — cache + forward to the bar.
+    register('cb-recording', (_event, data) => {
+        setRecording(data);
+    });
+
+    // Transient toast from the renderer (recording start / saved) → the bar.
+    register('cb-toast', (_event, data) => {
+        showToast(data);
+    });
+
+    // Toast's "Show in folder" button → run jitsi's reveal action in the renderer.
+    register('cb-open-recording', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-open-recording');
+        }
     });
 
     // User toggled pin state in the PiP panel — forward to main renderer

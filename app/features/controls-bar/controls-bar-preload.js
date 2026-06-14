@@ -47,6 +47,18 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     openParticipants: () => ipcRenderer.send('cb-open-participants'),
     openChat: () => ipcRenderer.send('cb-open-chat'),
 
+    // Toggle local recording.
+    toggleRecord: () => ipcRenderer.send('cb-toggle-record'),
+
+    // Local recording on/off ({ recording }) → Record menu label.
+    onRecording: onChannel('cb-recording'),
+
+    // Transient toast ({ message, sub?, actionLabel? }) → shown below the bar.
+    onToast: onChannel('cb-toast'),
+
+    // Toast's "Show in folder" button → reveal the saved recording.
+    openRecording: () => ipcRenderer.send('cb-open-recording'),
+
     // Live counts ({ participantCount, unreadCount }) → Participants/Chat badges.
     onCounts: onChannel('cb-counts')
 });

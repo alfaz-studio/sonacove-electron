@@ -91,6 +91,70 @@ button { font-family: inherit; }
   transform: none;
 }
 
+/* Transient toast (recording started / saved) — overlays below the capsule so
+   it doesn't shift the column layout. The whole toast is pointer-events:none so
+   it never blocks the screen; only its action button re-enables pointer events
+   (and the window's click-through treats that button as interactive). */
+.cb-toast {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 92%;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
+  background: rgba(10, 11, 13, 0.95);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -5px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.cb-toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.cb-toast-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.cb-toast-msg {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+}
+.cb-toast-sub {
+  max-width: 300px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cb-toast-sub[hidden] { display: none; }
+.cb-toast-action {
+  flex: none;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--action-glyph);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.13s ease;
+}
+.cb-toast-action:hover { background: rgba(255, 255, 255, 0.14); }
+.cb-toast-action[hidden] { display: none; }
+
 /* ── The capsule ────────────────────────────────────────────────────────── */
 .cb-thread {
   display: flex;
