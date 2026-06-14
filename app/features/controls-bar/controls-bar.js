@@ -12,6 +12,8 @@
     const more = document.getElementById('cbMore');
     const moreBtn = document.getElementById('cbMoreBtn');
     const hint = document.getElementById('cbHint');
+    const audioBtn = document.getElementById('cbAudio');
+    const videoBtn = document.getElementById('cbVideo');
     const timerVal = document.querySelector('.cb-timer-val');
 
     // ── Meeting timer ───────────────────────────────────────────────────────
@@ -60,6 +62,20 @@
     }
 
     api.onConferenceTimestamp?.(startTimer);
+
+    // ── Mic / camera ─────────────────────────────────────────────────────────
+    // Both on/off SVGs live in the markup; CSS swaps them on .cb-btn--danger.
+    // Clicking forwards a toggle to the meeting renderer.
+
+    /** Reflect the live mic/cam muted state on the Audio/Video buttons. */
+    function applyAvState(state) {
+        audioBtn?.classList.toggle('cb-btn--danger', Boolean(state && state.audioMuted));
+        videoBtn?.classList.toggle('cb-btn--danger', Boolean(state && state.videoMuted));
+    }
+
+    api.onAvState?.(applyAvState);
+    audioBtn?.addEventListener('click', () => api.toggleAudio?.());
+    videoBtn?.addEventListener('click', () => api.toggleVideo?.());
 
     // ── More menu ─────────────────────────────────────────────────────────
     // Opening the menu grows the window taller (top-fixed) so it isn't clipped;

@@ -252,6 +252,11 @@ button { font-family: inherit; }
   color: var(--action-glyph);
 }
 
+/* Audio/Video carry both glyphs; the muted (danger) state swaps on → off. */
+.cb-btn .cb-ico-off { display: none; }
+.cb-btn--danger .cb-ico-on { display: none; }
+.cb-btn--danger .cb-ico-off { display: block; }
+
 .cb-badge {
   position: absolute;
   top: -2px;

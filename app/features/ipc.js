@@ -18,7 +18,8 @@ const { getParticipantWindow } = require('./pip/helpers');
 const {
     openControlsBarWindow,
     closeControlsBarWindow,
-    setConferenceTimestamp
+    setConferenceTimestamp,
+    setAvState
 } = require('./controls-bar/controls-bar-window');
 const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
@@ -239,6 +240,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         try {
             openControlsBarWindow(getMainWindow);
             setConferenceTimestamp(data?.startTimestamp);
+            setAvState(data);
         } catch (err) {
             console.error('❌ ControlsBar: Failed to open window:', err);
         }
@@ -258,6 +260,23 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             restoreMainWindow(mainWindow);
             mainWindow.webContents.send('cb-stop-screenshare');
         }
+    });
+
+    // Mic / camera buttons on the bar — forward to the renderer to toggle mute.
+    register('cb-toggle-audio', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-audio');
+        }
+    });
+    register('cb-toggle-video', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-video');
+        }
+    });
+
+    // Renderer reports the live mic/cam muted state — cache + forward to the bar.
+    register('cb-av-state', (_event, data) => {
+        setAvState(data);
     });
 
     // User toggled pin state in the PiP panel — forward to main renderer

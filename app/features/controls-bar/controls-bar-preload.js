@@ -2,6 +2,25 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Channel names mirror IPC in ./constants.js — kept in sync by hand (same as
 // the PiP preload; preloads can't cleanly require feature modules).
+
+/**
+ * Builds a main → renderer subscription for a channel. The returned function
+ * takes a callback (invoked with the payload directly) and returns an
+ * unsubscribe function.
+ *
+ * @param {string} channel - The IPC channel to listen on.
+ * @returns {(cb: Function) => () => void}
+ */
+function onChannel(channel) {
+    return callback => {
+        const handler = (_event, data) => callback(data);
+
+        ipcRenderer.on(channel, handler);
+
+        return () => ipcRenderer.removeListener(channel, handler);
+    };
+}
+
 contextBridge.exposeInMainWorld('controlsBarAPI', {
     // Expand (true) / collapse (false) — main resizes the window to fit.
     setHover: expanded => ipcRenderer.send('cb-hover', Boolean(expanded)),
@@ -14,13 +33,13 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     // shared screen / meeting). Reuses the shared overlay handler in ipc.js.
     setIgnoreMouse: ignore => ipcRenderer.send('set-ignore-mouse-events', Boolean(ignore)),
 
-    // Conference start timestamp (epoch ms) for the meeting timer. Returns an
-    // unsubscribe fn. The listener receives the timestamp (or null) directly.
-    onConferenceTimestamp: callback => {
-        const handler = (_event, ts) => callback(ts);
+    // Conference start timestamp (epoch ms) for the meeting timer.
+    onConferenceTimestamp: onChannel('cb-conference-timestamp'),
 
-        ipcRenderer.on('cb-conference-timestamp', handler);
+    // Mic / camera toggles — forwarded to the meeting renderer.
+    toggleAudio: () => ipcRenderer.send('cb-toggle-audio'),
+    toggleVideo: () => ipcRenderer.send('cb-toggle-video'),
 
-        return () => ipcRenderer.removeListener('cb-conference-timestamp', handler);
-    }
+    // Live mic/cam muted state ({ audioMuted, videoMuted }) → Audio/Video icons.
+    onAvState: onChannel('cb-av-state')
 });

@@ -51,6 +51,23 @@ function setConferenceTimestamp(ts) {
     sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
 }
 
+// Latest local mic/cam muted state, so the bar's Audio/Video icons are correct
+// on open (cached + replayed on load, like the timestamp).
+let avMuted = { audioMuted: false,
+    videoMuted: false };
+
+/**
+ * Caches the local audio/video muted state and forwards it to the bar.
+ *
+ * @param {{ audioMuted?: boolean, videoMuted?: boolean }} [data] - Muted flags.
+ * @returns {void}
+ */
+function setAvState(data) {
+    avMuted = { audioMuted: Boolean(data?.audioMuted),
+        videoMuted: Boolean(data?.videoMuted) };
+    sendToBar('cb-av-state', avMuted);
+}
+
 // ── Crash safety ────────────────────────────────────────────────────────────
 // The bar is a separate always-on-top window. If the meeting's main window or
 // its renderer dies without sending cb-hide, the bar would be orphaned over the
@@ -286,9 +303,9 @@ function openControlsBarWindow(mainWindowGetter) {
     controlsBarWindow.webContents.on('did-finish-load', () => {
         reveal(); // fallback in case ready-to-show didn't fire
 
-        // Replay the cached timestamp so the timer starts on a window that
-        // opened after the conference clock was already running.
+        // Replay cached state so a freshly-loaded bar reflects reality.
         sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
+        sendToBar('cb-av-state', avMuted);
     });
 
     attachMainWindowWatch();
@@ -309,5 +326,6 @@ function closeControlsBarWindow() {
 module.exports = {
     openControlsBarWindow,
     closeControlsBarWindow,
-    setConferenceTimestamp
+    setConferenceTimestamp,
+    setAvState
 };
