@@ -68,6 +68,22 @@ function setAvState(data) {
     sendToBar('cb-av-state', avMuted);
 }
 
+// Latest participant / unread counts for the bar's badges (cached + replayed).
+let counts = { participantCount: 0,
+    unreadCount: 0 };
+
+/**
+ * Caches the participant / unread counts and forwards them to the bar.
+ *
+ * @param {{ participantCount?: number, unreadCount?: number }} [data] - Counts.
+ * @returns {void}
+ */
+function setCounts(data) {
+    counts = { participantCount: Number(data?.participantCount) || 0,
+        unreadCount: Number(data?.unreadCount) || 0 };
+    sendToBar('cb-counts', counts);
+}
+
 // ── Crash safety ────────────────────────────────────────────────────────────
 // The bar is a separate always-on-top window. If the meeting's main window or
 // its renderer dies without sending cb-hide, the bar would be orphaned over the
@@ -306,6 +322,7 @@ function openControlsBarWindow(mainWindowGetter) {
         // Replay cached state so a freshly-loaded bar reflects reality.
         sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
         sendToBar('cb-av-state', avMuted);
+        sendToBar('cb-counts', counts);
     });
 
     attachMainWindowWatch();
@@ -327,5 +344,6 @@ module.exports = {
     openControlsBarWindow,
     closeControlsBarWindow,
     setConferenceTimestamp,
-    setAvState
+    setAvState,
+    setCounts
 };

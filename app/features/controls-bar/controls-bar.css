@@ -257,6 +257,8 @@ button { font-family: inherit; }
 .cb-btn--danger .cb-ico-on { display: none; }
 .cb-btn--danger .cb-ico-off { display: block; }
 
+/* The badge's display:flex would otherwise beat the UA [hidden] rule. */
+.cb-badge[hidden] { display: none; }
 .cb-badge {
   position: absolute;
   top: -2px;

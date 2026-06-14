@@ -41,5 +41,12 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     toggleVideo: () => ipcRenderer.send('cb-toggle-video'),
 
     // Live mic/cam muted state ({ audioMuted, videoMuted }) → Audio/Video icons.
-    onAvState: onChannel('cb-av-state')
+    onAvState: onChannel('cb-av-state'),
+
+    // Open the participants pane / chat in the meeting.
+    openParticipants: () => ipcRenderer.send('cb-open-participants'),
+    openChat: () => ipcRenderer.send('cb-open-chat'),
+
+    // Live counts ({ participantCount, unreadCount }) → Participants/Chat badges.
+    onCounts: onChannel('cb-counts')
 });

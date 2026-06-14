@@ -19,7 +19,8 @@ const {
     openControlsBarWindow,
     closeControlsBarWindow,
     setConferenceTimestamp,
-    setAvState
+    setAvState,
+    setCounts
 } = require('./controls-bar/controls-bar-window');
 const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
@@ -241,6 +242,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             openControlsBarWindow(getMainWindow);
             setConferenceTimestamp(data?.startTimestamp);
             setAvState(data);
+            setCounts(data);
         } catch (err) {
             console.error('❌ ControlsBar: Failed to open window:', err);
         }
@@ -277,6 +279,25 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer reports the live mic/cam muted state — cache + forward to the bar.
     register('cb-av-state', (_event, data) => {
         setAvState(data);
+    });
+
+    // Participants / Chat buttons — restore the meeting + open the pane there.
+    register('cb-open-participants', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-open-participants');
+        }
+    });
+    register('cb-open-chat', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-open-chat');
+        }
+    });
+
+    // Renderer reports the live participant / unread counts — cache + forward.
+    register('cb-counts', (_event, data) => {
+        setCounts(data);
     });
 
     // User toggled pin state in the PiP panel — forward to main renderer

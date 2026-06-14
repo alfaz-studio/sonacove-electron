@@ -14,6 +14,10 @@
     const hint = document.getElementById('cbHint');
     const audioBtn = document.getElementById('cbAudio');
     const videoBtn = document.getElementById('cbVideo');
+    const participantsBtn = document.getElementById('cbParticipants');
+    const chatBtn = document.getElementById('cbChat');
+    const partBadge = document.getElementById('cbPartBadge');
+    const chatBadge = document.getElementById('cbChatBadge');
     const timerVal = document.querySelector('.cb-timer-val');
 
     // ── Meeting timer ───────────────────────────────────────────────────────
@@ -76,6 +80,29 @@
     api.onAvState?.(applyAvState);
     audioBtn?.addEventListener('click', () => api.toggleAudio?.());
     videoBtn?.addEventListener('click', () => api.toggleVideo?.());
+
+    // ── Participants / Chat ──────────────────────────────────────────────────
+    // Badges show the live participant count (when not alone) and chat unread
+    // count (when > 0); clicking opens the matching pane in the meeting.
+
+    /** Reflect the live participant / unread counts on the badges. */
+    function applyCounts(state) {
+        const people = Number(state && state.participantCount) || 0;
+        const unread = Number(state && state.unreadCount) || 0;
+
+        if (partBadge) {
+            partBadge.textContent = String(people);
+            partBadge.hidden = people <= 1;
+        }
+        if (chatBadge) {
+            chatBadge.textContent = unread > 99 ? '99+' : String(unread);
+            chatBadge.hidden = unread <= 0;
+        }
+    }
+
+    api.onCounts?.(applyCounts);
+    participantsBtn?.addEventListener('click', () => api.openParticipants?.());
+    chatBtn?.addEventListener('click', () => api.openChat?.());
 
     // ── More menu ─────────────────────────────────────────────────────────
     // Opening the menu grows the window taller (top-fixed) so it isn't clipped;
