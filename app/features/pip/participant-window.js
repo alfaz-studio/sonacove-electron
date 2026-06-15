@@ -12,7 +12,7 @@ const path = require('path');
 
 const { TILE_W, TILE_GAP, TILE_PAD, H_TILE_H, V_TILE_H, HEADER_H, BORDER, WINDOW_PAD, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
-const { computeWindowSize, windowFromMainExtent, uniformMainExtent, getWindowPosition } = require('./sizing');
+const { chromeMain, computeWindowSize, windowFromMainExtent, uniformMainExtent, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
 const {
@@ -124,9 +124,7 @@ function budgetVisibleCount() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay()).workArea;
     const screenMain = currentOrientation === 'vertical' ? workArea.height : workArea.width;
-    const chrome = (TILE_PAD * 2) + (BORDER * 2) + (WINDOW_PAD * 2)
-        + (currentOrientation === 'vertical' ? HEADER_H : 0);
-    const tileBudget = (screenMain * BUDGET_PCT) - chrome;
+    const tileBudget = (screenMain * BUDGET_PCT) - chromeMain(currentOrientation);
 
     // First tile always shows; later tiles only while they still fit the budget.
     let fit = 0;

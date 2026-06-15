@@ -105,11 +105,9 @@
       var V_MIN_H = Math.round(V_TILE_W / DEFAULT_AR), V_MAX_H = 360;  // vertical: tile height
 
       // { participantId: aspectRatio } — last AR seen in a frame, drives tile shape.
+      // Cleared when a camera goes off (no video ⇒ no AR ⇒ default tile shape);
+      // kept while a tile is merely hidden by a resize so the snap stays stable.
       var arById = {};
-      // { participantId: bool } — camera state from the participant feed
-      // (authoritative). A tile with the camera off uses the default (normal)
-      // shape regardless of any stale video AR, and late frames are ignored.
-      var hasVideoById = {};
 
       // ── DOM refs ───────────────────────────────────────────────────────────
 
@@ -392,8 +390,6 @@
 
         nameSpan.textContent = p.name || '';
 
-        hasVideoById[p.id] = !!p.hasVideo;
-
         if (!p.hasVideo) {
           videoImg.style.display = 'none';
           avatarDiv.style.display = 'flex';
@@ -636,11 +632,6 @@
             delete arById[aid];
           }
         }
-        for (var vid in hasVideoById) {
-          if (!currentIds[vid]) {
-            delete hasVideoById[vid];
-          }
-        }
 
         renderTiles();
         updateParticipantCount();
@@ -653,7 +644,8 @@
 
         // Camera off per the participant feed (authoritative): drop a late
         // in-flight frame so it can't re-apply the video or its portrait AR.
-        if (hasVideoById[frameData.id] === false) return;
+        var fp = participants.find(function (x) { return x.id === frameData.id; });
+        if (fp && !fp.hasVideo) return;
 
         // Resize the tile to the frame's aspect ratio when it changes (camera
         // flip, device rotation, first frame), then report the new extent.

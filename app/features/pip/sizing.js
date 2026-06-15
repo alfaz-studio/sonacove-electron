@@ -18,6 +18,19 @@ const {
 } = require('./constants');
 
 /**
+ * Panel chrome along the main axis (paddings, borders, the transparent shadow
+ * pad, plus the header which always sits on the height). Single source so the
+ * window sizing here and the length-budget cap in participant-window can't drift.
+ *
+ * @param {string} orientation - 'horizontal' or 'vertical'.
+ * @returns {number}
+ */
+function chromeMain(orientation) {
+    return (TILE_PAD * 2) + (BORDER * 2) + (WINDOW_PAD * 2)
+        + (orientation === 'vertical' ? HEADER_H : 0);
+}
+
+/**
  * Wraps the tiles' main-axis extent (sum of visible tile main sizes + the gaps
  * between them) in the panel chrome to produce the BrowserWindow dimensions.
  * The cross axis is fixed by the orientation.
@@ -29,21 +42,14 @@ const {
 function windowFromMainExtent(mainExtent, orientation) {
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
-    // Transparent shadow padding the window carries around the visible panel.
     const win2 = WINDOW_PAD * 2;
-    const main = Math.max(0, Math.round(mainExtent));
+    const main = Math.max(0, Math.round(mainExtent)) + chromeMain(orientation);
 
     if (orientation === 'horizontal') {
-        return {
-            width: main + pad2 + bdr2 + win2,
-            height: H_TILE_H + pad2 + HEADER_H + bdr2 + win2,
-        };
+        return { width: main, height: H_TILE_H + pad2 + HEADER_H + bdr2 + win2 };
     }
 
-    return {
-        width: TILE_W + pad2 + bdr2 + win2,
-        height: main + pad2 + HEADER_H + bdr2 + win2,
-    };
+    return { width: TILE_W + pad2 + bdr2 + win2, height: main };
 }
 
 /**
@@ -104,6 +110,7 @@ function getWindowPosition(W, H, orientation, workArea) {
 }
 
 module.exports = {
+    chromeMain,
     windowFromMainExtent,
     uniformMainExtent,
     computeWindowSize,
