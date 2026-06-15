@@ -10,7 +10,7 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { TILE_W, TILE_PAD, H_TILE_H, V_TILE_H, HEADER_H, BORDER, WINDOW_PAD, IPC } = require('./constants');
+const { TILE_W, TILE_GAP, TILE_PAD, H_TILE_H, V_TILE_H, HEADER_H, BORDER, WINDOW_PAD, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
 const { computeWindowSize, windowFromMainExtent, uniformMainExtent, getWindowPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
@@ -50,6 +50,19 @@ let currentOrientation = loadOrientation();
 let currentParticipantCount = 1;
 let currentPinnedCount = 0;
 let lastParticipantsData = null;
+
+// Length-budget cap: the panel auto-opens to at most this fraction of the
+// display's main axis (height in vertical, width in horizontal). Tall tiles
+// (a portrait video can grow to 360px vs a normal 141px) eat more of the budget
+// so fewer auto-show. 0.95 keeps the panel under ~95% of the screen while still
+// fitting a portrait + a couple of normals; adaptive across displays. Single knob.
+const BUDGET_PCT = 0.95;
+// Whether the panel still follows the budget cap. Once the user edge-resizes we
+// respect their size — and that choice PERSISTS across the panel closing and
+// reopening (savedUserCount carries the count, captured on close, restored on
+// open). It never auto-reverts to the budget.
+let autoSized = true;
+let savedUserCount = null;
 let lastThemeData = null;
 
 // Per-video tile sizing. Tiles vary in size with each video's aspect ratio
@@ -60,6 +73,10 @@ let lastThemeData = null;
 // (snapping, and the pre-size shown before the panel's first report).
 let contentMainExtent = null;
 let effTileMain = null;
+// Per-participant main-axis tile sizes (display order), reported by the panel.
+// Lets the resize engine snap by whole tiles at their real size (a 2x portrait
+// video is one step) instead of dividing by the average tile size.
+let tileMainSizes = [];
 
 // Timestamp (ms) until which a programmatic content-fit owns the bounds. The
 // native-resize listener skips while this is in the future so it doesn't
@@ -86,6 +103,48 @@ function getMinTiles() {
     return Math.max(1, Math.min(currentPinnedCount, currentParticipantCount));
 }
 
+/**
+ * Auto visible-tile count under the length budget: the most tiles (in growth
+ * order — pinned first, same as the panel renders) whose combined main-axis
+ * extent fits BUDGET_PCT of the display's main axis. Tall tiles eat more budget
+ * so fewer fit; pinned users always show (override the cap); never returns 0.
+ *
+ * @returns {number}
+ */
+function budgetVisibleCount() {
+    const sizes = tileMainSizes;
+    const pinned = getMinTiles();
+
+    if (!sizes.length) {
+        return Math.max(pinned, 1); // before the panel's first per-tile report
+    }
+
+    const mainWindow = getMainWindow();
+    const workArea = (mainWindow
+        ? screen.getDisplayMatching(mainWindow.getBounds())
+        : screen.getPrimaryDisplay()).workArea;
+    const screenMain = currentOrientation === 'vertical' ? workArea.height : workArea.width;
+    const chrome = (TILE_PAD * 2) + (BORDER * 2) + (WINDOW_PAD * 2)
+        + (currentOrientation === 'vertical' ? HEADER_H : 0);
+    const tileBudget = (screenMain * BUDGET_PCT) - chrome;
+
+    // First tile always shows; later tiles only while they still fit the budget.
+    let fit = 0;
+    let cum = 0;
+
+    for (let i = 0; i < sizes.length; i++) {
+        const withTile = cum + (i > 0 ? TILE_GAP : 0) + sizes[i];
+
+        if (i > 0 && withTile > tileBudget) {
+            break;
+        }
+        cum = withTile;
+        fit = i + 1;
+    }
+
+    return Math.min(Math.max(pinned, fit), currentParticipantCount);
+}
+
 // See suppressUnreadChatCount() for the rationale. 15s is the safety floor;
 // suppression normally drops earlier via the signals in sendParticipantsUpdate.
 const UNREAD_SUPPRESS_MS = 15000;
@@ -100,6 +159,7 @@ const getState = () => ({
     minTiles: getMinTiles(),
     orientation: currentOrientation,
     tileMain: effectiveTileMain(),
+    tileMains: tileMainSizes,
 });
 
 // Pill expand and the resize lerp both relax min/max to (1,1)/(0,0); without
@@ -109,7 +169,10 @@ const restoreSizeConstraints = () => updateSizeConstraints();
 
 setupDragHandlers(getWindow);
 setupPillHandlers(getWindow, getState, restoreSizeConstraints);
-setupResizeHandlers(getWindow, getState, restoreSizeConstraints);
+setupResizeHandlers(getWindow, getState, restoreSizeConstraints, () => {
+    // User took manual control of the size — stop auto-capping to the budget.
+    autoSized = false;
+});
 
 // ── Orientation ──────────────────────────────────────────────────────────────
 
@@ -148,6 +211,7 @@ function applyOrientation() {
     // once it re-renders, and the CONTENT_SIZE handler refits.
     contentMainExtent = null;
     effTileMain = null;
+    tileMainSizes = [];
 
     const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
     const { x, y } = getWindowPosition(W, H, currentOrientation, display.workArea);
@@ -254,24 +318,15 @@ ipcMain.on(IPC.RESIZE, (_event, { count }) => {
         return;
     }
 
-    const prevCount = currentParticipantCount;
-
     currentParticipantCount = Math.max(1, count);
 
-    // Clamp visible count if participants left.
-    let visibleCount = getVisibleTileCount();
+    // While auto-sizing, the visible count tracks the length-budget cap; once the
+    // user has manually resized we keep their count, just clamped to bounds.
+    const visibleCount = autoSized
+        ? budgetVisibleCount()
+        : Math.max(getMinTiles(), Math.min(getVisibleTileCount(), currentParticipantCount));
 
-    if (visibleCount > currentParticipantCount) {
-        visibleCount = currentParticipantCount;
-        setVisibleTileCount(visibleCount);
-    }
-
-    // If the user hasn't manually resized (visible == prev total), auto-expand
-    // to show new participants.
-    if (visibleCount === prevCount && currentParticipantCount > prevCount) {
-        visibleCount = currentParticipantCount;
-        setVisibleTileCount(visibleCount);
-    }
+    setVisibleTileCount(visibleCount);
 
     // While in pill mode or mid drag/resize we still keep the count/visible
     // data in sync above (so expandFromPill and gesture-end restore size to
@@ -351,6 +406,27 @@ ipcMain.on(IPC.CONTENT_SIZE, (_event, data) => {
         effTileMain = data.avgTileMain;
     }
 
+    // Stored before the extent dedup below so a report that only changes the
+    // tile set (same overall extent) still refreshes the per-tile snap sizes.
+    if (Array.isArray(data.tileMains)) {
+        tileMainSizes = data.tileMains;
+    }
+
+    // Re-apply the length-budget cap with the fresh per-tile sizes (e.g. a tile
+    // just became a tall portrait). If the cap changes the count, re-render and
+    // let the resulting report size the window — this extent is now stale.
+    if (autoSized && !isPillMode() && !isDragging() && !isResizing()
+            && participantWindow && !participantWindow.isDestroyed()) {
+        const want = budgetVisibleCount();
+
+        if (want !== getVisibleTileCount()) {
+            setVisibleTileCount(want);
+            participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: want, edge: null });
+
+            return;
+        }
+    }
+
     const next = Math.round(data.mainExtent);
 
     // Skip negligible deltas to avoid setBounds churn from sub-pixel jitter.
@@ -376,7 +452,10 @@ function openParticipantWindow() {
     currentPinnedCount = 0;
     contentMainExtent = null;
     effTileMain = null;
-    setVisibleTileCount(1);
+    tileMainSizes = [];
+    // Restore the user's chosen size across reopen; otherwise start at 1 and let
+    // the budget cap auto-fit once participants + per-tile sizes arrive.
+    setVisibleTileCount(!autoSized && savedUserCount ? savedUserCount : 1);
 
     const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
 
@@ -572,6 +651,12 @@ function setParticipantTheme(theme) {
 
 function closeParticipantWindow(notifyUserClosed = false) {
     lastParticipantsData = null;
+
+    // Remember a user-chosen size so reopening the panel restores it instead of
+    // snapping back to the budget default.
+    if (!autoSized) {
+        savedUserCount = getVisibleTileCount();
+    }
     // suppressUnreadUntil intentionally survives close: the chat-click
     // closes the PiP ms later and reopens it when the user minimises.
     // Edge case: if a new meeting starts within the 15s window with

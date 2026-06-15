@@ -12,11 +12,12 @@ const { ipcMain, screen } = require('electron');
 const {
     TILE_W, TILE_GAP, TILE_PAD, HEADER_H, BORDER, WINDOW_PAD, IPC,
 } = require('./constants');
-const { computeWindowSize } = require('./sizing');
+const { computeWindowSize, windowFromMainExtent } = require('./sizing');
 
 let _getWindow = null;
 let _getState = null;
 let _restoreConstraints = null;
+let _onUserResize = null;   // called when the user resizes (turns off auto-sizing)
 let _visibleTileCount = 4;
 
 // Edge-resize polling state.
@@ -89,12 +90,16 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
             return;
         }
 
-        const { count, minTiles, orientation, tileMain } = getState();
+        const { count, minTiles, orientation, tileMain, tileMains } = getState();
         const bounds = win.getBounds();
-        const { n } = snapToTileBoundary(bounds.width, bounds.height, orientation, count, minTiles, tileMain);
+        const { n } = snapToTileBoundary(
+            bounds.width, bounds.height, orientation, count, minTiles, tileMain, tileMains
+        );
 
         if (n !== _visibleTileCount) {
             _visibleTileCount = n;
+            // NB: don't treat this as a user resize — on a frameless window the
+            // native 'resize' only fires from our own programmatic setBounds.
             win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: n, edge: null });
         }
     });
@@ -121,31 +126,63 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
  * the snapped dimensions. `minTiles` defaults to 1; pinning N participants
  * raises it to N so the panel can't be shrunk past the pinned slots.
  */
-function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1, tileMain) {
+function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1, tileMain, tileMains) {
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
-    let n;
-
     const win2 = WINDOW_PAD * 2;
-    // Per-video tiles vary in size; use the panel-reported average main-axis
-    // size so the snap step matches the tiles the user is actually dragging past.
-    const tm = tileMain || TILE_W;
 
-    if (orientation === 'horizontal') {
-        const availableWidth = proposedWidth - pad2 - bdr2 - win2 + TILE_GAP;
+    // Main-axis space available for the tiles + the inter-tile gaps.
+    const availableMain = orientation === 'horizontal'
+        ? proposedWidth - pad2 - bdr2 - win2
+        : proposedHeight - pad2 - bdr2 - HEADER_H - win2;
 
-        n = Math.round(availableWidth / (tm + TILE_GAP));
-    } else {
-        const availableHeight = proposedHeight - pad2 - bdr2 - HEADER_H - win2 + TILE_GAP;
+    const sizes = Array.isArray(tileMains) && tileMains.length ? tileMains : null;
 
-        n = Math.round(availableHeight / (tm + TILE_GAP));
+    if (!sizes) {
+        // Before the panel has reported per-tile sizes: uniform-tile estimate.
+        const tm = tileMain || TILE_W;
+        const n = Math.max(minTiles, Math.min(
+            Math.round((availableMain + TILE_GAP) / (tm + TILE_GAP)), maxTiles));
+        const { width, height } = computeWindowSize(n, orientation, tileMain);
+
+        return { n, width, height };
     }
 
-    n = Math.max(minTiles, Math.min(n, maxTiles));
+    // Snap by the real per-video tile sizes: a tile is added once the drag passes
+    // that tile's midpoint, so a 2x portrait tile is one whole step (not half).
+    // `cum` accumulates the exact extent of the tiles counted into `n`.
+    let n = 0;
+    let cum = 0;
 
-    const { width, height } = computeWindowSize(n, orientation, tileMain);
+    for (let i = 0; i < sizes.length; i++) {
+        const gap = i > 0 ? TILE_GAP : 0;
 
-    return { n, width, height };
+        if (availableMain >= cum + gap + (sizes[i] / 2)) {
+            cum += gap + sizes[i];
+            n = i + 1;
+        } else {
+            break;
+        }
+    }
+
+    const clamped = Math.max(minTiles, Math.min(n, maxTiles));
+
+    // The exact window comes straight from `cum`; only re-sum when the
+    // min/max-tiles clamp actually moved the boundary (e.g. a pinned floor).
+    let mainExtent = cum;
+
+    if (clamped !== n) {
+        const fit = Math.min(clamped, sizes.length);
+
+        mainExtent = (fit - 1) * TILE_GAP;
+        for (let i = 0; i < fit; i++) {
+            mainExtent += sizes[i];
+        }
+    }
+
+    const { width, height } = windowFromMainExtent(mainExtent, orientation);
+
+    return { n: clamped, width, height };
 }
 
 /**
@@ -189,7 +226,7 @@ function startEdgeResize(edge) {
         }
 
         const pos = screen.getCursorScreenPoint();
-        const { count, minTiles, orientation, tileMain } = _getState();
+        const { count, minTiles, orientation, tileMain, tileMains } = _getState();
 
         let proposedWidth = _startWindowSize;
         let proposedHeight = _startWindowSize;
@@ -218,7 +255,7 @@ function startEdgeResize(edge) {
         }
 
         const { n, width, height } = snapToTileBoundary(
-            proposedWidth, proposedHeight, orientation, count, minTiles, tileMain
+            proposedWidth, proposedHeight, orientation, count, minTiles, tileMain, tileMains
         );
 
         // Compute target position — anchor to opposite edge.
@@ -346,13 +383,17 @@ function stopEdgeResize() {
  * @param {(() => void)=} restoreConstraints - Optional callback invoked when
  *   the lerp animation completes so participant-window can reapply min/max.
  */
-function setupResizeHandlers(getWindow, getState, restoreConstraints) {
+function setupResizeHandlers(getWindow, getState, restoreConstraints, onUserResize) {
     _getWindow = getWindow;
     _getState = getState;
     _restoreConstraints = restoreConstraints || null;
+    _onUserResize = onUserResize || null;
     _visibleTileCount = getState().count;
 
     ipcMain.on(IPC.START_EDGE_RESIZE, (_event, { edge }) => {
+        if (_onUserResize) {
+            _onUserResize();
+        }
         startEdgeResize(edge);
     });
 

@@ -175,9 +175,10 @@ contextBridge.exposeInMainWorld('panelAPI', {
      * window. Tiles vary in size with each video's aspect ratio, so the main
      * process can't compute the window from a tile count alone.
      *
-     * @param {Object} size - { orientation, mainExtent, avgTileMain, count }.
+     * @param {Object} size - { orientation, mainExtent, avgTileMain, tileMains, count }.
      *   mainExtent is the main-axis extent of the visible tiles (px, incl. gaps);
-     *   avgTileMain is the average per-tile main-axis size.
+     *   avgTileMain is the average per-tile main-axis size; tileMains is the
+     *   per-participant main-axis size (display order) for whole-tile resize snapping.
      */
     reportContentSize(size) {
         if (size && typeof size === 'object') {

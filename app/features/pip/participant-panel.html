@@ -106,6 +106,10 @@
 
       // { participantId: aspectRatio } — last AR seen in a frame, drives tile shape.
       var arById = {};
+      // { participantId: bool } — camera state from the participant feed
+      // (authoritative). A tile with the camera off uses the default (normal)
+      // shape regardless of any stale video AR, and late frames are ignored.
+      var hasVideoById = {};
 
       // ── DOM refs ───────────────────────────────────────────────────────────
 
@@ -155,6 +159,7 @@
       // window. rAF-debounced and value-deduped to avoid setBounds churn.
       var contentReportScheduled = false;
       var lastReportedMain = -1;
+      var lastReportedCount = -1;
 
       function scheduleContentReport() {
         if (contentReportScheduled) {
@@ -186,15 +191,36 @@
 
         var mainExtent = sum + ((n - 1) * TILE_GAP);
 
-        if (Math.abs(mainExtent - lastReportedMain) < 2) {
+        if (Math.abs(mainExtent - lastReportedMain) < 2 && participants.length === lastReportedCount) {
           return;
         }
         lastReportedMain = mainExtent;
+        lastReportedCount = participants.length;
+
+        // Per-tile main-axis size in GROWTH ORDER — the order tiles are revealed
+        // as the panel grows: pinned first (always shown), then unpinned in the
+        // fill direction (from the end when dragging the top/left edge). This
+        // mirrors getVisibleParticipants, so the snap's first n sizes are exactly
+        // the set shown at count n — correct even when a pinned tile is a
+        // different size than the first participant. ARs persist while a tile is
+        // only hidden (see renderTiles), so this stays stable across a resize.
+        var pinnedP = [];
+        var unpinnedP = [];
+        for (var q = 0; q < participants.length; q++) {
+          (pinnedIds[participants[q].id] ? pinnedP : unpinnedP).push(participants[q]);
+        }
+        var fillFromEnd = resizeEdge === 'left' || resizeEdge === 'top';
+        var growth = pinnedP.concat(fillFromEnd ? unpinnedP.slice().reverse() : unpinnedP);
+        var tileMains = [];
+        for (var g = 0; g < growth.length; g++) {
+          tileMains.push(tileDimsFor(arById[growth[g].id]).main);
+        }
 
         window.panelAPI.reportContentSize({
           orientation: currentOrientation,
           mainExtent: mainExtent,
           avgTileMain: Math.round(sum / n),
+          tileMains: tileMains,
           count: n
         });
       }
@@ -252,7 +278,10 @@
           if (!newIds[id]) {
             existingMap[id].remove();
             delete existingMap[id];
-            delete arById[id];   // drop stale AR so it can't accumulate across join/leave cycles
+            // Keep arById: a tile hidden by a resize is still in the meeting, so
+            // its real aspect ratio must survive — otherwise the resize snap loses
+            // the tile's size and flip-flops the count. Left participants' ARs are
+            // pruned in onParticipantsUpdate instead.
           }
         }
 
@@ -363,9 +392,19 @@
 
         nameSpan.textContent = p.name || '';
 
+        hasVideoById[p.id] = !!p.hasVideo;
+
         if (!p.hasVideo) {
           videoImg.style.display = 'none';
           avatarDiv.style.display = 'flex';
+          // Camera off → there's no video AR any more, so revert the tile to a
+          // normal (default) size instead of leaving it stuck at the last video's
+          // aspect ratio, and re-report so the window refits (mirrors onFrame).
+          if (arById[p.id] !== undefined) {
+            delete arById[p.id];
+            sizeTile(tile, p.id);
+            scheduleContentReport();
+          }
         }
 
         renderAvatar(avatarDiv, p);
@@ -589,6 +628,20 @@
           window.panelAPI.updatePinState(pinnedIds);
         }
 
+        // Drop cached ARs for participants who actually left, so arById stays
+        // bounded. A resize-hidden participant is still in `participants`, so its
+        // AR is kept (that's what keeps the resize snap stable).
+        for (var aid in arById) {
+          if (!currentIds[aid]) {
+            delete arById[aid];
+          }
+        }
+        for (var vid in hasVideoById) {
+          if (!currentIds[vid]) {
+            delete hasVideoById[vid];
+          }
+        }
+
         renderTiles();
         updateParticipantCount();
         updateChatBadge(data.unreadChatCount || 0);
@@ -597,6 +650,10 @@
       window.panelAPI.onFrame(function (frameData) {
         var tile = tilesContainer.querySelector('.tile[data-participant-id="' + frameData.id + '"]');
         if (!tile) return;
+
+        // Camera off per the participant feed (authoritative): drop a late
+        // in-flight frame so it can't re-apply the video or its portrait AR.
+        if (hasVideoById[frameData.id] === false) return;
 
         // Resize the tile to the frame's aspect ratio when it changes (camera
         // flip, device rotation, first frame), then report the new extent.

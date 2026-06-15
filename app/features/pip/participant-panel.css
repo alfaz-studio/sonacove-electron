@@ -65,7 +65,6 @@ body {
   background: var(--panel-bg);
   border-radius: 18px;
   border: 1px solid var(--border);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   opacity: 1;
   transform: scale(1);
