@@ -12,6 +12,7 @@
   "scripts": {
     "start": "webpack --config ./webpack.main.js --mode development && electron .",
     "preview:controls-bar": "electron scripts/preview-controls-bar.js",
+    "preview:pip": "electron scripts/preview-pip.js",
     "start:prod": "npm run build && npx electron-builder --dir",
     "clean": "rm -rf node_modules build dist",
     "lint": "eslint .",

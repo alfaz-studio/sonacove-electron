@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const { FILMSTRIP_VIDEO } = require('./constants');
+
 /**
  * Minimal preload for the participant PiP panel overlay window.
  *
@@ -10,6 +12,9 @@ const { contextBridge, ipcRenderer } = require('electron');
  *   - Receive the current orientation from the main process.
  */
 contextBridge.exposeInMainWorld('panelPlatform', process.platform);
+
+// Static panel config (feature flags) read once by the renderer at startup.
+contextBridge.exposeInMainWorld('panelConfig', { filmstripVideo: FILMSTRIP_VIDEO });
 
 contextBridge.exposeInMainWorld('panelAPI', {
     /**
@@ -64,37 +69,6 @@ contextBridge.exposeInMainWorld('panelAPI', {
      */
     close() {
         ipcRenderer.send('pp-close-request');
-    },
-
-    /**
-     * Request the main process to toggle between horizontal and vertical layout.
-     *
-     * @returns {void}
-     */
-    toggleOrientation() {
-        ipcRenderer.send('pip-toggle-orientation');
-    },
-
-    /**
-     * Register a callback that fires when the main process confirms an
-     * orientation change.
-     *
-     * @param {function(string): void} cb - Called with 'horizontal' or 'vertical'.
-     * @returns {void}
-     */
-    onOrientationChanged(cb) {
-        ipcRenderer.on('pp-orientation-changed', (_event, orientation) => cb(orientation));
-    },
-
-    /**
-     * Register a callback that fires when the visible tile count changes
-     * (user resized the window, or participants changed).
-     *
-     * @param {function(number): void} cb - Called with the new visible count.
-     * @returns {void}
-     */
-    onVisibleCountChanged(cb) {
-        ipcRenderer.on('pp-visible-count-changed', (_event, data) => cb(data));
     },
 
     /**
@@ -187,18 +161,35 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
-     * Tell the main process to start an edge resize.
+     * Spotlight: request the window be resized to the panel's measured card
+     * size. The renderer owns its layout, so it owns its dimensions.
      *
-     * @param {string} edge - 'left' | 'right' | 'top' | 'bottom'
+     * @param {number} width - Desired window width in px.
+     * @param {number} height - Desired window height in px.
+     * @returns {void}
      */
-    startEdgeResize(edge) {
-        ipcRenderer.send('pp-start-edge-resize', { edge });
+    setSize(width, height) {
+        ipcRenderer.send('pp-set-size', { width,
+            height });
     },
 
     /**
-     * Tell the main process to stop edge resizing.
+     * Spotlight: persist the panel's layout + auto-follow prefs across sessions.
+     *
+     * @param {{ layout: string, auto: boolean }} settings - Prefs to persist.
+     * @returns {void}
      */
-    stopEdgeResize() {
-        ipcRenderer.send('pp-stop-edge-resize');
+    saveSettings(settings) {
+        ipcRenderer.send('pp-save-settings', settings);
+    },
+
+    /**
+     * Register a callback for the persisted settings, sent once on load.
+     *
+     * @param {function({ layout: string, auto: boolean }): void} cb - Called with prefs.
+     * @returns {void}
+     */
+    onSettings(cb) {
+        ipcRenderer.on('pp-settings', (_event, settings) => cb(settings));
     },
 });

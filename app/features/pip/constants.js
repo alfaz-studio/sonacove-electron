@@ -23,6 +23,13 @@ const MARGIN = 20;    // gap between panel and screen edges
 
 const PILL_SIZE = 56;
 
+// ── Spotlight card (renderer-driven sizing) ─────────────────────────────────
+// The Spotlight panel is a fixed-width card; the renderer measures its content
+// per layout and requests the exact window size via SET_SIZE. CARD_H_DEFAULT is
+// just the initial guess before the renderer's first measure lands.
+const CARD_W = 320;
+const CARD_H_DEFAULT = 331;
+
 // ── Spotlight ──────────────────────────────────────────────────────────────
 // Feature flag: show live video in the filmstrip thumbnails. Off for now —
 // the filmstrip shows avatars only; live video is reserved for the stage
@@ -55,8 +62,13 @@ const IPC = {
     START_EDGE_RESIZE: 'pp-start-edge-resize',
     STOP_EDGE_RESIZE: 'pp-stop-edge-resize',
 
+    // Spotlight: renderer-driven window size + persisted layout/auto prefs.
+    SET_SIZE: 'pp-set-size',
+    SAVE_SETTINGS: 'pp-save-settings',
+
     // Main → panel renderer
     FRAME: 'pp-frame',
+    SETTINGS: 'pp-settings',
     ORIENTATION_CHANGED: 'pp-orientation-changed',
     VISIBLE_COUNT_CHANGED: 'pp-visible-count-changed',
     ENTER_PILL_MODE: 'pp-enter-pill-mode',
@@ -80,6 +92,8 @@ module.exports = {
     BORDER,
     MARGIN,
     PILL_SIZE,
+    CARD_W,
+    CARD_H_DEFAULT,
     FILMSTRIP_VIDEO,
     IPC,
 };

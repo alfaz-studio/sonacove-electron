@@ -199,9 +199,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             const { isPillMode, expandFromPill } = require('./pip/pill');
 
             if (getParticipantWindow() && isPillMode()) {
-                const { count, orientation } = getCurrentState();
-
-                expandFromPill(count, orientation);
+                expandFromPill(getCurrentState().size);
             } else {
                 openParticipantWindow();
             }

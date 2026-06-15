@@ -59,7 +59,24 @@ function getWindowPosition(count, orientation, workArea) {
     };
 }
 
+/**
+ * Bottom-right anchored position for a renderer-sized card. Clamped so the
+ * window never starts off the top/left of the work area.
+ *
+ * @param {number} width - Card width in px.
+ * @param {number} height - Card height in px.
+ * @param {Electron.Rectangle} workArea - The display work area.
+ * @returns {{ x: number, y: number }}
+ */
+function getCardPosition(width, height, workArea) {
+    return {
+        x: Math.max(workArea.x, workArea.x + workArea.width - width - MARGIN),
+        y: Math.max(workArea.y, workArea.y + workArea.height - height - MARGIN)
+    };
+}
+
 module.exports = {
     computeWindowSize,
     getWindowPosition,
+    getCardPosition
 };

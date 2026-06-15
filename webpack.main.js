@@ -20,12 +20,17 @@ module.exports = {
     },
     plugins: [
         new webpack.IgnorePlugin({ resourceRegExp: /^supports-color$/ }),
+
+        // ⚠️ Renderer assets are copied per-file. A NEW file in a renderer dir
+        // (e.g. a split-out *.js for the PiP / controls-bar) MUST be added here,
+        // or it silently 404s in build/ and the window loads blank.
         new CopyPlugin({
             patterns: [
                 { from: 'app/splash.html', to: 'splash.html' },
                 { from: 'app/error.html', to: 'error.html' },
                 { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' },
                 { from: 'app/features/pip/participant-panel.css', to: 'participant-panel.css' },
+                { from: 'app/features/pip/participant-panel.js', to: 'participant-panel.js' },
                 { from: 'app/features/controls-bar/controls-bar.html', to: 'controls-bar.html' },
                 { from: 'app/features/controls-bar/controls-bar.css', to: 'controls-bar.css' },
                 { from: 'app/features/controls-bar/controls-bar.js', to: 'controls-bar.js' },

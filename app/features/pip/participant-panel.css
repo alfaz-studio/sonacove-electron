@@ -1,6 +1,20 @@
-/* ── Participant PiP Panel Styles ──────────────────────────────────────────── */
+/* ── Spotlight PiP — ConceptSpotlight (desktop-overlay design kit) ─────────── */
 
-/* ── Reset ────────────────────────────────────────────────────────────────── */
+:root {
+  --action: #f05023;
+  --action-soft: rgba(240, 80, 35, 0.16);
+  --action-glyph: #f86f4d;
+  --pip: #1a1b1f;
+  --pip-2: #232429;
+  --pip-tile: #0c0d0f;
+  --line: rgba(255, 255, 255, 0.09);
+  --ink: #e9eaec;
+  --ink-2: #9a9ca3;
+  --ink-3: #6b6d74;
+  --success: #22a55a;
+  --danger: #e0483b;
+  --danger-hover: #f15a4d;
+}
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -13,391 +27,360 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
+  color: var(--ink);
 }
 
-/* ── Panel ────────────────────────────────────────────────────────────────── */
+/* ── Card ──────────────────────────────────────────────────────────────────── */
 
-.panel {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: rgba(20, 20, 20, 0.9);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+.sp-card {
+  position: relative;
+  width: 320px;
+  background: var(--pip);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   opacity: 1;
   transform: scale(1);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.panel.hiding {
-  opacity: 0;
-  transform: scale(0.85);
-}
+.sp-card.hiding { opacity: 0; transform: scale(0.85); }
+.sp-card.hidden { display: none; }
 
-.panel.hidden {
-  display: none;
-}
+/* ── Header ────────────────────────────────────────────────────────────────── */
 
-/* ── Tiles Container ──────────────────────────────────────────────────────── */
-
-.tiles-container {
-  flex: 1;
+.sp-header {
   display: flex;
-  flex-direction: row;
+  align-items: center;
   gap: 6px;
-  padding: 6px;
-  overflow: hidden;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
   cursor: grab;
-}
-
-.tiles-container:active {
-  cursor: grabbing;
-}
-
-.tiles-container.vertical {
-  flex-direction: column;
-}
-
-/* ── Tile ─────────────────────────────────────────────────────────────────── */
-
-.tile {
-  width: 250px;
-  height: 130px;
-  background: #040404;
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-  flex-shrink: 0;
-}
-
-/* Entry animation lives on a one-shot class (removed on animationend) so that
-   re-ordering tiles — which re-inserts the DOM node — doesn't replay it. */
-.tile.tile-enter {
-  animation: tileIn 0.18s ease-out;
-}
-
-@keyframes tileIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.tiles-container.vertical .tile {
-  width: 250px;
-  height: 160px;
-}
-
-.tile-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: none;
-}
-
-/* ── Tile Avatar ──────────────────────────────────────────────────────────── */
-
-.tile-avatar {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #040404;
-}
-
-.tile-avatar-img {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.tile-avatar-initials {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #FFFFFF;
-  font-size: 16px;
-  font-weight: 700;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.tile-avatar-fallback {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-/* ── Tile Audio Level Indicator ───────────────────────────────────────────── */
-
-.tile-audio-indicator {
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  z-index: 2;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  pointer-events: none;
-}
-
-.tile-audio-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #44A5FF;
-  opacity: 0;
-  transition: opacity 0.15s ease-in-out;
-}
-
-/* ── Tile Pin Button ──────────────────────────────────────────────────────── */
-
-.tile-pin-btn {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 3;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  color: rgba(255, 255, 255, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.12s, color 0.12s;
-}
-
-.tile:hover .tile-pin-btn {
-  opacity: 1;
-}
-
-.tile-pin-btn.pinned {
-  opacity: 1;
-  background: rgba(70, 135, 237, 0.85);
-  color: #FFFFFF;
-}
-
-.tile-pin-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: #FFFFFF;
-}
-
-.tile-pin-btn.pinned:hover {
-  background: rgba(70, 135, 237, 1);
-}
-
-/* ── Tile Name Bar ────────────────────────────────────────────────────────── */
-
-.tile-name-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  height: 32px;
-  background: linear-gradient(to bottom, transparent, rgba(4, 4, 4, 0.93));
-  padding: 0 8px 6px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-.tiles-container.vertical .tile-name-bar {
-  height: 34px;
-}
-
-.tile-name {
-  font-size: 11px;
-  font-weight: 600;
-  color: #FFFFFF;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── Tile Status Icons ────────────────────────────────────────────────────── */
-
-.tile-status-icons {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-}
-
-.tile-status-btn {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 4px;
-  border-radius: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s, border-color 0.12s, transform 0.1s;
-}
-
-.tile-status-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.tile-status-btn:active {
-  background: rgba(255, 255, 255, 0.35);
-  transform: scale(0.9);
-}
-
-/* ── Tile Indicators ──────────────────────────────────────────────────────── */
-
-/* Speaking — matches filmstrip theme blue */
-.tile.speaking {
-  box-shadow: 0 0 0 2px #4687ED, 0 0 12px rgba(70, 135, 237, 0.4);
-}
-
-/* Raised hand — matches filmstrip warning-02 */
-.tile.raised-hand {
-  box-shadow: 0 0 0 2px #FFD600, 0 0 8px rgba(255, 214, 0, 0.3);
-}
-
-/* Speaking + raised hand — hand takes priority for border color */
-.tile.speaking.raised-hand {
-  box-shadow: 0 0 0 2px #FFD600, 0 0 12px rgba(70, 135, 237, 0.4);
-}
-
-.tile-hand-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 3;
-  width: 22px;
-  height: 22px;
-  background: #FFD600;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
-
-/* ── Control Bar ──────────────────────────────────────────────────────────── */
-
-.control-bar {
-  height: 32px;
-  background: rgba(255, 255, 255, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
-  flex-shrink: 0;
   user-select: none;
 }
 
-.control-left {
+.sp-header:active { cursor: grabbing; }
+
+.sp-seg {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #858585;
-  cursor: grab;
-  flex: 1;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9px;
+  padding: 2px;
+  flex: none;
 }
 
-.control-left:active {
-  cursor: grabbing;
-}
-
-.control-left svg {
-  flex-shrink: 0;
-}
-
-.participant-count {
-  font-size: 11px;
-  font-weight: 400;
-  color: #858585;
-}
-
-.control-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ctrl-btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
+.sp-seg-btn {
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-2);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.12s;
-  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, transform 0.12s ease;
 }
 
-.ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
+.sp-seg-btn:hover { color: var(--ink); }
+.sp-seg-btn.active { background: var(--action); color: #fff; }
+.sp-seg-btn:active { transform: scale(0.94); }
 
-.ctrl-btn-danger {
-  color: #FF6B6B;
-}
-
-.ctrl-btn-danger:hover {
-  background: rgba(255, 107, 107, 0.15);
-}
-
-/* ── Chat Badge ───────────────────────────────────────────────────────────── */
-
-.chat-badge-count {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 14px;
-  height: 14px;
-  background: #165ECC;
-  border-radius: 7px;
-  font-size: 9px;
-  font-weight: 700;
-  color: #FFFFFF;
+.sp-auto {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 3px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  gap: 6px;
+  height: 26px;
+  min-width: 80px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: none;
+  transition: background 0.12s, color 0.12s, transform 0.12s ease;
 }
 
-.chat-badge-count.hidden {
+.sp-auto.on { background: var(--action-soft); color: var(--action-glyph); }
+.sp-auto:active { transform: scale(0.94); }
+
+.sp-spacer { flex: 1; }
+
+.sp-count {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  flex: none;
+}
+
+.sp-hdiv {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  flex: none;
+}
+
+/* Minimize + back-to-meeting — copied exactly from overlay.jsx's LayoutBtn. */
+.sp-ctrl {
+  width: 32px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #9a9aa0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+  transition: background 0.12s, transform 0.12s ease;
+}
+
+.sp-ctrl:hover { background: rgba(255, 255, 255, 0.1); }
+.sp-ctrl:active { transform: scale(0.94); }
+
+.hidden { display: none !important; }
+
+/* ── Custom tooltip (matches the controls bar) ─────────────────────────────── */
+
+.sp-tip {
+  position: absolute;
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.sp-tip.is-on { opacity: 1; }
+
+/* ── Body / layouts (fixed card height across all three) ───────────────────── */
+
+.sp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  height: 284px;
+}
+
+.sp-stage { flex: 1; min-height: 0; display: grid; gap: 8px; }
+.sp-body--split .sp-stage { grid-template-rows: 1fr 1fr; }
+.sp-body--grid .sp-stage { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+.sp-film { flex: none; height: 56px; }
+
+/* ── Stage tile ────────────────────────────────────────────────────────────── */
+
+.sp-tile {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--pip-tile);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.sp-tile--big { cursor: default; }
+.sp-tile.selected { border: 2px solid var(--action); }
+.sp-tile:not(.sp-tile--big):active { transform: scale(0.96); }
+
+.sp-vid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: none;
 }
 
-/* ── Pill Mode ────────────────────────────────────────────────────────────── */
+.sp-av-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: spSwap 0.25s ease-out;
+}
+
+.sp-av {
+  width: 50px;
+  height: 50px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.sp-av--big { width: 86px; height: 86px; font-size: 31px; }
+
+.sp-av-img { width: 50px; height: 50px; border-radius: 9999px; object-fit: cover; }
+.sp-tile--big .sp-av-img { width: 86px; height: 86px; }
+
+/* Speaking bars (top-left). */
+.sp-speak { position: absolute; top: 7px; left: 7px; }
+.sp-tile--big .sp-speak { top: 12px; left: 12px; }
+
+.sp-bars { display: flex; align-items: center; gap: 2.5px; }
+.sp-bars i {
+  width: 3px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--success);
+  transform-origin: center;
+  animation: spWave 1s ease-in-out infinite;
+}
+.sp-tile--big .sp-bars i { height: 12px; }
+.sp-bars i:nth-child(2) { animation-delay: 0.15s; }
+.sp-bars i:nth-child(3) { animation-delay: 0.3s; }
+
+/* FOLLOWING badge (top-right, big tile only). */
+.sp-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sp-dot { width: 5px; height: 5px; border-radius: 9999px; background: var(--success); animation: spPulse 1.4s infinite; }
+
+/* Name label (bottom-left). Small tiles keep the mic inline; the big tile uses
+   the corner mic box instead and appends " · you". */
+.sp-label {
+  position: absolute;
+  bottom: 7px;
+  left: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.sp-tile--big .sp-label { bottom: 12px; left: 12px; padding: 5px 11px; font-size: 13.5px; }
+.sp-tile--big .sp-label .sp-mic { display: none; }
+
+.sp-mic { display: inline-flex; line-height: 0; color: #fff; }
+.sp-mic.off { color: var(--danger-hover); }
+
+.sp-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-you { color: var(--ink-2); }
+
+/* Corner mic box (bottom-right, big tile only). */
+.sp-micbox {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.sp-tile--big .sp-micbox { display: flex; }
+.sp-micbox.off { color: var(--danger-hover); }
+
+/* ── Filmstrip ─────────────────────────────────────────────────────────────── */
+
+.sp-film {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.sp-film::-webkit-scrollbar { height: 0; }
+
+.sp-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+  background: var(--pip-tile);
+  border: 1px solid var(--line);
+  transition: transform 0.12s ease, border-color 0.12s;
+}
+
+.sp-thumb.selected { border: 2px solid var(--action); }
+.sp-thumb:active { transform: scale(0.94); }
+.sp-thumb:hover { border-color: rgba(255, 255, 255, 0.32); }
+.sp-thumb .sp-av { width: 34px; height: 34px; font-size: 12px; }
+.sp-thumb .sp-av-img { width: 34px; height: 34px; }
+
+/* Hover: the avatar zooms in slightly (clipped by the thumb, no overflow). */
+.sp-thumb .sp-av-wrap { transition: transform 0.18s ease; }
+.sp-thumb:hover .sp-av-wrap { transform: scale(1.08); }
+
+.sp-thumb-speak {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--success);
+  display: none;
+}
+
+.sp-thumb-speak.on { display: block; }
+
+.sp-thumb-mute {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  display: inline-flex;
+  line-height: 0;
+  color: var(--danger-hover);
+}
+
+/* ── Pill (minimized) ──────────────────────────────────────────────────────── */
 
 .pill-overlay {
   display: none;
@@ -407,38 +390,28 @@ html, body {
   justify-content: center;
 }
 
-.pill-overlay.active {
-  display: flex;
-}
+.pill-overlay.active { display: flex; }
 
 .pill-btn {
+  position: relative;
   width: 56px;
   height: 56px;
+  border: 0;
   border-radius: 50%;
-  background: linear-gradient(to bottom, #6C5CE7, #4834D4);
-  color: #FFFFFFEE;
-  border: none;
+  background: linear-gradient(160deg, #f86f4d, #f05023);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 24px rgba(108, 92, 231, 0.2), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 24px rgba(240, 80, 35, 0.25), 0 8px 32px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: scale(0.5);
   transition: opacity 0.2s ease, transform 0.2s ease;
-  position: relative;
 }
 
-/* macOS shows a rounded-square window background behind transparent windows;
-   match the pill shape to that native corner radius so there's no gap. */
-.pill-btn.macos {
-  border-radius: 12px;
-}
-
-.pill-btn.visible {
-  opacity: 1;
-  transform: scale(1);
-}
+.pill-btn.macos { border-radius: 14px; }
+.pill-btn.visible { opacity: 1; transform: scale(1); }
 
 .pill-badge {
   position: absolute;
@@ -446,59 +419,33 @@ html, body {
   right: -2px;
   width: 20px;
   height: 20px;
-  background: #E04848;
+  background: var(--danger);
   border-radius: 50%;
   font-size: 10px;
   font-weight: 700;
-  color: #FFFFFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  line-height: 20px;
+  color: #fff;
+  text-align: center;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.pill-badge.hidden {
-  display: none;
-}
+/* ── Animations ────────────────────────────────────────────────────────────── */
 
-/* ── Resize Edge Zones ───────────────────────────────────────────────── */
+/* Promote every scaling element to its own GPU layer so hover/press scales
+   stay crisp (no sub-pixel "shiver"). */
+.sp-card,
+.sp-av-wrap,
+.sp-tile,
+.sp-thumb,
+.sp-seg-btn,
+.sp-auto,
+.sp-ctrl,
+.pill-btn { will-change: transform; }
 
-.resize-edge {
-  position: absolute;
-  z-index: 10;
-  display: none;
-}
+@keyframes spWave { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+@keyframes spPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes spSwap { from { transform: scale(0.94); } to { transform: none; } }
 
-.resize-edge-left,
-.resize-edge-right {
-  top: 32px; /* below control bar */
-  bottom: 0;
-  width: 6px;
-  cursor: ew-resize;
-}
-
-.resize-edge-left { left: 0; }
-.resize-edge-right { right: 0; }
-
-.resize-edge-top,
-.resize-edge-bottom {
-  left: 0;
-  right: 0;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.resize-edge-top { top: 32px; } /* below control bar */
-.resize-edge-bottom { bottom: 0; }
-
-/* Show the correct edges based on orientation */
-.panel.resize-horizontal .resize-edge-left,
-.panel.resize-horizontal .resize-edge-right {
-  display: block;
-}
-
-.panel.resize-vertical .resize-edge-top,
-.panel.resize-vertical .resize-edge-bottom {
-  display: block;
-}
+/* Layout-switch rise-in (added to the rebuilt body children by setLayout). */
+.sp-rise { animation: spRise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes spRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }

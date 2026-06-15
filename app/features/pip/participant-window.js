@@ -10,56 +10,65 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const { TILE_W, TILE_PAD, H_TILE_H, HEADER_H, BORDER, IPC } = require('./constants');
+const { CARD_W, CARD_H_DEFAULT, MARGIN, IPC } = require('./constants');
 const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
-const { computeWindowSize, getWindowPosition } = require('./sizing');
+const { getCardPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
-const {
-    setupResizeHandlers,
-    isResizing,
-    attachNativeResizeListener,
-    getVisibleTileCount,
-    setVisibleTileCount,
-} = require('./resize');
 
 // ── Settings persistence ─────────────────────────────────────────────────────
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'pip-settings.json');
+const VALID_LAYOUTS = [ 'single', 'split', 'grid' ];
+const DEFAULT_SETTINGS = { layout: 'single', auto: true };
 
-function loadOrientation() {
+/**
+ * Reads persisted panel settings from disk, validating each field and
+ * falling back to defaults for anything missing or malformed.
+ *
+ * @returns {{ layout: string, auto: boolean }}
+ */
+function loadSettings() {
     try {
         const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+        const layout = VALID_LAYOUTS.includes(data.layout) ? data.layout : DEFAULT_SETTINGS.layout;
+        const auto = typeof data.auto === 'boolean' ? data.auto : DEFAULT_SETTINGS.auto;
 
-        if (data.orientation === 'horizontal' || data.orientation === 'vertical') {
-            return data.orientation;
-        }
+        return { layout, auto };
     } catch (_) { /* missing, corrupt, or unreadable — fall through */ }
 
-    return 'vertical';
+    return { ...DEFAULT_SETTINGS };
 }
 
-function saveOrientation(orientation) {
-    // Async — IPC handler shouldn't block on disk I/O. Best-effort; a
-    // failure just means next launch falls back to vertical.
-    fs.writeFile(SETTINGS_FILE, JSON.stringify({ orientation }), 'utf8', () => {});
+/**
+ * Merges the given prefs into the current settings and writes them to disk.
+ * Async + best-effort: a failure just means the next launch falls back to
+ * the last persisted (or default) settings.
+ *
+ * @param {{ layout?: string, auto?: boolean }} next - Partial prefs to merge.
+ */
+function saveSettings(next) {
+    if (!next || typeof next !== 'object') {
+        return;
+    }
+
+    const merged = { ...currentSettings };
+
+    if (VALID_LAYOUTS.includes(next.layout)) {
+        merged.layout = next.layout;
+    }
+    if (typeof next.auto === 'boolean') {
+        merged.auto = next.auto;
+    }
+
+    currentSettings = merged;
+    fs.writeFile(SETTINGS_FILE, JSON.stringify(merged), 'utf8', () => {});
 }
 
 let participantWindow = null;
-let currentOrientation = loadOrientation();
-let currentParticipantCount = 1;
-let currentPinnedCount = 0;
+let currentSettings = loadSettings();
+let currentSize = { width: CARD_W, height: CARD_H_DEFAULT };
 let lastParticipantsData = null;
-
-/**
- * Floor for the visible-tile count. Pinning N participants means the user
- * explicitly wants those N visible — resize must not shrink past that.
- * Capped at the participant count so leaving participants can't strand the
- * minimum above the available tiles.
- */
-function getMinTiles() {
-    return Math.max(1, Math.min(currentPinnedCount, currentParticipantCount));
-}
 
 // See suppressUnreadChatCount() for the rationale. 15s is the safety floor;
 // suppression normally drops earlier via the signals in sendParticipantsUpdate.
@@ -70,182 +79,50 @@ let suppressBaseline = 0;
 // ── Wire up drag and pill subsystems ─────────────────────────────────────────
 
 const getWindow = () => participantWindow;
-const getState = () => ({ count: currentParticipantCount, minTiles: getMinTiles(), orientation: currentOrientation });
-
-// Pill expand and the resize lerp both relax min/max to (1,1)/(0,0); without
-// this restore the next OS-native resize can shrink past the single-tile
-// minimum. Arrow wrapper sidesteps the hoisting question.
-const restoreSizeConstraints = () => updateSizeConstraints();
+const getState = () => ({ size: currentSize });
 
 setupDragHandlers(getWindow);
-setupPillHandlers(getWindow, getState, restoreSizeConstraints);
-setupResizeHandlers(getWindow, getState, restoreSizeConstraints);
-
-// ── Orientation ──────────────────────────────────────────────────────────────
-
-/**
- * Resizes and repositions the panel to match the current orientation.
- * Notifies both the panel renderer and the main renderer.
- */
-function applyOrientation() {
-    if (!participantWindow || participantWindow.isDestroyed()
-            || isDragging() || isResizing() || isPillMode()) {
-        // isPillMode: the pill is locked to PILL_SIZE; resizing/repositioning
-        // here would yank it out of its fixed shape. expandFromPill reapplies
-        // orientation and size when the user reopens.
-        return;
-    }
-
-    const mainWindow = getMainWindow();
-    const display = mainWindow
-        ? screen.getDisplayMatching(mainWindow.getBounds())
-        : screen.getPrimaryDisplay();
-
-    // Clamp visible count to the pin floor as a lower bound and the
-    // participant count as an upper bound, so the data layer can't drift
-    // below the floor even when called from paths that bypass the
-    // PIN_STATE_CHANGED handler.
-    const visibleCount = Math.max(
-        getMinTiles(),
-        Math.min(getVisibleTileCount(), currentParticipantCount)
-    );
-
-    setVisibleTileCount(visibleCount);
-
-    const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
-    const { x, y } = getWindowPosition(visibleCount, currentOrientation, display.workArea);
-
-    updateSizeConstraints();
-    participantWindow.setMinimumSize(1, 1);
-    participantWindow.setBounds({ x, y, width: W, height: H });
-    updateSizeConstraints();
-
-    participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
-    participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
-
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC.ORIENTATION_CHANGED_RENDERER, currentOrientation);
-    }
-}
-
-/**
- * Updates min/max size constraints based on current orientation and
- * participant count, constraining resize to the correct axis.
- */
-function updateSizeConstraints() {
-    if (!participantWindow || participantWindow.isDestroyed()) {
-        return;
-    }
-
-    // Min = floor enforced by pin count (else 1 tile), max = all participants.
-    // Pinning protects the tile slot — the user shouldn't be able to drag the
-    // panel past the point where pinned participants would be hidden.
-    // Horizontal: height locked (min == max), width varies.
-    // Vertical: width locked (min == max), height varies.
-    const minSize = computeWindowSize(getMinTiles(), currentOrientation);
-    const maxSize = computeWindowSize(currentParticipantCount, currentOrientation);
-
-    participantWindow.setMinimumSize(minSize.width, minSize.height);
-    participantWindow.setMaximumSize(maxSize.width, maxSize.height);
-}
+setupPillHandlers(getWindow, getState);
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
 
-ipcMain.on(IPC.TOGGLE_ORIENTATION, () => {
-    currentOrientation = currentOrientation === 'horizontal' ? 'vertical' : 'horizontal';
-    saveOrientation(currentOrientation);
-    applyOrientation();
-});
-
-// Track pin count so resize handlers can honor it as a floor. ipc.js
-// already forwards pin state to the main renderer for dominant-speaker
-// protection — this is an additional listener, not a replacement.
-ipcMain.on(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
-    if (pinnedIds && typeof pinnedIds === 'object' && !Array.isArray(pinnedIds)) {
-        currentPinnedCount = Object.keys(pinnedIds).length;
-    } else {
-        currentPinnedCount = 0;
-    }
-
-    if (!participantWindow || participantWindow.isDestroyed()) {
-        return;
-    }
-
-    // Skip all window mutations while in pill mode: both branches below
-    // (applyOrientation / updateSizeConstraints) would override the pill's
-    // fixed PILL_SIZE lock. currentPinnedCount is already updated above, and
-    // expandFromPill → restoreSizeConstraints reapplies the correct floor when
-    // the user reopens the panel.
-    if (isPillMode()) {
-        return;
-    }
-
-    // Grow visible count up to the new floor if pinning just expanded it.
-    // Shrinking past the floor is handled by setMinimumSize via
-    // updateSizeConstraints — the OS won't allow it.
-    //
-    // Skip the auto-expand while a drag/resize is in flight: applyOrientation
-    // silently no-ops in that state, so mutating _visibleTileCount here
-    // would leave the data layer out of sync with the window bounds.
-    // updateSizeConstraints picks up the new floor on the next tick when
-    // the resize completes and restoreSizeConstraints fires.
-    const min = getMinTiles();
-
-    if (!isDragging() && !isResizing() && getVisibleTileCount() < min) {
-        setVisibleTileCount(min);
-        applyOrientation();
-    } else {
-        updateSizeConstraints();
-    }
-});
-
-ipcMain.on(IPC.RESIZE, (_event, { count }) => {
-    if (!participantWindow || participantWindow.isDestroyed()) {
-        return;
-    }
-
-    const prevCount = currentParticipantCount;
-
-    currentParticipantCount = Math.max(1, count);
-
-    // Clamp visible count if participants left.
-    let visibleCount = getVisibleTileCount();
-
-    if (visibleCount > currentParticipantCount) {
-        visibleCount = currentParticipantCount;
-        setVisibleTileCount(visibleCount);
-    }
-
-    // If the user hasn't manually resized (visible == prev total), auto-expand
-    // to show new participants.
-    if (visibleCount === prevCount && currentParticipantCount > prevCount) {
-        visibleCount = currentParticipantCount;
-        setVisibleTileCount(visibleCount);
-    }
-
-    // While in pill mode or mid drag/resize we still keep the count/visible
-    // data in sync above (so expandFromPill and gesture-end restore size to
-    // the fresh count) — but we must not move the window or touch size
-    // constraints: that would fight the pill size lock and the resize lerp.
-    if (isPillMode() || isDragging() || isResizing()) {
-        return;
-    }
-
-    const { width: W, height: H } = computeWindowSize(visibleCount, currentOrientation);
-
+// Renderer-driven sizing: the Spotlight card measures its own content per
+// layout and reports the exact window size it needs. Main honors the request,
+// keeping the bottom-right corner anchored so the card grows upward/leftward.
+ipcMain.on(IPC.SET_SIZE, (_event, { width, height } = {}) => {
     const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x, y } = getWindowPosition(visibleCount, currentOrientation, display.workArea);
+    const { workArea } = display;
 
-    updateSizeConstraints();
-    participantWindow.setMinimumSize(1, 1);
-    participantWindow.setBounds({ x, y, width: W, height: H });
-    updateSizeConstraints();
+    // Clamp to sane bounds: a hard floor plus the display work area (minus
+    // edge margins) as the ceiling, so a runaway measure can't exceed screen.
+    const maxW = Math.max(200, workArea.width - MARGIN * 2);
+    const maxH = Math.max(200, workArea.height - MARGIN * 2);
+    const w = Math.round(Math.min(maxW, Math.max(200, Number(width) || CARD_W)));
+    const h = Math.round(Math.min(maxH, Math.max(200, Number(height) || CARD_H_DEFAULT)));
 
-    participantWindow.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: visibleCount, edge: null });
+    currentSize = { width: w, height: h };
+
+    if (!participantWindow || participantWindow.isDestroyed()
+            || isPillMode() || isDragging()) {
+        // Pill lock / active drag own the bounds; currentSize is still updated
+        // so expandFromPill / drag-end restore to the fresh size.
+        return;
+    }
+
+    // Anchor the window's CURRENT bottom-right corner so the card grows
+    // upward/leftward in place (instead of snapping to the screen corner after
+    // the user has dragged it somewhere), then clamp fully on-screen.
+    const b = participantWindow.getBounds();
+    const x = Math.max(workArea.x, Math.min(b.x + b.width - w, workArea.x + workArea.width - w));
+    const y = Math.max(workArea.y, Math.min(b.y + b.height - h, workArea.y + workArea.height - h));
+
+    participantWindow.setBounds({ x, y, width: w, height: h });
 });
+
+ipcMain.on(IPC.SAVE_SETTINGS, (_event, next) => saveSettings(next));
 
 // ── Window lifecycle ─────────────────────────────────────────────────────────
 
@@ -256,10 +133,6 @@ function openParticipantWindow() {
     if (participantWindow && !participantWindow.isDestroyed()) {
         return;
     }
-
-    currentParticipantCount = 1;
-    currentPinnedCount = 0;
-    setVisibleTileCount(1);
 
     const preloadPath = resolveFile('participant-panel-preload.js', __dirname);
 
@@ -282,8 +155,8 @@ function openParticipantWindow() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
 
-    const { width: W, height: H } = computeWindowSize(currentParticipantCount, currentOrientation);
-    const { x: posX, y: posY } = getWindowPosition(currentParticipantCount, currentOrientation, display.workArea);
+    const { width: W, height: H } = currentSize;
+    const { x: posX, y: posY } = getCardPosition(W, H, display.workArea);
 
     try {
         participantWindow = new BrowserWindow({
@@ -291,13 +164,11 @@ function openParticipantWindow() {
             y: posY,
             width: W,
             height: H,
-            minWidth: TILE_W + TILE_PAD * 2 + BORDER * 2,
-            minHeight: H_TILE_H + TILE_PAD * 2 + HEADER_H + BORDER * 2,
             transparent: true,
             frame: false,
             alwaysOnTop: true,
             hasShadow: true,
-            resizable: true,
+            resizable: false,
             skipTaskbar: true,
             show: false,
             webPreferences: {
@@ -330,23 +201,11 @@ function openParticipantWindow() {
         resetPill();
     });
 
-    attachNativeResizeListener(
-        participantWindow, getState, () => isPillMode() || isDragging()
-    );
-
     participantWindow.webContents.on('did-finish-load', () => {
         if (participantWindow && !participantWindow.isDestroyed()) {
-            participantWindow.webContents.send(IPC.ORIENTATION_CHANGED, currentOrientation);
-
-            // Also tell the jitsi renderer the active orientation now, not just
-            // on toggle. Its orientationRef defaults to 'horizontal'; without
-            // this the frame capture uses the wrong tile aspect until the user
-            // first toggles when the persisted orientation is 'vertical'.
-            const mw = getMainWindow();
-
-            if (mw && !mw.isDestroyed()) {
-                mw.webContents.send(IPC.ORIENTATION_CHANGED_RENDERER, currentOrientation);
-            }
+            // Hand the panel its persisted layout/auto prefs so it can render
+            // the right layout immediately and then report its measured size.
+            participantWindow.webContents.send(IPC.SETTINGS, currentSettings);
 
             // Direct send: the cache is already suppression-applied (via
             // sendParticipantsUpdate, the only writer); re-routing would
