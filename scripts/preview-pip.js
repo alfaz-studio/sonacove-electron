@@ -53,7 +53,8 @@ const PEOPLE = [
         initials: 'IC',
         avatarColor: '#7c3aed',
         hasAudio: false,
-        hasVideo: false },
+        hasVideo: false,
+        raisedHand: true },
     { id: 'p5',
         name: 'Sara M.',
         initials: 'SM',
@@ -97,11 +98,17 @@ const roster = PEOPLE.slice(0, COUNT);
 // Rotate the dominant speaker among the remotes so Auto-follow visibly tracks.
 let speaker = 1;
 
-/** Push the current mock roster (with the rotating dominant speaker) to the panel. */
+// Current speaker's mock audio level (0–1), jittered each push so the reactive
+// speaking bars visibly rise and fall like real speech.
+let level = 0.5;
+
+/** Push the current mock roster (with the rotating speaker + live level) to the panel. */
 function pushUpdate() {
     const withSpeaking = roster.map((p, i) => {
         return { ...p,
-            dominantSpeaker: i === speaker };
+            dominantSpeaker: i === speaker,
+            speaking: i === speaker,
+            audioLevel: i === speaker ? level : 0 };
     });
 
     sendParticipantsUpdate({
@@ -125,10 +132,17 @@ app.whenReady().then(() => {
     }
 
     pushUpdate();
+
+    // Rotate the active speaker every 2.5s.
     setInterval(() => {
         speaker = 1 + (speaker % Math.max(1, roster.length - 1));
-        pushUpdate();
     }, 2500);
+
+    // Jitter the level ~8×/s and push, so the reactive bars move like speech.
+    setInterval(() => {
+        level = 0.15 + (Math.random() * 0.75);
+        pushUpdate();
+    }, 120);
 
     for (const file of WATCH_FILES) {
         try {

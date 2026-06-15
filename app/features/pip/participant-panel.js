@@ -28,16 +28,16 @@
             + '<path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/>',
         minus: '<line x1="5" x2="19" y1="12" y2="12"/>',
         maximize2: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>'
-            + '<line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>'
+            + '<line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>',
+        hand: '<path d="M18 11V6a2 2 0 0 0-4 0"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/>'
+            + '<path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 '
+            + '0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'
     };
 
     /** Wrap icon path(s) in an svg with stroke styling. */
     const svg = (paths, size = 16) =>
         `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" `
         + `stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-
-    /** Three animated speaking bars. */
-    const bars = () => '<span class="sp-bars"><i></i><i></i><i></i></span>';
 
     // ── State ──────────────────────────────────────────────────────────────────
     let roster = []; // full ranked roster (from data.roster)
@@ -162,6 +162,34 @@
         return `<span class="${cls}" style="background:${p.avatarColor || '#555'}">${p.initials || ''}</span>`;
     };
 
+    /**
+     * Set the avatar wrap's content only when it actually changes. render() now
+     * runs at ~10 Hz (audio levels), so rebuilding the avatar DOM unconditionally
+     * would re-create the <img> every frame — wasteful and prone to flicker.
+     */
+    const setAvatar = (avWrap, p, big) => {
+        const key = `${big ? 'b:' : ''}${p.avatarURL || `${p.avatarColor || ''}|${p.initials || ''}`}`;
+
+        if (avWrap.dataset.av !== key) {
+            avWrap.dataset.av = key;
+            avWrap.innerHTML = avatarHtml(p, big);
+        }
+    };
+
+    /**
+     * Toggle an element's visibility and fill its innerHTML only once (first time
+     * shown, while still empty), from the lazy `html()` builder. render() runs at
+     * ~10 Hz, so re-setting innerHTML every frame would restart the inner CSS
+     * animation (hand-bounce, dot pulse); `html` is lazy so hidden elements don't
+     * even build the markup.
+     */
+    const setOnce = (el, show, html) => {
+        el.classList.toggle('hidden', !show);
+        if (show && !el.firstChild) {
+            el.innerHTML = html();
+        }
+    };
+
     /** Update a stage tile in place (video/avatar, name, mic, speaking, badge, selection). */
     const updateStageTile = (el, p, big) => {
         const vid = el.querySelector('.sp-vid');
@@ -175,7 +203,7 @@
         } else {
             vid.style.display = 'none';
             avWrap.style.display = 'flex';
-            avWrap.innerHTML = avatarHtml(p, big);
+            setAvatar(avWrap, p, big);
         }
 
         const sp = spotlight();
@@ -194,24 +222,28 @@
         }
 
         // Mic: small tiles show it inline in the label; the big tile shows it in a
-        // corner box (matches the design's StageTile).
-        const micIcon = svg(p.hasAudio ? I.micOn : I.micOff, big ? 15 : 11);
+        // corner box (matches the design's StageTile). The icon only changes when
+        // hasAudio flips, so rebuild it then — not every ~10 Hz render.
         const mic = el.querySelector('.sp-mic');
         const micbox = el.querySelector('.sp-micbox');
 
-        mic.innerHTML = micIcon;
-        mic.classList.toggle('off', !p.hasAudio);
-        micbox.innerHTML = micIcon;
-        micbox.classList.toggle('off', !p.hasAudio);
-        el.querySelector('.sp-speak').innerHTML = p.dominantSpeaker ? bars() : '';
+        if (el.dataset.mic !== String(p.hasAudio)) {
+            el.dataset.mic = String(p.hasAudio);
+            const micIcon = svg(p.hasAudio ? I.micOn : I.micOff, big ? 15 : 11);
 
-        const badge = el.querySelector('.sp-badge');
-        const showBadge = big && auto;
-
-        badge.classList.toggle('hidden', !showBadge);
-        if (showBadge) {
-            badge.innerHTML = '<span class="sp-dot"></span> FOLLOWING';
+            mic.innerHTML = micIcon;
+            micbox.innerHTML = micIcon;
         }
+        mic.classList.toggle('off', !p.hasAudio);
+        micbox.classList.toggle('off', !p.hasAudio);
+
+        const speak = el.querySelector('.sp-speak');
+
+        speak.classList.toggle('on', Boolean(p.speaking));
+        speak.style.setProperty('--lvl', String(p.speaking ? p.audioLevel || 0 : 0));
+
+        setOnce(el.querySelector('.sp-badge'), big && auto, () => '<span class="sp-dot"></span> FOLLOWING');
+        setOnce(el.querySelector('.sp-hand'), p.raisedHand, () => svg(I.hand, 17));
     };
 
     /** Build a stage tile element for participant `p`. `big` = spotlight size. */
@@ -223,8 +255,8 @@
         el.innerHTML
             = '<img class="sp-vid" alt="">'
             + '<span class="sp-av-wrap"></span>'
-            + '<span class="sp-speak"></span>'
-            + '<span class="sp-badge hidden"></span>'
+            + '<span class="sp-speak"><span class="sp-bars"><i></i><i></i><i></i></span></span>'
+            + '<span class="sp-corner"><span class="sp-badge hidden"></span><span class="sp-hand hidden"></span></span>'
             + '<span class="sp-label"><span class="sp-mic"></span><span class="sp-name"></span></span>'
             + '<span class="sp-micbox"></span>';
         updateStageTile(el, p, big);
@@ -245,20 +277,15 @@
         } else {
             vid.style.display = 'none';
             avWrap.style.display = 'flex';
-            avWrap.innerHTML = avatarHtml(p, false);
+            setAvatar(avWrap, p, false);
         }
 
         const sp = spotlight();
 
         el.classList.toggle('selected', Boolean(sp) && p.id === sp.id);
-        el.querySelector('.sp-thumb-speak').classList.toggle('on', Boolean(p.dominantSpeaker));
+        el.querySelector('.sp-thumb-speak').classList.toggle('on', Boolean(p.speaking));
 
-        const mute = el.querySelector('.sp-thumb-mute');
-
-        mute.classList.toggle('hidden', p.hasAudio);
-        if (!p.hasAudio) {
-            mute.innerHTML = svg(I.micOff, 11);
-        }
+        setOnce(el.querySelector('.sp-thumb-hand'), p.raisedHand, () => svg(I.hand, 13));
     };
 
     /** Build a filmstrip thumbnail for participant `p`. */
@@ -272,7 +299,7 @@
             = '<img class="sp-vid" alt="">'
             + '<span class="sp-av-wrap"></span>'
             + '<span class="sp-thumb-speak"></span>'
-            + '<span class="sp-thumb-mute hidden"></span>';
+            + '<span class="sp-thumb-hand hidden"></span>';
         attachTip(el);
         updateThumb(el, p);
 

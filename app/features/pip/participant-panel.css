@@ -244,9 +244,13 @@ html, body {
 .sp-tile--big .sp-av-img { width: 86px; height: 86px; }
 
 /* Speaking bars (top-left). */
-.sp-speak { position: absolute; top: 7px; left: 7px; }
+.sp-speak { position: absolute; top: 7px; left: 7px; display: none; }
+.sp-speak.on { display: block; }
 .sp-tile--big .sp-speak { top: 12px; left: 12px; }
 
+/* Bars scale live with the speaker's audio level (--lvl, 0–1, set per frame).
+   Each bar has its own gain so they read as a meter rather than one block; the
+   short transition smooths the ~10 Hz level updates from the feed. */
 .sp-bars { display: flex; align-items: center; gap: 2.5px; }
 .sp-bars i {
   width: 3px;
@@ -254,17 +258,26 @@ html, body {
   border-radius: 2px;
   background: var(--success);
   transform-origin: center;
-  animation: spWave 1s ease-in-out infinite;
+  transition: transform 90ms linear;
 }
 .sp-tile--big .sp-bars i { height: 12px; }
-.sp-bars i:nth-child(2) { animation-delay: 0.15s; }
-.sp-bars i:nth-child(3) { animation-delay: 0.3s; }
+.sp-bars i:nth-child(1) { transform: scaleY(clamp(0.2, calc(0.2 + var(--lvl, 0) * 2), 1)); }
+.sp-bars i:nth-child(2) { transform: scaleY(clamp(0.25, calc(0.25 + var(--lvl, 0) * 2.6), 1)); }
+.sp-bars i:nth-child(3) { transform: scaleY(clamp(0.2, calc(0.2 + var(--lvl, 0) * 2.2), 1)); }
 
-/* FOLLOWING badge (top-right, big tile only). */
-.sp-badge {
+/* Top-right cluster: FOLLOWING badge + raised-hand badge (sit side by side). */
+.sp-corner {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 7px;
+  right: 7px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sp-tile--big .sp-corner { top: 12px; right: 12px; }
+
+.sp-badge {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -277,6 +290,23 @@ html, body {
 }
 
 .sp-dot { width: 5px; height: 5px; border-radius: 9999px; background: var(--success); animation: spPulse 1.4s infinite; }
+
+/* Raised hand — copied from jitsi's in-meeting filmstrip Thumbnail indicator:
+   a translucent warning-01 (#f8ae1a @ 20%) circle with a full-colour Hand glyph;
+   the glyph (not the circle) carries the hand-bounce wave. */
+.sp-hand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: rgba(248, 174, 26, 0.2);
+  color: #f8ae1a;
+}
+
+.sp-hand svg { animation: handBounce 2s ease-in-out infinite; }
+.sp-hand.hidden { display: none; }
 
 /* Name label (bottom-left). Small tiles keep the mic inline; the big tile uses
    the corner mic box instead and appends " · you". */
@@ -371,14 +401,25 @@ html, body {
 
 .sp-thumb-speak.on { display: block; }
 
-.sp-thumb-mute {
+.sp-thumb-hand {
   position: absolute;
-  bottom: 3px;
+  top: 3px;
   right: 3px;
   display: inline-flex;
-  line-height: 0;
-  color: var(--danger-hover);
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  /* Less transparent + a slight ring — the 20% fill is hard to read on the
+     small filmstrip thumb (the spotlight tile keeps the lighter fill). */
+  background: rgba(248, 174, 26, 0.32);
+  border: 1px solid rgba(248, 174, 26, 0.55);
+  color: #f8ae1a;
 }
+
+.sp-thumb-hand svg { animation: handBounce 2s ease-in-out infinite; }
+.sp-thumb-hand.hidden { display: none; }
 
 /* ── Pill (minimized) ──────────────────────────────────────────────────────── */
 
@@ -442,7 +483,14 @@ html, body {
 .sp-ctrl,
 .pill-btn { will-change: transform; }
 
-@keyframes spWave { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+/* Raise-hand wave — copied verbatim from jitsi css/_motion.css (handBounce). */
+@keyframes handBounce {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-5px) rotate(-12deg); }
+  55% { transform: translateY(-2px) rotate(10deg); }
+  80% { transform: translateY(-1px) rotate(-4deg); }
+}
+
 @keyframes spPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 @keyframes spSwap { from { transform: scale(0.94); } to { transform: none; } }
 
