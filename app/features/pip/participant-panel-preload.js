@@ -173,6 +173,20 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Spotlight: report which participants are currently on-stage (spotlight /
+     * split / grid tiles) so the main renderer captures frames + attaches video
+     * for exactly those, instead of a fixed top-N.
+     *
+     * @param {string[]} stageIds - Participant ids currently shown as tiles.
+     * @returns {void}
+     */
+    reportStage(stageIds) {
+        if (Array.isArray(stageIds)) {
+            ipcRenderer.send('pp-stage-changed', stageIds);
+        }
+    },
+
+    /**
      * Tell the main process to start an edge resize.
      *
      * @param {string} edge - 'left' | 'right' | 'top' | 'bottom'

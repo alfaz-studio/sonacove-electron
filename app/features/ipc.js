@@ -351,6 +351,14 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
+    // Spotlight: the PiP panel reports which participants are on-stage — forward
+    // to the main renderer so jitsi captures frames + attaches video for them.
+    register(IPC.STAGE_CHANGED, (_event, stageIds) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC.STAGE_CHANGED_RENDERER, stageIds);
+        }
+    });
+
     // User toggled mic/cam from the PiP panel — forward to main renderer.
     // Use the direct mainWindow reference (not getMainWindow()) because
     // getMainWindow() picks the first *visible* window, which is the PiP

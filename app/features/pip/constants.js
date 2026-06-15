@@ -23,6 +23,13 @@ const MARGIN = 20;    // gap between panel and screen edges
 
 const PILL_SIZE = 56;
 
+// ── Spotlight ──────────────────────────────────────────────────────────────
+// Feature flag: show live video in the filmstrip thumbnails. Off for now —
+// the filmstrip shows avatars only; live video is reserved for the stage
+// tile(s). Flipping this on later also widens the on-stage set reported to
+// jitsi to include filmstrip-visible participants (cap to viewport then).
+const FILMSTRIP_VIDEO = false;
+
 // ── IPC channels ─────────────────────────────────────────────────────────────
 
 const IPC = {
@@ -35,6 +42,7 @@ const IPC = {
 
     // Panel renderer → main (sent from participant-panel.html via preload)
     PIN_STATE_CHANGED: 'pp-pin-state-changed',
+    STAGE_CHANGED: 'pp-stage-changed',
     START_DRAG: 'pp-start-window-drag',
     STOP_DRAG: 'pp-stop-window-drag',
     TOGGLE_ORIENTATION: 'pip-toggle-orientation',
@@ -56,6 +64,7 @@ const IPC = {
 
     // Main → jitsi-meet renderer
     PIN_STATE_CHANGED_RENDERER: 'pip-pin-state-changed',
+    STAGE_CHANGED_RENDERER: 'pip-stage-changed',
     PANEL_CLOSED: 'pip-panel-closed',
     PANEL_REOPENED: 'pip-panel-reopened',
     ORIENTATION_CHANGED_RENDERER: 'pip-orientation-changed',
@@ -71,5 +80,6 @@ module.exports = {
     BORDER,
     MARGIN,
     PILL_SIZE,
+    FILMSTRIP_VIDEO,
     IPC,
 };
