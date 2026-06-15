@@ -10,8 +10,8 @@
 const TILE_W = 250;   // tile width — same for both orientations
 const H_TILE_H = 130; // tile height in horizontal mode (landscape)
 const V_TILE_H = 160; // tile height in vertical mode (squarish)
-const TILE_GAP = 6;
-const TILE_PAD = 6;   // padding inside the tiles container (each side)
+const TILE_GAP = 8;
+const TILE_PAD = 8;   // padding inside the tiles container (each side)
 
 // ── Panel chrome ─────────────────────────────────────────────────────────────
 
@@ -19,9 +19,21 @@ const HEADER_H = 32;  // control bar height
 const BORDER = 1;     // panel border width (each side)
 const MARGIN = 20;    // gap between panel and screen edges
 
+// Transparent padding the window carries around the visible panel so the panel's
+// rounded CSS drop-shadow has room to render instead of being clipped to the
+// window rectangle (which, with the native window shadow, looked sharp-cornered).
+// The panel is inset by this much via `body { padding }`.
+// ⚠ Mirrored as the `body { padding }` literal in participant-panel.css (the
+//   sandboxed panel can't import this module) — update both together.
+const WINDOW_PAD = 18;
+
 // ── Pill ─────────────────────────────────────────────────────────────────────
 
-const PILL_SIZE = 56;
+// Larger than the visible 60px pill (which is centred in it via .pill-overlay)
+// so the pill's drop shadow and unread badge have transparent room and don't
+// clip against the window edge. The extra padding also acts as the screen-edge
+// inset (see pill.js — no MARGIN is subtracted for the pill).
+const PILL_SIZE = 110;
 
 // ── IPC channels ─────────────────────────────────────────────────────────────
 
@@ -34,6 +46,7 @@ const IPC = {
     RESIZE: 'pip-resize',
 
     // Panel renderer → main (sent from participant-panel.html via preload)
+    CONTENT_SIZE: 'pp-content-size',
     PIN_STATE_CHANGED: 'pp-pin-state-changed',
     START_DRAG: 'pp-start-window-drag',
     STOP_DRAG: 'pp-stop-window-drag',
@@ -46,6 +59,9 @@ const IPC = {
     END_MEETING: 'pp-end-meeting',
     START_EDGE_RESIZE: 'pp-start-edge-resize',
     STOP_EDGE_RESIZE: 'pp-stop-edge-resize',
+
+    // Renderer → main → panel renderer (host theme tokens for live recolour)
+    THEME_UPDATE: 'pp-theme-update',
 
     // Main → panel renderer
     FRAME: 'pp-frame',
@@ -70,6 +86,7 @@ module.exports = {
     HEADER_H,
     BORDER,
     MARGIN,
+    WINDOW_PAD,
     PILL_SIZE,
     IPC,
 };

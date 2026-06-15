@@ -6,7 +6,7 @@
  */
 
 const { ipcMain, screen } = require('electron');
-const { PILL_SIZE, MARGIN, IPC } = require('./constants');
+const { PILL_SIZE, IPC } = require('./constants');
 const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
 const { computeWindowSize, getWindowPosition } = require('./sizing');
 const { setVisibleTileCount } = require('./resize');
@@ -57,8 +57,10 @@ function shrinkToPill() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
     const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
-    const pillX = waX + waW - PILL_SIZE - MARGIN;
-    const pillY = waY + waH - PILL_SIZE - MARGIN;
+    // No screen-edge margin here: PILL_SIZE includes transparent padding around
+    // the visible pill, which doubles as the visual inset from the screen edge.
+    const pillX = waX + waW - PILL_SIZE;
+    const pillY = waY + waH - PILL_SIZE;
 
     const mw = getMainWindow();
 
@@ -108,7 +110,7 @@ function expandFromPill(count, orientation) {
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x: posX, y: posY } = getWindowPosition(count, orientation, display.workArea);
+    const { x: posX, y: posY } = getWindowPosition(W, H, orientation, display.workArea);
 
     // Release the pill size lock (min back to 1×1, max back to "no limit"),
     // set bounds, then restore the participant-window panel constraints.
