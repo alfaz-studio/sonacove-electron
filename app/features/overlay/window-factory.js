@@ -1,12 +1,31 @@
-const { BrowserWindow, app, globalShortcut } = require('electron');
+const { BrowserWindow, app, globalShortcut, session } = require('electron');
 
 const {
     ALWAYS_ON_TOP_LEVEL,
     TRANSPARENT_BG,
     SHORTCUT_TOGGLE_CLICK_THROUGH,
-    IPC_TOGGLE_CLICK_THROUGH
+    IPC_TOGGLE_CLICK_THROUGH,
+    OVERLAY_PARTITION,
+    CLOSE_REASON_LOAD_FAILED,
+    CLOSE_REASON_CRASHED,
+    CLOSE_REASON_UNRESPONSIVE
 } = require('./constants');
 const { getIconPath } = require('../paths');
+
+/**
+ * Hard ceiling (ms) for the overlay page to fire `did-finish-load`. The page is
+ * the same-origin meeting app shell (fast), so anything past this means the load
+ * is wedged — treat it as a failure instead of leaving an invisible window up.
+ */
+const LOAD_WATCHDOG_MS = 20000;
+
+/**
+ * Grace window (ms) after `unresponsive` before tearing the overlay down. A brief
+ * hang during Excalidraw init is normal and usually clears (`responsive`); only a
+ * sustained freeze — which blocks the whole screen, the overlay being fullscreen
+ * always-on-top — warrants a teardown.
+ */
+const UNRESPONSIVE_GRACE_MS = 10000;
 
 /** Module-level set tracking overlay windows (safer than setting arbitrary props on BrowserWindow). */
 const overlayWindows = new Set();
@@ -46,7 +65,7 @@ function createOverlayWindow(screenBounds, preloadPath) {
 
             // Dedicated partition so the CORS relaxation in wireEvents()
             // only affects the overlay, not the main window's session.
-            partition: 'persist:overlay'
+            partition: OVERLAY_PARTITION
         }
     };
 
@@ -100,7 +119,7 @@ function configurePlatform(win, screenBounds, options = {}) {
  * Registers the global keyboard shortcut for toggling click-through on the overlay.
  *
  * @param {BrowserWindow} win - The overlay window to send the toggle request to.
- * @returns {void}
+ * @returns {boolean} Whether the shortcut was registered (false if another app owns it).
  */
 function registerShortcut(win) {
     const success = globalShortcut.register(SHORTCUT_TOGGLE_CLICK_THROUGH, () => {
@@ -115,18 +134,38 @@ function registerShortcut(win) {
             + ' Another application may have claimed it. Click-through toggle will not work.'
         );
     }
+
+    return success;
 }
 
 /**
- * Wires lifecycle event listeners on the overlay window (load, close, cleanup).
+ * Clears the CORS-relaxation header filter from the shared overlay session.
+ * `onHeadersReceived` is a per-session singleton on the persistent `persist:overlay`
+ * session, so wireEvents re-registers it (with a fresh collab origin) on every open;
+ * clearing it on close stops a stale closure from lingering between sessions.
+ *
+ * @returns {void}
+ */
+function clearOverlaySessionCors() {
+    try {
+        session.fromPartition(OVERLAY_PARTITION).webRequest.onHeadersReceived(null);
+    } catch (e) {
+        console.warn('⚠️ Failed to clear overlay CORS filter:', e);
+    }
+}
+
+/**
+ * Wires lifecycle event listeners on the overlay window (load, failure, close, cleanup).
  *
  * @param {BrowserWindow} win - The overlay window.
  * @param {string} [collabServerUrl] - The collab server URL (for scoped CORS injection).
  * @param {Object} callbacks - Lifecycle callbacks.
  * @param {Function} callbacks.onClosed - Called when the window is closed externally.
+ * @param {Function} callbacks.onFailure - Called with a close-reason when the overlay
+ *   fails to load, crashes, or hangs — the caller tears it down and notifies the renderer.
  * @returns {void}
  */
-function wireEvents(win, collabServerUrl, { onClosed }) {
+function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
     // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
     // without disabling webSecurity globally. Scoped to the collab server origin
     // so other endpoints (auth, analytics) keep their own CORS policies.
@@ -155,20 +194,119 @@ function wireEvents(win, collabServerUrl, { onClosed }) {
         });
     }
 
+    // ── Failure plumbing ──
+    // A wedged load leaves the window invisible (show is deferred to
+    // did-finish-load) and the renderer stuck "annotating"; a crash/hang leaves
+    // an orphaned window that blocks re-open. Each failure path routes through a
+    // single guarded `fail()` so the caller can tear down + notify exactly once.
+    let loadWatchdog = null;
+    let graceTimer = null;
+    let tornDown = false;
+
+    const clearTimers = () => {
+        if (loadWatchdog) {
+            clearTimeout(loadWatchdog);
+            loadWatchdog = null;
+        }
+        if (graceTimer) {
+            clearTimeout(graceTimer);
+            graceTimer = null;
+        }
+    };
+
+    const fail = reason => {
+        // Also bail if the window is already gone — e.g. a watchdog still pending
+        // after a manual close (which strips the 'closed' timer-clearing bridge).
+        if (tornDown || !win || win.isDestroyed()) {
+            clearTimers();
+
+            return;
+        }
+        tornDown = true;
+        clearTimers();
+        onFailure?.(reason);
+    };
+
+    loadWatchdog = setTimeout(() => {
+        console.warn(`⚠️ Overlay load timed out after ${LOAD_WATCHDOG_MS}ms.`);
+        fail(CLOSE_REASON_LOAD_FAILED);
+    }, LOAD_WATCHDOG_MS);
+
+    // Clear the watchdog on dom-ready — the reliable "the page loaded" signal.
+    // We can't rely on did-finish-load (below): it waits for the `load` event,
+    // which never fires while the page holds long-lived connections (Vite HMR in
+    // dev, the Excalidraw collab socket), so the watchdog would tear down a
+    // healthy overlay. dom-ready fires once the DOM is parsed, regardless.
+    win.webContents.once('dom-ready', () => {
+        if (loadWatchdog) {
+            clearTimeout(loadWatchdog);
+            loadWatchdog = null;
+        }
+    });
+
     win.webContents.on('did-finish-load', () => {
+        clearTimers();
         if (win && !win.isDestroyed()) {
             win.show();
             win.focus();
         }
     });
 
-    win.on('closed', onClosed);
+    // Main-frame load error. Ignore -3 (ABORTED) — that fires on our own
+    // destroy() and on benign in-page navigations, not on a real load failure.
+    // eslint-disable-next-line max-params -- Electron's did-fail-load passes a fixed positional signature
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _url, isMainFrame) => {
+        if (!isMainFrame || errorCode === -3) {
+            return;
+        }
+        console.warn(`⚠️ Overlay did-fail-load (${errorCode}): ${errorDescription}`);
+        fail(CLOSE_REASON_LOAD_FAILED);
+    });
+
+    // Render process crashed / was killed / OOM. 'clean-exit' is the normal
+    // teardown path (our destroy) — not a crash.
+    win.webContents.on('render-process-gone', (_event, details) => {
+        if (details?.reason === 'clean-exit') {
+            return;
+        }
+        console.warn(`⚠️ Overlay render process gone: ${details?.reason}`);
+        fail(CLOSE_REASON_CRASHED);
+    });
+
+    // Hung renderer. Give it a grace window — a transient freeze during init
+    // usually clears with 'responsive'; a sustained one blocks the whole screen.
+    win.webContents.on('unresponsive', () => {
+        if (graceTimer || tornDown) {
+            return;
+        }
+        console.warn('⚠️ Overlay renderer unresponsive — starting grace timer.');
+        graceTimer = setTimeout(() => {
+            graceTimer = null;
+            console.warn('⚠️ Overlay renderer still unresponsive — tearing down.');
+            fail(CLOSE_REASON_UNRESPONSIVE);
+        }, UNRESPONSIVE_GRACE_MS);
+    });
+
+    win.webContents.on('responsive', () => {
+        if (graceTimer) {
+            clearTimeout(graceTimer);
+            graceTimer = null;
+        }
+    });
+
+    // External close (OS close, app quit). Clear our timers so they can't fire
+    // against a gone window, then run the caller's cleanup.
+    win.on('closed', () => {
+        clearTimers();
+        onClosed?.();
+    });
 }
 
 module.exports = {
     createOverlayWindow,
     configurePlatform,
     registerShortcut,
+    clearOverlaySessionCors,
     wireEvents,
     overlayWindows
 };

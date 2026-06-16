@@ -5,9 +5,12 @@ const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     IPC_NOTIFY_OVERLAY_CLOSED,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
+    IPC_ANNOTATION_STATUS,
+    ALWAYS_ON_TOP_LEVEL,
     CLOSE_REASON_MANUAL,
     CLOSE_REASON_OVERLAY_CLOSED,
-    CLOSE_REASON_SCREENSHARE_STOPPED
+    CLOSE_REASON_SCREENSHARE_STOPPED,
+    CLOSE_REASON_DISPLAY_GONE
 } = require('./constants');
 const {
     getMainWindow,
@@ -20,6 +23,7 @@ const {
     createOverlayWindow,
     configurePlatform,
     registerShortcut,
+    clearOverlaySessionCors,
     wireEvents,
     overlayWindows
 } = require('./window-factory');
@@ -27,6 +31,96 @@ const {
 // ── Module state ────────────────────────────────────────────────────────────
 
 let annotationWindow = null;
+
+// id of the display the overlay was opened on — tracked so the overlay can
+// follow that display's geometry changes and self-close if it's unplugged.
+let overlayDisplayId = null;
+
+// ── Display-change handling ─────────────────────────────────────────────────
+
+/**
+ * Re-applies the overlay's geometry to the given display bounds. On Windows the
+ * window is pinned fullscreen, so we drop out of fullscreen to move/resize, then
+ * re-assert it; macOS positions via setBounds directly.
+ *
+ * @param {{ x: number, y: number, width: number, height: number }} bounds - Target bounds.
+ * @returns {void}
+ */
+function repositionOverlay(bounds) {
+    if (!annotationWindow || annotationWindow.isDestroyed()) {
+        return;
+    }
+
+    const target = {
+        x: Math.floor(bounds.x),
+        y: Math.floor(bounds.y),
+        width: Math.floor(bounds.width),
+        height: Math.floor(bounds.height)
+    };
+
+    try {
+        if (process.platform === 'darwin') {
+            annotationWindow.setBounds(target);
+            annotationWindow.setAlwaysOnTop(true, ALWAYS_ON_TOP_LEVEL);
+        } else {
+            annotationWindow.setFullScreen(false);
+            annotationWindow.setBounds(target);
+            annotationWindow.setAlwaysOnTop(true, ALWAYS_ON_TOP_LEVEL);
+            annotationWindow.setFullScreen(true);
+        }
+    } catch (e) {
+        console.error('❌ Failed to reposition overlay after display change:', e);
+    }
+}
+
+/** Handles a display being removed — self-close if it's the one we're on. */
+function onDisplayRemoved(_event, display) {
+    if (annotationWindow && display?.id === overlayDisplayId) {
+        console.warn('⚠️ Overlay display removed — closing overlay.');
+        closeOverlay(true, CLOSE_REASON_DISPLAY_GONE);
+    }
+}
+
+/** Handles our display's metrics changing (resolution/scale) — refit or self-close. */
+function onDisplayMetricsChanged(_event, display, changedMetrics) {
+    if (!annotationWindow || display?.id !== overlayDisplayId) {
+        return;
+    }
+    if (!changedMetrics?.includes('bounds') && !changedMetrics?.includes('scaleFactor')) {
+        return;
+    }
+
+    const target = screen.getAllDisplays().find(d => d.id === overlayDisplayId);
+
+    if (!target) {
+        closeOverlay(true, CLOSE_REASON_DISPLAY_GONE);
+
+        return;
+    }
+    repositionOverlay(target.bounds);
+}
+
+let displayListenersAttached = false;
+
+/** Subscribe to display changes while the overlay is open. */
+function attachDisplayListeners() {
+    if (displayListenersAttached) {
+        return;
+    }
+    screen.on('display-removed', onDisplayRemoved);
+    screen.on('display-metrics-changed', onDisplayMetricsChanged);
+    displayListenersAttached = true;
+}
+
+/** Remove display-change subscriptions once the overlay is gone. */
+function detachDisplayListeners() {
+    if (!displayListenersAttached) {
+        return;
+    }
+    screen.removeListener('display-removed', onDisplayRemoved);
+    screen.removeListener('display-metrics-changed', onDisplayMetricsChanged);
+    displayListenersAttached = false;
+}
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -73,6 +167,8 @@ function toggleOverlay(mainWindow, data) {
         : screen.getPrimaryDisplay().bounds;
     const currentScreen = screen.getDisplayMatching(displayBounds);
 
+    overlayDisplayId = currentScreen.id;
+
     if (isDev) {
         console.log(
             `🖌️ Launching Overlay on Screen: ${currentScreen.label}`
@@ -104,18 +200,35 @@ function toggleOverlay(mainWindow, data) {
     }
 
     annotationWindow.loadURL(overlayUrl);
-    registerShortcut(annotationWindow);
+
+    // Surface a dead toggle shortcut (another app already owns Alt+X) so the
+    // user isn't left wondering why Draw-mode toggling does nothing.
+    if (!registerShortcut(annotationWindow)) {
+        sendToMainWindow(IPC_ANNOTATION_STATUS, { type: 'shortcut-unavailable' });
+    }
+
     wireEvents(annotationWindow, data.collabServerUrl, {
         onClosed: () => {
             annotationWindow = null;
+            overlayDisplayId = null;
+            detachDisplayListeners();
+            clearOverlaySessionCors();
             globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
             restoreMainWindow();
             sendToMainWindow(IPC_NOTIFY_OVERLAY_CLOSED, {
                 reason: CLOSE_REASON_OVERLAY_CLOSED,
                 timestamp: Date.now()
             });
-        }
+        },
+
+        // Load failure / crash / hang — tear down with the specific reason so the
+        // renderer can drop its "annotating" state and warn the presenter. Deferred
+        // to the next tick: these fire from inside the overlay's own webContents
+        // handlers, where a synchronous destroy() can be fragile.
+        onFailure: reason => setImmediate(() => closeOverlay(true, reason))
     });
+
+    attachDisplayListeners();
 }
 
 /**
@@ -127,6 +240,9 @@ function toggleOverlay(mainWindow, data) {
  */
 function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
     globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
+    detachDisplayListeners();
+    clearOverlaySessionCors();
+    overlayDisplayId = null;
 
     if (annotationWindow) {
         if (isDev) {
