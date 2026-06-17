@@ -643,5 +643,31 @@
         render();
     });
 
+    // Host theme → live recolour. Only base accent/danger/warn colours are
+    // sent; the CSS derives translucent variants (--action-soft) from them via
+    // color-mix. Host tokens map onto the Spotlight palette's own var names.
+    api.onThemeUpdate?.(t => {
+        if (!t) {
+            return;
+        }
+        const root = document.documentElement.style;
+
+        if (t.accent) {
+            root.setProperty('--action', t.accent);
+        }
+        if (t.accentHover) {
+            root.setProperty('--action-glyph', t.accentHover);
+        }
+        if (t.danger) {
+            root.setProperty('--danger', t.danger);
+        }
+        if (t.dangerIcon) {
+            root.setProperty('--danger-hover', t.dangerIcon);
+        }
+        if (t.warn) {
+            root.setProperty('--warn', t.warn);
+        }
+    });
+
     renderHeader(false);
 })();

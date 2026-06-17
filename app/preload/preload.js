@@ -43,6 +43,7 @@ const whitelistedIpcChannels = [
     'pip-window-restored',
     'pip-stage-changed',
     'pp-participants-update',
+    'pp-theme-update',
     'pip-toggle-audio',
     'pip-toggle-video',
     'pip-open-chat',

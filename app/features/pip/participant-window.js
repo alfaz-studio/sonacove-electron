@@ -69,6 +69,7 @@ let participantWindow = null;
 let currentSettings = loadSettings();
 let currentSize = { width: CARD_W, height: CARD_H_DEFAULT };
 let lastParticipantsData = null;
+let lastThemeData = null;
 
 // See suppressUnreadChatCount() for the rationale. 15s is the safety floor;
 // suppression normally drops earlier via the signals in sendParticipantsUpdate.
@@ -215,6 +216,12 @@ function openParticipantWindow() {
                 participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, lastParticipantsData);
             }
 
+            // Replay the last host theme so a panel opened after the theme was
+            // set still recolours (instead of falling back to the dark defaults).
+            if (lastThemeData) {
+                participantWindow.webContents.send(IPC.THEME_UPDATE, lastThemeData);
+            }
+
             participantWindow.show();
 
             // macOS: PiP has skipTaskbar+alwaysOnTop, so macOS hides
@@ -324,10 +331,31 @@ function suppressUnreadChatCount() {
     suppressUnreadUntil = Date.now() + UNREAD_SUPPRESS_MS;
 }
 
+/**
+ * Caches and forwards the host theme tokens to the panel so it recolours live.
+ * Cached because the jitsi renderer may push the theme before the panel window
+ * exists; the did-finish-load handler replays the cache on open.
+ *
+ * @param {Object} theme - { accent, accentHover, danger, dangerIcon, warn }.
+ * @returns {void}
+ */
+function setParticipantTheme(theme) {
+    if (!theme || typeof theme !== 'object') {
+        return;
+    }
+
+    lastThemeData = theme;
+
+    if (participantWindow && !participantWindow.isDestroyed()) {
+        participantWindow.webContents.send(IPC.THEME_UPDATE, theme);
+    }
+}
+
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
+    setParticipantTheme,
     closeParticipantWindow,
     shrinkToPill,
     suppressUnreadChatCount,

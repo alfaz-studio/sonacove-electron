@@ -2,7 +2,7 @@
 
 :root {
   --action: #f05023;
-  --action-soft: rgba(240, 80, 35, 0.16);
+  --action-soft: color-mix(in srgb, var(--action) 16%, transparent);
   --action-glyph: #f86f4d;
   --pip: #1a1b1f;
   --pip-2: #232429;
@@ -14,6 +14,7 @@
   --success: #22a55a;
   --danger: #e0483b;
   --danger-hover: #f15a4d;
+  --warn: #f8ae1a;
 }
 
 *, *::before, *::after {
@@ -301,8 +302,8 @@ html, body {
   width: 30px;
   height: 30px;
   border-radius: 9999px;
-  background: rgba(248, 174, 26, 0.2);
-  color: #f8ae1a;
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
 }
 
 .sp-hand svg { animation: handBounce 2s ease-in-out infinite; }
@@ -413,9 +414,9 @@ html, body {
   border-radius: 9999px;
   /* Less transparent + a slight ring — the 20% fill is hard to read on the
      small filmstrip thumb (the spotlight tile keeps the lighter fill). */
-  background: rgba(248, 174, 26, 0.32);
-  border: 1px solid rgba(248, 174, 26, 0.55);
-  color: #f8ae1a;
+  background: color-mix(in srgb, var(--warn) 32%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
+  color: var(--warn);
 }
 
 .sp-thumb-hand svg { animation: handBounce 2s ease-in-out infinite; }
@@ -439,13 +440,13 @@ html, body {
   height: 56px;
   border: 0;
   border-radius: 50%;
-  background: linear-gradient(160deg, #f86f4d, #f05023);
+  background: linear-gradient(160deg, var(--action-glyph), var(--action));
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 24px rgba(240, 80, 35, 0.25), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 24px color-mix(in srgb, var(--action) 25%, transparent), 0 8px 32px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: scale(0.5);
   transition: opacity 0.2s ease, transform 0.2s ease;

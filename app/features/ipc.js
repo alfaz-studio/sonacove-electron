@@ -8,6 +8,7 @@ const {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
+    setParticipantTheme,
     closeParticipantWindow,
     shrinkToPill,
     suppressUnreadChatCount,
@@ -217,6 +218,12 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer sends participant metadata (names, avatars, camera state).
     register('pp-participants-update', (_event, participants) => {
         sendParticipantsUpdate(participants);
+    });
+
+    // Renderer sends the host theme tokens (accent/danger/warn) so the PiP
+    // panel recolours live with the app theme instead of hardcoded defaults.
+    register(IPC.THEME_UPDATE, (_event, theme) => {
+        setParticipantTheme(theme);
     });
 
     // Renderer signals screenshare stopped (main window restored, or panel

@@ -72,6 +72,18 @@ contextBridge.exposeInMainWorld('panelAPI', {
     },
 
     /**
+     * Register a callback that fires when the host theme changes, so the panel
+     * can recolour live (accent / danger / warn) instead of using hardcoded
+     * defaults.
+     *
+     * @param {function(Object): void} cb - Called with the theme token map.
+     * @returns {void}
+     */
+    onThemeUpdate(cb) {
+        ipcRenderer.on('pp-theme-update', (_event, theme) => cb(theme));
+    },
+
+    /**
      * Register a callback that fires when the main process wants the panel
      * to switch to pill (minimised) mode.
      *
@@ -130,6 +142,23 @@ contextBridge.exposeInMainWorld('panelAPI', {
      */
     endMeeting() {
         ipcRenderer.send('pp-end-meeting');
+    },
+
+    /**
+     * Report the panel's per-video content size so the main process can fit the
+     * window. Tiles vary in size with each video's aspect ratio, so the main
+     * process can't compute the window from a tile count alone.
+     *
+     * @param {Object} size - { orientation, mainExtent, avgTileMain, tileMains, count }.
+     *   mainExtent is the main-axis extent of the visible tiles (px, incl. gaps);
+     *   avgTileMain is the average per-tile main-axis size; tileMains is the
+     *   per-participant main-axis size (display order) for whole-tile resize snapping.
+     */
+    reportContentSize(size) {
+        if (size && typeof size === 'object') {
+            // Keep in sync with IPC.CONTENT_SIZE in constants.js
+            ipcRenderer.send('pp-content-size', size);
+        }
     },
 
     /**
