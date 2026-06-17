@@ -25,6 +25,7 @@ const {
     setRecording,
     setAnnotateState,
     setSharingState,
+    sendAnnotateReady,
     showToast
 } = require('./controls-bar/controls-bar-window');
 const {
@@ -326,6 +327,12 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer reports local screenshare on/off — cache + forward to the bar.
     register('cb-sharing-state', (_event, data) => {
         setSharingState(data);
+    });
+
+    // Renderer reports the annotation overlay is actually up — clear the bar's
+    // Annotate open spinner.
+    register('cb-annotate-ready', () => {
+        sendAnnotateReady();
     });
 
     // Participants / Chat buttons — restore the meeting + open the pane there.

@@ -4,6 +4,7 @@ const isDev = require('electron-is-dev');
 const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     IPC_NOTIFY_OVERLAY_CLOSED,
+    IPC_NOTIFY_OVERLAY_OPENED,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
     CLOSE_REASON_MANUAL,
     CLOSE_REASON_OVERLAY_CLOSED,
@@ -112,6 +113,15 @@ function toggleOverlay(mainWindow, data) {
             restoreMainWindow();
             sendToMainWindow(IPC_NOTIFY_OVERLAY_CLOSED, {
                 reason: CLOSE_REASON_OVERLAY_CLOSED,
+                timestamp: Date.now()
+            });
+        },
+
+        // Fires once the overlay has loaded and is shown — the real "annotation
+        // is up" moment (a few seconds after the toggle), used to settle the
+        // controls bar's Annotate button and clear its loading spinner.
+        onShown: () => {
+            sendToMainWindow(IPC_NOTIFY_OVERLAY_OPENED, {
                 timestamp: Date.now()
             });
         }

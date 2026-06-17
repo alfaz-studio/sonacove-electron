@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     // Localized UI strings (tooltips, labels) pushed from main on load.
     onStrings: onChannel('cb-strings'),
 
+    // First-run intro gate ({ play }) — true only the very first time the bar
+    // is shown (the main process persists the "already shown" flag).
+    onIntro: onChannel('cb-intro'),
+
     // Conference start timestamp (epoch ms) for the meeting timer.
     onConferenceTimestamp: onChannel('cb-conference-timestamp'),
 
@@ -59,6 +63,9 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
 
     // Annotation on/off ({ annotating }) → Annotate button highlight.
     onAnnotate: onChannel('cb-annotate-state'),
+
+    // Overlay actually opened → clear the Annotate button's open spinner.
+    onAnnotateReady: onChannel('cb-annotate-ready'),
 
     // Screenshare on/off ({ sharing }) → Share/Stop button (green Share when off).
     onSharing: onChannel('cb-sharing-state'),

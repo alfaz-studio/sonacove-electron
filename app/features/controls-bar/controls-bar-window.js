@@ -7,6 +7,8 @@
  */
 
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 const { t } = require('../i18n');
 
@@ -18,6 +20,27 @@ const {
     IPC
 } = require('./constants');
 const { resolveFile } = require('./helpers');
+
+// Persisted UI state (currently just the first-run intro flag) so the
+// hover-to-expand intro plays once ever, not on every minimize/reopen.
+const STATE_FILE = path.join(app.getPath('userData'), 'controls-bar-state.json');
+
+/** @returns {boolean} Whether the first-run intro has already been shown. */
+function loadIntroShown() {
+    try {
+        return Boolean(JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')).introShown);
+    } catch (_) { /* missing or corrupt — treat as not shown yet */ }
+
+    return false;
+}
+
+let introShown = loadIntroShown();
+
+/** Marks the first-run intro as shown and persists it (best-effort). */
+function markIntroShown() {
+    introShown = true;
+    fs.writeFile(STATE_FILE, JSON.stringify({ introShown: true }), 'utf8', () => {});
+}
 
 let controlsBarWindow = null;
 
@@ -153,6 +176,16 @@ let sharing = false;
 function setSharingState(data) {
     sharing = Boolean(data?.sharing);
     sendToBar('cb-sharing-state', { sharing });
+}
+
+/**
+ * Tells the bar the annotation overlay is actually up, so it can clear the
+ * Annotate button's open spinner. Transient — not cached/replayed.
+ *
+ * @returns {void}
+ */
+function sendAnnotateReady() {
+    sendToBar('cb-annotate-ready');
 }
 
 /**
@@ -406,6 +439,13 @@ function openControlsBarWindow(mainWindowGetter) {
         // below land their labels in the right language (IPC preserves order).
         sendToBar('cb-strings', barStrings());
 
+        // First-run intro: play it only the first time the bar is ever shown,
+        // then persist the flag so reopening on minimize doesn't replay it.
+        sendToBar('cb-intro', { play: !introShown });
+        if (!introShown) {
+            markIntroShown();
+        }
+
         // Replay cached state so a freshly-loaded bar reflects reality.
         sendToBar(IPC.CONFERENCE_TIMESTAMP, conferenceTimestamp);
         sendToBar('cb-av-state', avMuted);
@@ -439,5 +479,6 @@ module.exports = {
     setRecording,
     setAnnotateState,
     setSharingState,
+    sendAnnotateReady,
     showToast
 };

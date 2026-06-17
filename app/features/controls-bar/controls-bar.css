@@ -369,6 +369,31 @@ button { font-family: inherit; }
   pointer-events: none;
 }
 
+/* ── Pending (loading) state ─────────────────────────────────────────────── */
+/* Mic/cam/annotate/record toggles round-trip to the meeting renderer; a spinner
+   replaces the glyph on the clicked control until the resulting state echoes
+   back. border-top-color: currentColor tints it to the control's own colour. */
+.cb-btn.cb-loading { pointer-events: none; }
+.cb-btn.cb-loading > svg { visibility: hidden; }
+.cb-menu-item.cb-loading { pointer-events: none; }
+.cb-menu-item.cb-loading .cb-menu-icon { position: relative; }
+.cb-menu-item.cb-loading .cb-menu-icon > svg { visibility: hidden; }
+.cb-btn.cb-loading::after,
+.cb-menu-item.cb-loading .cb-menu-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: currentColor;
+  animation: cbSpin 0.6s linear infinite;
+}
+@keyframes cbSpin { to { transform: rotate(360deg); } }
+
 /* ── More — dropdown (opens downward; window grows to fit) ───────────────── */
 .cb-more { position: relative; display: flex; }
 .cb-menu {
@@ -433,10 +458,10 @@ button { font-family: inherit; }
   font-weight: 700;
   white-space: nowrap;
   flex: none;
-  margin-left: 2px;
+  margin-left: -2px;
   transition: background 0.12s, transform 0.15s;
 }
-.cb-thread.is-expanded .cb-stop { margin-left: 0; }
+.cb-thread.is-expanded .cb-stop { margin-left: -2px; }
 .cb-stop:hover { background: var(--danger-hover); }
 .cb-stop:active { transform: scale(0.96); }
 .cb-stop-ico {

@@ -23,6 +23,64 @@
     const liveEl = document.querySelector('.cb-live');
     const stopText = document.getElementById('cbStopText');
     const timerVal = document.querySelector('.cb-timer-val');
+    const recordItem = document.getElementById('cbRecord');
+
+    // ── Pending (loading) state ───────────────────────────────────────────────
+    // Mic/cam/annotate/record toggles round-trip to the meeting renderer; show a
+    // spinner on the clicked control until the resulting state echoes back. A
+    // timeout clears it so a dropped update can't leave a control stuck spinning.
+    // Per-control loading state with timing: the spinner stays visible for a
+    // minimum (so fast ops like a warm camera still register) and never spins
+    // forever (a dropped completion signal clears at the max).
+    const loadingState = new Map();
+    const MIN_SPINNER_MS = 400;
+    const MAX_SPINNER_MS = 4000;
+
+    function clearLoading(el) {
+        const s = loadingState.get(el);
+
+        if (s?.timer) {
+            clearTimeout(s.timer);
+        }
+        loadingState.delete(el);
+        el.classList.remove('cb-loading');
+    }
+
+    function setLoading(el, on) {
+        if (!el) {
+            return;
+        }
+        if (on) {
+            const existing = loadingState.get(el);
+
+            if (existing?.timer) {
+                clearTimeout(existing.timer);
+            }
+            el.classList.add('cb-loading');
+            loadingState.set(el, {
+                shownAt: Date.now(),
+                timer: setTimeout(() => clearLoading(el), MAX_SPINNER_MS)
+            });
+
+            return;
+        }
+
+        const s = loadingState.get(el);
+
+        if (!s) {
+            return;
+        }
+
+        const remaining = MIN_SPINNER_MS - (Date.now() - s.shownAt);
+
+        if (remaining <= 0) {
+            clearLoading(el);
+        } else {
+            // Hold the spinner for the minimum visible time, then clear.
+            clearTimeout(s.timer);
+            s.timer = setTimeout(() => clearLoading(el), remaining);
+        }
+    }
 
     // ── Localized strings ─────────────────────────────────────────────────────
     // This window has no i18n runtime of its own; main pushes the translated
@@ -121,11 +179,24 @@
     function applyAvState(state) {
         audioBtn?.classList.toggle('cb-btn--danger', Boolean(state && state.audioMuted));
         videoBtn?.classList.toggle('cb-btn--danger', Boolean(state && state.videoMuted));
+        setLoading(audioBtn, false);
+
+        // Keep the camera spinner up while it's still warming up (videoPending),
+        // even when this update was triggered by an unrelated audio change.
+        if (!(state && state.videoPending)) {
+            setLoading(videoBtn, false);
+        }
     }
 
     api.onAvState?.(applyAvState);
-    audioBtn?.addEventListener('click', () => api.toggleAudio?.());
-    videoBtn?.addEventListener('click', () => api.toggleVideo?.());
+    audioBtn?.addEventListener('click', () => {
+        setLoading(audioBtn, true);
+        api.toggleAudio?.();
+    });
+    videoBtn?.addEventListener('click', () => {
+        setLoading(videoBtn, true);
+        api.toggleVideo?.();
+    });
 
     // ── Participants / Chat ──────────────────────────────────────────────────
     // Badges show the live participant count (when not alone) and chat unread
@@ -160,6 +231,12 @@
 
         annotateBtn?.classList.toggle('cb-btn--active', on);
 
+        // Close settles immediately here; the OPEN spinner instead waits for the
+        // overlay to actually be up (onAnnotateReady below).
+        if (!on) {
+            setLoading(annotateBtn, false);
+        }
+
         // Tooltip flips to "Stop annotating" while on (read on next hover by
         // showTip); refresh it live if the button is currently hovered, since
         // the toggle happens with the cursor on it.
@@ -174,7 +251,15 @@
     }
 
     api.onAnnotate?.(applyAnnotate);
-    annotateBtn?.addEventListener('click', () => api.toggleAnnotate?.());
+
+    // Overlay window is actually up (a few seconds after the click) — clear the
+    // open spinner now that annotation is really live.
+    api.onAnnotateReady?.(() => setLoading(annotateBtn, false));
+
+    annotateBtn?.addEventListener('click', () => {
+        setLoading(annotateBtn, true);
+        api.toggleAnnotate?.();
+    });
 
     // ── Share / Stop ─────────────────────────────────────────────────────────
     // While sharing: red "Stop" (monitor-x) + the "SHARING" status. While not
@@ -206,10 +291,20 @@
 
     /** Reflect local recording state on the Record menu label. */
     function applyRecording(state) {
+        const wasPending = recordItem?.classList.contains('cb-loading');
+
+        setLoading(recordItem, false);
+
         const label = state && state.recording ? strings.stopRecording : strings.record;
 
         if (recordLabel && label) {
             recordLabel.textContent = label;
+        }
+
+        // The More menu was held open to show the record spinner — close it now
+        // that the recording state has resolved.
+        if (wasPending) {
+            closeMore();
         }
     }
 
@@ -270,9 +365,12 @@
     }
 
     // ── First-run intro ───────────────────────────────────────────────────
-    // Briefly open on load so the user sees the bar is expandable, then collapse
-    // and surface a one-time hint. Any hover ends the intro + dismisses the hint.
-    let introActive = true;
+    // Played only the FIRST time the bar ever appears — the main process gates
+    // it via cb-intro ({ play }) and persists the "shown" flag to disk, so it
+    // doesn't replay every time the bar reopens on minimize. Briefly expands so
+    // the user sees the bar is expandable, then collapses and surfaces a one-time
+    // hint. Any hover ends the intro + dismisses the hint.
+    let introActive = false;
     let introTimer = null;
 
     /** Ends the intro: cancels the auto-collapse and hides the hint for good. */
@@ -287,27 +385,32 @@
         hint?.classList.remove('is-on');
     }
 
-    // Appear already fully expanded (no grow-in) — disable transitions for the
-    // first paint, then re-enable them so only the collapse animates.
-    root.classList.add('no-anim');
-    thread.classList.add('is-expanded');
-    controlsInner?.classList.add('is-settled');
-    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('no-anim')));
+    /** Runs the one-time intro: grow in, hold, then collapse + reveal the hint. */
+    function playIntro() {
+        introActive = true;
+        thread.classList.add('is-expanded'); // animates the grow-in (is-settled lands via transitionend)
 
-    introTimer = setTimeout(() => {
-        if (!introActive) {
-            return;
-        }
-        thread.classList.remove('is-expanded');
-        controlsInner?.classList.remove('is-settled');
-
-        // Reveal the hint once the collapse has settled.
-        setTimeout(() => {
-            if (introActive) {
-                hint?.classList.add('is-on');
+        introTimer = setTimeout(() => {
+            if (!introActive) {
+                return;
             }
-        }, 480);
-    }, 2600);
+            thread.classList.remove('is-expanded');
+            controlsInner?.classList.remove('is-settled');
+
+            // Reveal the hint once the collapse has settled.
+            setTimeout(() => {
+                if (introActive) {
+                    hint?.classList.add('is-on');
+                }
+            }, 480);
+        }, 2600);
+    }
+
+    api.onIntro?.(data => {
+        if (data && data.play) {
+            playIntro();
+        }
+    });
 
     // ── Hover reveal ──────────────────────────────────────────────────────
     // Expand/collapse are driven by the click-through hit-test below (mousemove),
@@ -347,9 +450,11 @@
             openMore();
         }
     });
-    document.getElementById('cbRecord')?.addEventListener('click', () => {
+    recordItem?.addEventListener('click', () => {
+        setLoading(recordItem, true);
         api.toggleRecord?.();
-        closeMore();
+        // Keep the menu open so the spinner stays visible; applyRecording closes
+        // it once the recording state confirms (or the loading timeout fires).
     });
     document.addEventListener('click', e => {
         if (more && !more.contains(e.target)) {
