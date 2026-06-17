@@ -36,6 +36,12 @@ let annotationWindow = null;
 // follow that display's geometry changes and self-close if it's unplugged.
 let overlayDisplayId = null;
 
+// Trailing-debounce timer for display-metrics-changed (see onDisplayMetricsChanged).
+let metricsDebounceTimer = null;
+
+// Trailing-debounce delay (ms) for coalescing display-metrics bursts.
+const METRICS_DEBOUNCE_MS = 200;
+
 // ── Display-change handling ─────────────────────────────────────────────────
 
 /**
@@ -81,7 +87,14 @@ function onDisplayRemoved(_event, display) {
     }
 }
 
-/** Handles our display's metrics changing (resolution/scale) — refit or self-close. */
+/**
+ * Handles our display's metrics changing (resolution/scale) — refit or self-close.
+ *
+ * `display-metrics-changed` fires in rapid bursts for a single change, and the
+ * Windows reposition path toggles fullscreen off/on (visible flicker, and races
+ * if a new event lands mid-toggle). We coalesce the burst with a short trailing
+ * debounce and re-validate the window/display when it finally fires.
+ */
 function onDisplayMetricsChanged(_event, display, changedMetrics) {
     if (!annotationWindow || display?.id !== overlayDisplayId) {
         return;
@@ -90,14 +103,26 @@ function onDisplayMetricsChanged(_event, display, changedMetrics) {
         return;
     }
 
-    const target = screen.getAllDisplays().find(d => d.id === overlayDisplayId);
-
-    if (!target) {
-        closeOverlay(true, CLOSE_REASON_DISPLAY_GONE);
-
-        return;
+    if (metricsDebounceTimer) {
+        clearTimeout(metricsDebounceTimer);
     }
-    repositionOverlay(target.bounds);
+    metricsDebounceTimer = setTimeout(() => {
+        metricsDebounceTimer = null;
+
+        // The window may have been torn down during the debounce window.
+        if (!annotationWindow || annotationWindow.isDestroyed()) {
+            return;
+        }
+
+        const target = screen.getAllDisplays().find(d => d.id === overlayDisplayId);
+
+        if (!target) {
+            closeOverlay(true, CLOSE_REASON_DISPLAY_GONE);
+
+            return;
+        }
+        repositionOverlay(target.bounds);
+    }, METRICS_DEBOUNCE_MS);
 }
 
 let displayListenersAttached = false;
@@ -120,6 +145,23 @@ function detachDisplayListeners() {
     screen.removeListener('display-removed', onDisplayRemoved);
     screen.removeListener('display-metrics-changed', onDisplayMetricsChanged);
     displayListenersAttached = false;
+}
+
+/**
+ * Shared global-state teardown run by both close paths — the manual
+ * {@link closeOverlay} and the window's own 'closed' handler. Idempotent.
+ *
+ * @returns {void}
+ */
+function teardownOverlayState() {
+    globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
+    detachDisplayListeners();
+    clearOverlaySessionCors();
+    if (metricsDebounceTimer) {
+        clearTimeout(metricsDebounceTimer);
+        metricsDebounceTimer = null;
+    }
+    overlayDisplayId = null;
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -210,10 +252,7 @@ function toggleOverlay(mainWindow, data) {
     wireEvents(annotationWindow, data.collabServerUrl, {
         onClosed: () => {
             annotationWindow = null;
-            overlayDisplayId = null;
-            detachDisplayListeners();
-            clearOverlaySessionCors();
-            globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
+            teardownOverlayState();
             restoreMainWindow();
             sendToMainWindow(IPC_NOTIFY_OVERLAY_CLOSED, {
                 reason: CLOSE_REASON_OVERLAY_CLOSED,
@@ -239,10 +278,7 @@ function toggleOverlay(mainWindow, data) {
  * @returns {void}
  */
 function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
-    globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
-    detachDisplayListeners();
-    clearOverlaySessionCors();
-    overlayDisplayId = null;
+    teardownOverlayState();
 
     if (annotationWindow) {
         if (isDev) {

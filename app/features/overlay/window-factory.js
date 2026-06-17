@@ -13,11 +13,15 @@ const {
 const { getIconPath } = require('../paths');
 
 /**
- * Hard ceiling (ms) for the overlay page to fire `did-finish-load`. The page is
- * the same-origin meeting app shell (fast), so anything past this means the load
- * is wedged — treat it as a failure instead of leaving an invisible window up.
+ * Per-attempt ceiling (ms) for the overlay page to make load progress. The page
+ * is a REMOTE meeting-app shell, so a cold/slow connection can legitimately take
+ * a while to reach `dom-ready` — hence the generous ceiling. Crucially this is
+ * not an absolute deadline: the watchdog is reset on every `did-start-loading`
+ * (see wireEvents), so an ongoing load that keeps making progress (redirects,
+ * sub-resource fetches, retries) is never torn down. Only a genuinely wedged
+ * load — no progress at all for this whole window — trips the failure path.
  */
-const LOAD_WATCHDOG_MS = 20000;
+const LOAD_WATCHDOG_MS = 45000;
 
 /**
  * Grace window (ms) after `unresponsive` before tearing the overlay down. A brief
@@ -227,10 +231,29 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
         onFailure?.(reason);
     };
 
-    loadWatchdog = setTimeout(() => {
-        console.warn(`⚠️ Overlay load timed out after ${LOAD_WATCHDOG_MS}ms.`);
-        fail(CLOSE_REASON_LOAD_FAILED);
-    }, LOAD_WATCHDOG_MS);
+    // (Re)arm the load watchdog. Called once up front and again on every
+    // `did-start-loading` so an actively-progressing remote load keeps getting a
+    // fresh window instead of a single absolute deadline. dom-ready stops the
+    // re-arming for good. No-op once we've torn down.
+    const armWatchdog = () => {
+        if (tornDown) {
+            return;
+        }
+        if (loadWatchdog) {
+            clearTimeout(loadWatchdog);
+        }
+        loadWatchdog = setTimeout(() => {
+            console.warn(`⚠️ Overlay load made no progress for ${LOAD_WATCHDOG_MS}ms.`);
+            fail(CLOSE_REASON_LOAD_FAILED);
+        }, LOAD_WATCHDOG_MS);
+    };
+
+    armWatchdog();
+
+    // Reset the watchdog whenever a load (re)starts — a redirect, retry, or
+    // sub-frame navigation all count as progress, so the slow-network case isn't
+    // killed mid-flight. dom-ready clears it entirely (below).
+    win.webContents.on('did-start-loading', armWatchdog);
 
     // Clear the watchdog on dom-ready — the reliable "the page loaded" signal.
     // We can't rely on did-finish-load (below): it waits for the `load` event,
