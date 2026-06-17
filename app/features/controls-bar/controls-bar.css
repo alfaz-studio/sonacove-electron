@@ -355,6 +355,20 @@ button { font-family: inherit; }
   box-sizing: content-box;
 }
 
+/* Participant count — not a notification: no fill/ring, drawn in the icon's
+   own colour and tucked at its lower-right so it reads as part of the glyph. */
+.cb-count[hidden] { display: none; }
+.cb-count {
+  position: absolute;
+  right: 6px;
+  top: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  pointer-events: none;
+}
+
 /* ── More — dropdown (opens downward; window grows to fit) ───────────────── */
 .cb-more { position: relative; display: flex; }
 .cb-menu {
