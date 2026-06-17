@@ -304,11 +304,21 @@ function startDrag() {
     }, 16);
 }
 
+// A hover expand/collapse that arrived mid-drag, applied once the drag ends so
+// the window doesn't get stuck at the wrong height.
+let pendingExpand = null;
+
 /** Stops an in-progress window drag. */
 function stopDrag() {
     if (dragInterval) {
         clearInterval(dragInterval);
         dragInterval = null;
+    }
+    if (pendingExpand !== null) {
+        const want = pendingExpand;
+
+        pendingExpand = null;
+        setExpanded(want);
     }
 }
 
@@ -322,7 +332,15 @@ function stopDrag() {
  * @returns {void}
  */
 function setExpanded(expanded) {
-    if (!controlsBarWindow || controlsBarWindow.isDestroyed() || dragInterval) {
+    if (!controlsBarWindow || controlsBarWindow.isDestroyed()) {
+        return;
+    }
+
+    // Defer until the drag ends, then stopDrag() re-applies the latest request —
+    // otherwise a hover toggle during a drag would be silently dropped.
+    if (dragInterval) {
+        pendingExpand = expanded;
+
         return;
     }
     const b = controlsBarWindow.getBounds();

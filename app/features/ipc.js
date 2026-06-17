@@ -249,7 +249,11 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // renderer on load.
     register('cb-show', (_event, data) => {
         try {
-            openControlsBarWindow(getMainWindow);
+            // Pass the direct main-window ref (not getMainWindow, which resolves
+            // by visibility and can return the bar/PiP when the main window is
+            // minimized) so the bar's display targeting and crash-watch bind to
+            // the real meeting window — same reason cb-stop-share uses it.
+            openControlsBarWindow(() => mainWindow);
             setConferenceTimestamp(data?.startTimestamp);
             setAvState(data);
             setCounts(data);

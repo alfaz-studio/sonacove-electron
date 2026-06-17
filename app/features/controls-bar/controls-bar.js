@@ -321,7 +321,7 @@
 
     /** Show a transient toast ({ message, sub?, actionLabel? }) below the bar. */
     function applyToast(data) {
-        if (!toast || !data || !data.message) {
+        if (!toast || !toastMsg || !toastSub || !toastAction || !data || !data.message) {
             return;
         }
         toastMsg.textContent = data.message;
@@ -518,6 +518,11 @@
         thread.classList.remove('is-dragging');
         api.stopDrag?.();
     });
+
+    // Safety net: if the cursor leaves the window without a final margin mousemove
+    // (so collapseBar never fires), losing focus still collapses + closes the menu
+    // so the window can't stay stuck expanded/tall.
+    window.addEventListener('blur', collapseBar);
 
     // ── Click-through + hover ───────────────────────────────────────────────
     // The window starts ignoring mouse events so the transparent margins fall
