@@ -152,14 +152,29 @@
 
     // ── Tile builders ──────────────────────────────────────────────────────────
 
-    /** Avatar inner HTML for a participant (real avatar image, else gradient initials). */
-    const avatarHtml = (p, big) => {
+    /**
+     * Build the avatar node for a participant (real avatar image, else gradient
+     * initials). Built via the DOM (img.src / textContent), NOT an innerHTML
+     * string — avatarURL/initials derive from a remote participant's display
+     * name/identity, so interpolating them into HTML would be an XSS sink.
+     */
+    const buildAvatar = (p, big) => {
         if (p.avatarURL) {
-            return `<img class="sp-av-img" src="${p.avatarURL}" alt="">`;
-        }
-        const cls = big ? 'sp-av sp-av--big' : 'sp-av';
+            const img = document.createElement('img');
 
-        return `<span class="${cls}" style="background:${p.avatarColor || '#555'}">${p.initials || ''}</span>`;
+            img.className = 'sp-av-img';
+            img.alt = '';
+            img.src = p.avatarURL; // property assignment — not parsed as HTML
+
+            return img;
+        }
+        const span = document.createElement('span');
+
+        span.className = big ? 'sp-av sp-av--big' : 'sp-av';
+        span.style.background = p.avatarColor || '#555';
+        span.textContent = p.initials || '';
+
+        return span;
     };
 
     /**
@@ -172,7 +187,7 @@
 
         if (avWrap.dataset.av !== key) {
             avWrap.dataset.av = key;
-            avWrap.innerHTML = avatarHtml(p, big);
+            avWrap.replaceChildren(buildAvatar(p, big));
         }
     };
 
@@ -613,6 +628,16 @@
     api.onParticipantsUpdate?.(data => {
         roster = data?.roster || data?.participants || [];
         total = data?.totalParticipantCount || roster.length;
+
+        // Drop cached frames for participants who have left, so the map doesn't
+        // grow unbounded over a long session.
+        const present = new Set(roster.map(p => p.id));
+
+        for (const id of Object.keys(frames)) {
+            if (!present.has(id)) {
+                delete frames[id];
+            }
+        }
         render();
     });
     api.onFrame?.(f => {
