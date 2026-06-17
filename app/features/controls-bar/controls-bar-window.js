@@ -49,6 +49,7 @@ function barStrings() {
         windowTitle: t('controlsBar.windowTitle'),
         live: t('controlsBar.live'),
         stop: t('controlsBar.stop'),
+        share: t('controlsBar.share'),
         audio: t('controlsBar.audio'),
         video: t('controlsBar.video'),
         participants: t('controlsBar.participants'),
@@ -137,6 +138,21 @@ let annotating = false;
 function setAnnotateState(data) {
     annotating = Boolean(data?.annotating);
     sendToBar('cb-annotate-state', { annotating });
+}
+
+// Latest local-screenshare on/off state (cached + replayed on load).
+let sharing = false;
+
+/**
+ * Caches the screenshare on/off state and forwards it to the bar — drives the
+ * Share/Stop button (green "Share" when off, red "Stop" while sharing).
+ *
+ * @param {{ sharing?: boolean }} [data] - The screenshare flag.
+ * @returns {void}
+ */
+function setSharingState(data) {
+    sharing = Boolean(data?.sharing);
+    sendToBar('cb-sharing-state', { sharing });
 }
 
 /**
@@ -396,6 +412,7 @@ function openControlsBarWindow(mainWindowGetter) {
         sendToBar('cb-counts', counts);
         sendToBar('cb-recording', { recording });
         sendToBar('cb-annotate-state', { annotating });
+        sendToBar('cb-sharing-state', { sharing });
     });
 
     attachMainWindowWatch();
@@ -421,5 +438,6 @@ module.exports = {
     setCounts,
     setRecording,
     setAnnotateState,
+    setSharingState,
     showToast
 };

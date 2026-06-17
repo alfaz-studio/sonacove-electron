@@ -51,6 +51,8 @@ const whitelistedIpcChannels = [
     'cb-show',
     'cb-hide',
     'cb-stop-screenshare',
+    'cb-start-share',
+    'cb-sharing-state',
     'cb-toggle-audio',
     'cb-toggle-video',
     'cb-av-state',

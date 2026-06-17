@@ -210,7 +210,17 @@ button { font-family: inherit; }
 .cb-meta {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   line-height: 1.1;
+}
+.cb-timer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cb-timer-ico {
+  flex-shrink: 0;
+  color: var(--ink-2);
 }
 .cb-timer-val {
   /* Fixed width + tabular figures so the ticking digits never reflow the
@@ -234,6 +244,9 @@ button { font-family: inherit; }
   text-transform: uppercase;
   color: var(--success);
 }
+/* Author display:flex above overrides the UA [hidden] rule — restore it so the
+   renderer can hide the SHARING status when not screensharing. */
+.cb-live[hidden] { display: none; }
 .cb-live-dot {
   width: 5px;
   height: 5px;
@@ -412,13 +425,15 @@ button { font-family: inherit; }
 .cb-thread.is-expanded .cb-stop { margin-left: 0; }
 .cb-stop:hover { background: var(--danger-hover); }
 .cb-stop:active { transform: scale(0.96); }
-.cb-stop-square {
-  width: 11px;
-  height: 11px;
-  border-radius: 3px;
-  background: #fff;
+.cb-stop-ico {
   flex: none;
 }
+/* Share mode (not currently sharing): green button, monitor-up icon. */
+.cb-stop-ico--share { display: none; }
+.cb-stop.is-share { background: var(--success); }
+.cb-stop.is-share:hover { background: color-mix(in srgb, var(--success) 88%, #fff); }
+.cb-stop.is-share .cb-stop-ico--stop { display: none; }
+.cb-stop.is-share .cb-stop-ico--share { display: inline; }
 
 /* ── Custom tooltip ─────────────────────────────────────────────────────── */
 /* Replaces the OS-native title tooltip (which looks foreign in the overlay).

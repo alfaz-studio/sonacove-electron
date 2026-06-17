@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     startDrag: () => ipcRenderer.send('cb-start-window-drag'),
     stopDrag: () => ipcRenderer.send('cb-stop-window-drag'),
     stopShare: () => ipcRenderer.send('cb-stop-share'),
+    startShare: () => ipcRenderer.send('cb-start-share'),
 
     // Click-through: when the cursor is off the capsule, ignore mouse events so
     // clicks fall through the transparent margins to the window behind (the
@@ -58,6 +59,9 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
 
     // Annotation on/off ({ annotating }) → Annotate button highlight.
     onAnnotate: onChannel('cb-annotate-state'),
+
+    // Screenshare on/off ({ sharing }) → Share/Stop button (green Share when off).
+    onSharing: onChannel('cb-sharing-state'),
 
     // Local recording on/off ({ recording }) → Record menu label.
     onRecording: onChannel('cb-recording'),

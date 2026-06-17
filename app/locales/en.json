@@ -29,8 +29,9 @@
 
     "controlsBar": {
         "windowTitle": "Screenshare controls",
-        "live": "Live",
+        "live": "Sharing",
         "stop": "Stop",
+        "share": "Share",
         "audio": "Audio",
         "video": "Video",
         "participants": "Participants",

@@ -24,6 +24,7 @@ const {
     setCounts,
     setRecording,
     setAnnotateState,
+    setSharingState,
     showToast
 } = require('./controls-bar/controls-bar-window');
 const {
@@ -253,6 +254,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             setCounts(data);
             setRecording(data);
             setAnnotateState(data);
+            setSharingState(data);
         } catch (err) {
             console.error('❌ ControlsBar: Failed to open window:', err);
         }
@@ -271,6 +273,15 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         if (mainWindow && !mainWindow.isDestroyed()) {
             restoreMainWindow(mainWindow);
             mainWindow.webContents.send('cb-stop-screenshare');
+        }
+    });
+
+    // User clicked Share on the bar (shown while not sharing) — restore the meeting
+    // window so the source picker is visible, then tell the renderer to start sharing.
+    register('cb-start-share', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-start-share');
         }
     });
 
@@ -310,6 +321,11 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     // Renderer reports annotation on/off — cache + forward to the bar.
     register('cb-annotate-state', (_event, data) => {
         setAnnotateState(data);
+    });
+
+    // Renderer reports local screenshare on/off — cache + forward to the bar.
+    register('cb-sharing-state', (_event, data) => {
+        setSharingState(data);
     });
 
     // Participants / Chat buttons — restore the meeting + open the pane there.

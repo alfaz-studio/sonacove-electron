@@ -20,6 +20,7 @@
     const partBadge = document.getElementById('cbPartBadge');
     const chatBadge = document.getElementById('cbChatBadge');
     const liveText = document.getElementById('cbLiveText');
+    const liveEl = document.querySelector('.cb-live');
     const stopText = document.getElementById('cbStopText');
     const timerVal = document.querySelector('.cb-timer-val');
 
@@ -137,7 +138,7 @@
 
         if (partBadge) {
             partBadge.textContent = String(people);
-            partBadge.hidden = people <= 1;
+            partBadge.hidden = people < 1;
         }
         if (chatBadge) {
             chatBadge.textContent = unread > 99 ? '99+' : String(unread);
@@ -174,6 +175,31 @@
 
     api.onAnnotate?.(applyAnnotate);
     annotateBtn?.addEventListener('click', () => api.toggleAnnotate?.());
+
+    // ── Share / Stop ─────────────────────────────────────────────────────────
+    // While sharing: red "Stop" (monitor-x) + the "SHARING" status. While not
+    // sharing: green "Share" (monitor-up), status hidden. The trailing button is
+    // one element that morphs; the click starts or stops sharing accordingly.
+
+    /** Reflect the live screenshare on/off state on the trailing button + status. */
+    function applySharing(state) {
+        const on = Boolean(state && state.sharing);
+
+        // Share mode = NOT sharing.
+        stopBtn?.classList.toggle('is-share', !on);
+        if (liveEl) {
+            liveEl.hidden = !on;
+        }
+        if (stopText) {
+            const label = on ? strings.stop : strings.share;
+
+            if (label) {
+                stopText.textContent = label;
+            }
+        }
+    }
+
+    api.onSharing?.(applySharing);
 
     // ── Recording label ──────────────────────────────────────────────────────
     const recordLabel = document.getElementById('cbRecordLabel');
@@ -365,10 +391,14 @@
         btn.addEventListener('mouseleave', hideTip);
     });
 
-    // ── Stop share ────────────────────────────────────────────────────────
+    // ── Stop / Start share ──────────────────────────────────────────────────
     stopBtn?.addEventListener('click', e => {
         e.stopPropagation();
-        api.stopShare?.();
+        if (stopBtn.classList.contains('is-share')) {
+            api.startShare?.();
+        } else {
+            api.stopShare?.();
+        }
     });
 
     // ── Drag the window by the capsule (but not its buttons) ──────────────
