@@ -105,17 +105,22 @@ function setConferenceTimestamp(ts) {
 // Latest local mic/cam muted state, so the bar's Audio/Video icons are correct
 // on open (cached + replayed on load, like the timestamp).
 let avMuted = { audioMuted: false,
-    videoMuted: false };
+    videoMuted: false,
+    videoPending: false };
 
 /**
  * Caches the local audio/video muted state and forwards it to the bar.
  *
- * @param {{ audioMuted?: boolean, videoMuted?: boolean }} [data] - Muted flags.
+ * @param {{ audioMuted?: boolean, videoMuted?: boolean, videoPending?: boolean }} [data] - Muted flags.
  * @returns {void}
  */
 function setAvState(data) {
     avMuted = { audioMuted: Boolean(data?.audioMuted),
-        videoMuted: Boolean(data?.videoMuted) };
+        videoMuted: Boolean(data?.videoMuted),
+
+        // Preserve the camera warm-up flag so the bar can keep its spinner up
+        // through getUserMedia even on the cached/replayed path.
+        videoPending: Boolean(data?.videoPending) };
     sendToBar('cb-av-state', avMuted);
 }
 
