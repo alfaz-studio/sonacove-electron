@@ -124,9 +124,10 @@ function registerShortcut(win) {
  * @param {string} [collabServerUrl] - The collab server URL (for scoped CORS injection).
  * @param {Object} callbacks - Lifecycle callbacks.
  * @param {Function} callbacks.onClosed - Called when the window is closed externally.
+ * @param {Function} [callbacks.onShown] - Called once the overlay has loaded and is shown.
  * @returns {void}
  */
-function wireEvents(win, collabServerUrl, { onClosed }) {
+function wireEvents(win, collabServerUrl, { onClosed, onShown }) {
     // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
     // without disabling webSecurity globally. Scoped to the collab server origin
     // so other endpoints (auth, analytics) keep their own CORS policies.
@@ -159,6 +160,7 @@ function wireEvents(win, collabServerUrl, { onClosed }) {
         if (win && !win.isDestroyed()) {
             win.show();
             win.focus();
+            onShown?.();
         }
     });
 

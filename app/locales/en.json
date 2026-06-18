@@ -27,6 +27,24 @@
         "helpTooltip": "Open Sonacove documentation"
     },
 
+    "controlsBar": {
+        "windowTitle": "Screenshare controls",
+        "live": "Sharing",
+        "stop": "Stop",
+        "share": "Share",
+        "audio": "Audio",
+        "video": "Video",
+        "participants": "Participants",
+        "chat": "Chat",
+        "annotate": "Annotate",
+        "stopAnnotating": "Stop annotating",
+        "annotateNeedsShare": "Share your screen to use annotations",
+        "more": "More",
+        "record": "Record",
+        "stopRecording": "Stop recording",
+        "hint": "Hover to see all controls"
+    },
+
     "update": {
         "stagingTitle": "Staging Build",
         "stagingMessage": "Staging builds do not receive auto-updates.",

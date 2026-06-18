@@ -1,0 +1,13 @@
+DM Sans
+=======
+
+Bundled here so the screenshare controls bar renders the same font as the
+jitsi-meet app while offline.
+
+Font:    DM Sans (variable)
+License: SIL Open Font License, Version 1.1 (OFL-1.1)
+Source:  https://fonts.google.com/specimen/DM+Sans
+Files:   dm-sans-latin.woff2, dm-sans-latin-ext.woff2 (Google Fonts v17 subsets)
+
+The OFL permits bundling and redistribution. Full license text:
+https://openfontlicense.org/
