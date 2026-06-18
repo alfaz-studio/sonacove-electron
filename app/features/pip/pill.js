@@ -6,7 +6,7 @@
  */
 
 const { ipcMain, screen } = require('electron');
-const { PILL_SIZE, PILL_HINT_HEADROOM, MARGIN, IPC } = require('./constants');
+const { PILL_SIZE, PILL_HINT_HEADROOM, PILL_HINT_SIDEROOM, MARGIN, IPC } = require('./constants');
 const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
 const { getCardPosition } = require('./sizing');
 
@@ -56,7 +56,13 @@ function shrinkToPill() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
     const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
-    const pillX = waX + waW - PILL_SIZE - MARGIN;
+
+    // The window is WIDER than PILL_SIZE by 2× PILL_HINT_SIDEROOM (transparent
+    // room on each side for the "Drag to move" hint, which is wider than the
+    // pill). It widens symmetrically and shifts left by PILL_HINT_SIDEROOM so the
+    // centered pill (justify-content:center in .pill-overlay) stays put.
+    const pillW = PILL_SIZE + (2 * PILL_HINT_SIDEROOM);
+    const pillX = waX + waW - PILL_SIZE - MARGIN - PILL_HINT_SIDEROOM;
 
     // The window is taller than PILL_SIZE by PILL_HINT_HEADROOM (transparent room
     // above the pill for the "Drag to move" hint). Shift its top up by the same
@@ -77,23 +83,17 @@ function shrinkToPill() {
             return;
         }
 
-        // Drop the OS window shadow: the window is transparent and only the
-        // small round pill is painted, so the shadow would otherwise be drawn
-        // around the full (square) window bounds — a rounded-square halo on
-        // macOS, a square box on Windows. The pill keeps its own CSS shadow,
-        // which fits within the PILL_SIZE window's margin.
-        win.setHasShadow(false);
-
-        // Lock to pill size — prevent resize while in pill mode. The window is
-        // PILL_SIZE wide but PILL_SIZE + PILL_HINT_HEADROOM tall (headroom above
-        // the pill for the hover hint); the pill itself is bottom-anchored in the
-        // overlay so it stays PILL_SIZE-square at the window's bottom.
-        win.setMinimumSize(PILL_SIZE, pillH);
-        win.setMaximumSize(PILL_SIZE, pillH);
+        // Lock to the padded pill size — prevent resize while in pill mode. The
+        // window carries transparent headroom above (PILL_HINT_HEADROOM) and on
+        // each side (PILL_HINT_SIDEROOM) for the hover hint; the pill itself is
+        // bottom-anchored and centered in the overlay so it stays PILL_SIZE-square
+        // at the window's bottom-centre.
+        win.setMinimumSize(pillW, pillH);
+        win.setMaximumSize(pillW, pillH);
         win.setBounds({
             x: Math.max(0, pillX),
             y: Math.max(0, pillY),
-            width: PILL_SIZE,
+            width: pillW,
             height: pillH,
         });
     }, 220);
@@ -113,10 +113,6 @@ function expandFromPill(size) {
     }
 
     _isPillMode = false;
-
-    // Restore the OS window shadow for the full panel (its rounded card fills
-    // the window, so the window shadow is what gives the panel its depth).
-    win.setHasShadow(true);
 
     const { width: W, height: H } = size;
     const mainWindow = getMainWindow();

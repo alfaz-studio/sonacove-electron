@@ -70,6 +70,23 @@
         pillBtn.classList.add('macos');
     }
 
+    // ── "Drag to move" hint (panel) ──────────────────────────────────────────
+    // The panel shows its hint only the FIRST time the user hovers it, for a few
+    // seconds (the pill keeps the always-on hover hint via CSS). Skipped in pill
+    // mode, where the card is hidden.
+    const cardWrap = document.getElementById('cardWrap');
+    const cardDragHint = cardWrap?.querySelector('.draghint');
+    let cardHintDone = false;
+
+    cardWrap?.addEventListener('mouseenter', () => {
+        if (cardHintDone || pillMode) {
+            return;
+        }
+        cardHintDone = true;
+        cardDragHint?.classList.add('is-shown');
+        setTimeout(() => cardDragHint?.classList.remove('is-shown'), 3500);
+    });
+
     // Static header icons.
     closeBtn.innerHTML = svg(I.minus, 16);
     backBtn.innerHTML = svg(I.maximize2, 14);

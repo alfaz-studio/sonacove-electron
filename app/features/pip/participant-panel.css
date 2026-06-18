@@ -520,19 +520,29 @@ body {
   opacity: 0;
   pointer-events: none;
   z-index: 90;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  /* Hidden state owns the DISAPPEAR: a longer, gentle fade so the hint eases out
+     instead of snapping. The appear stays snappy via the shorter transition on
+     the shown rule below. */
+  transition: opacity 0.34s ease, transform 0.34s ease;
 }
 .draghint.below {
   bottom: auto;
   top: calc(100% + 9px);
   transform: translateX(-50%) translateY(-4px);
 }
-.dragwin:hover > .draghint {
+/* The pill shows its hint on every hover; the panel (#cardWrap) shows it only on
+   the first hover for a few seconds, driven by the .is-shown class toggled in
+   participant-panel.js — so the hover trigger is scoped to the pill only. */
+#pillBtn:hover > .draghint,
+.draghint.is-shown {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+  /* Quick appear (the longer fade only applies on hide, via the base rule). */
+  transition: opacity 0.18s ease, transform 0.18s ease;
   animation: hintBob 1.5s ease-in-out 0.25s infinite;
 }
-.dragwin:hover > .draghint.below {
+#pillBtn:hover > .draghint.below,
+.draghint.is-shown.below {
   transform: translateX(-50%) translateY(0);
 }
 .draghint .gico {

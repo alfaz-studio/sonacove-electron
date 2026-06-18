@@ -536,19 +536,27 @@ button { font-family: inherit; }
   opacity: 0;
   pointer-events: none;
   z-index: 90;
-  transition: opacity 0.18s ease, transform 0.18s ease;
+  /* Hidden state owns the DISAPPEAR: a longer, gentle fade so the hint eases out
+     instead of snapping. The appear is kept snappy by the shorter transition on
+     .is-shown below. */
+  transition: opacity 0.34s ease, transform 0.34s ease;
 }
 .draghint.below {
   bottom: auto;
   top: calc(100% + 9px);
   transform: translateX(-50%) translateY(-4px);
 }
-.dragwin:hover > .draghint {
+/* Timed reveal: the bar shows the hint only on the first hover for a few seconds
+   (and not while the More menu is open) — driven by the .is-shown class toggled
+   in controls-bar.js, not :hover. */
+.draghint.is-shown {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+  /* Quick appear (the longer fade only applies on hide, via the base rule). */
+  transition: opacity 0.18s ease, transform 0.18s ease;
   animation: hintBob 1.5s ease-in-out 0.25s infinite;
 }
-.dragwin:hover > .draghint.below {
+.draghint.is-shown.below {
   transform: translateX(-50%) translateY(0);
 }
 .draghint .gico {

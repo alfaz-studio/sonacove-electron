@@ -43,6 +43,13 @@ const PILL_SIZE = 110;
 // ⚠ Mirrored as the `.pill-overlay { padding-bottom }` reasoning in the CSS.
 const PILL_HINT_HEADROOM = 46;
 
+// Extra transparent room on EACH SIDE of the pill window so the "Drag to move"
+// hint — which is wider than the 110px pill window — isn't clipped left/right.
+// The window widens symmetrically and shifts left by this much, so the centered
+// pill (justify-content:center in .pill-overlay) stays at the same on-screen
+// spot. Kept under MARGIN so the window's right edge stays on-screen.
+const PILL_HINT_SIDEROOM = 16;
+
 // ── Spotlight card (renderer-driven sizing) ─────────────────────────────────
 // The Spotlight panel is a fixed-width card; the renderer measures its content
 // per layout and requests the exact window size via SET_SIZE. CARD_H_DEFAULT is
@@ -118,6 +125,7 @@ module.exports = {
     WINDOW_PAD,
     PILL_SIZE,
     PILL_HINT_HEADROOM,
+    PILL_HINT_SIDEROOM,
     CARD_W,
     CARD_H_DEFAULT,
     FILMSTRIP_VIDEO,

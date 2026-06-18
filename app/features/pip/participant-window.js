@@ -168,7 +168,14 @@ function openParticipantWindow() {
             transparent: true,
             frame: false,
             alwaysOnTop: true,
-            hasShadow: true,
+            // No OS window shadow. The window is transparent with rounded content
+            // (the card, and the round pill in pill mode), so the native shadow
+            // renders as a sharp-cornered square halo around the window rect — and
+            // a runtime setHasShadow(false) toggle doesn't reliably repaint it away
+            // on Windows. Both the card and the pill carry their own rounded CSS
+            // box-shadow (WINDOW_PAD / the pill's window margin give it room), so
+            // depth is preserved without the halo.
+            hasShadow: false,
             resizable: false,
             skipTaskbar: true,
             show: false,

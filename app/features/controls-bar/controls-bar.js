@@ -364,6 +364,12 @@
             toastAction.textContent = data.actionLabel;
         }
         toast.classList.add('is-on');
+
+        // The toast owns the band below the capsule — clear the tooltip and the
+        // drag hint so the three popups never stack in the same spot.
+        hideTip();
+        hideDragHint();
+
         if (toastTimer) {
             clearTimeout(toastTimer);
         }
@@ -394,7 +400,38 @@
     function openMore() {
         more?.classList.add('is-open');
         api.setHover?.(true);
+
+        // The menu opens below the capsule, where the (below-placed) drag hint
+        // sits — hide the hint so the two never overlap.
+        hideDragHint();
     }
+
+    // ── "Drag to move" hint ─────────────────────────────────────────────────
+    // Shown only the FIRST time the user hovers the bar, for a few seconds, and
+    // never while the More menu is open. (The PiP pill keeps an always-on hover
+    // hint; the bar and PiP panel are timed.)
+    const dragHint = thread?.querySelector('.draghint');
+    let dragHintDone = false;
+    let dragHintTimer = null;
+    const DRAG_HINT_MS = 3500;
+
+    /** Hides the drag hint and clears its auto-dismiss timer. */
+    function hideDragHint() {
+        if (dragHintTimer) {
+            clearTimeout(dragHintTimer);
+            dragHintTimer = null;
+        }
+        dragHint?.classList.remove('is-shown');
+    }
+
+    thread?.addEventListener('mouseenter', () => {
+        if (dragHintDone || more?.classList.contains('is-open') || toast?.classList.contains('is-on')) {
+            return;
+        }
+        dragHintDone = true;
+        dragHint?.classList.add('is-shown');
+        dragHintTimer = setTimeout(hideDragHint, DRAG_HINT_MS);
+    });
 
     // ── First-run intro ───────────────────────────────────────────────────
     // Played only the FIRST time the bar ever appears — the main process gates
@@ -504,6 +541,12 @@
 
     /** Show the tooltip centred just below a control button. */
     function showTip(btn) {
+        // Toast outranks the tooltip — they share the band below the capsule, so
+        // suppress the tooltip whenever a toast (recording / annotate) is up.
+        if (toast?.classList.contains('is-on')) {
+            return;
+        }
+
         const text = btn.getAttribute('data-tip');
 
         if (!text) {
