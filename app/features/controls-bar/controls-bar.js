@@ -552,6 +552,12 @@
         if (!text) {
             return;
         }
+
+        // Tooltip and the drag hint share the band below the capsule — showing a
+        // tooltip clears the (lower-priority, transient) drag hint so they can't
+        // overlap.
+        hideDragHint();
+
         tip.textContent = text;
         const r = btn.getBoundingClientRect();
         const rootR = root.getBoundingClientRect();
