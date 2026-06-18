@@ -11,6 +11,16 @@
   <!-- Spotlight PiP (ui_kits/desktop-overlay/pip-concepts.html → ConceptSpotlight):
        one focused tile, a layout switch (single / split / grid), an Auto/Pinned
        speaker-follow toggle, and (single only) a filmstrip of everyone. -->
+  <!-- The .dragwin wrapper carries the hover hint. It can't live on .sp-card
+       itself because the card is overflow:hidden (clips its rounded tiles) and
+       would clip the hint that floats above it. The wrapper hugs the card (block,
+       same width) so the hint still anchors centred over the card. -->
+  <div class="dragwin" id="cardWrap">
+
+    <!-- "Drag to move" hover hint — sits above the card (room reserved by the
+         body's top padding + the renderer's CARD_HINT_HEADROOM). -->
+    <span class="draghint"><span class="gico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg></span>Drag to move</span>
+
   <div class="sp-card" id="card">
 
     <!-- ── Header ─────────────────────────────────────────────────────────── -->
@@ -39,11 +49,15 @@
 
     <!-- ── Body (layout-dependent) ────────────────────────────────────────── -->
     <div class="sp-body" id="body"></div>
-  </div>
+  </div><!-- /.sp-card -->
+  </div><!-- /#cardWrap -->
 
   <!-- ── Pill (minimized) ─────────────────────────────────────────────────── -->
   <div class="pill-overlay" id="pillOverlay">
-    <button class="pill-btn" id="pillBtn" title="Show participants">
+    <button class="pill-btn dragwin" id="pillBtn" title="Show participants">
+      <!-- "Drag to move" hover hint — sits above the pill (room reserved by the
+           window's PILL_HINT_HEADROOM). -->
+      <span class="draghint"><span class="gico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg></span>Drag to move</span>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span class="pill-badge hidden" id="pillBadge">0</span>
     </button>

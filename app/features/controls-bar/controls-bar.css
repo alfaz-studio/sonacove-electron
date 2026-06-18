@@ -157,6 +157,8 @@ button { font-family: inherit; }
 
 /* ── The capsule ────────────────────────────────────────────────────────── */
 .cb-thread {
+  /* Positioning context for the absolute "Drag to move" hint (.draghint). */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -329,6 +331,14 @@ button { font-family: inherit; }
   color: var(--action-glyph);
 }
 
+/* Annotate while not screensharing: reads as disabled but still accepts the
+   click (to surface the "share your screen" toast), so no pointer-events:none. */
+.cb-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cb-btn--disabled:hover { background: transparent; }
+
 /* Audio/Video carry both glyphs; the muted (danger) state swaps on → off. */
 .cb-btn .cb-ico-off { display: none; }
 .cb-btn--danger .cb-ico-on { display: none; }
@@ -498,6 +508,76 @@ button { font-family: inherit; }
 .cb-tip.is-on {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* ── "Drag to move" hint — shown on hover over the capsule ──────────────── */
+/* Verbatim from the desktop-overlay design kit (ui_kits/desktop-overlay →
+   DragHint). `.dragwin` here is the capsule itself, which is position:relative
+   (not absolute as in the kit) so the hint anchors to it. The bar sits at the
+   top edge of the screen, so the hint uses `.below` (drops under the capsule). */
+.draghint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(4px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 9px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  background: rgba(18, 19, 22, 0.96);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 90;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.draghint.below {
+  bottom: auto;
+  top: calc(100% + 9px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.dragwin:hover > .draghint {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  animation: hintBob 1.5s ease-in-out 0.25s infinite;
+}
+.dragwin:hover > .draghint.below {
+  transform: translateX(-50%) translateY(0);
+}
+.draghint .gico {
+  display: flex;
+  color: var(--action-glyph, #f86f4d);
+  animation: gripNudge 1.5s ease-in-out infinite;
+}
+.draghint::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(18, 19, 22, 0.96);
+}
+.draghint.below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: rgba(18, 19, 22, 0.96);
+}
+@keyframes hintBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-3px); }
+}
+@keyframes gripNudge {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-2px, -2px); }
 }
 
 /* ── Keyframes (verbatim from concepts.html) ────────────────────────────── */

@@ -236,20 +236,15 @@
             nameEl.appendChild(you);
         }
 
-        // Mic: small tiles show it inline in the label; the big tile shows it in a
-        // corner box (matches the design's StageTile). The icon only changes when
-        // hasAudio flips, so rebuild it then — not every ~10 Hz render.
-        const mic = el.querySelector('.sp-mic');
+        // Mic sits in the bottom-right corner box on every tile (compact on small
+        // tiles, larger on the spotlight). The icon only changes when hasAudio
+        // flips, so rebuild it then — not every ~10 Hz render.
         const micbox = el.querySelector('.sp-micbox');
 
         if (el.dataset.mic !== String(p.hasAudio)) {
             el.dataset.mic = String(p.hasAudio);
-            const micIcon = svg(p.hasAudio ? I.micOn : I.micOff, big ? 15 : 11);
-
-            mic.innerHTML = micIcon;
-            micbox.innerHTML = micIcon;
+            micbox.innerHTML = svg(p.hasAudio ? I.micOn : I.micOff, big ? 15 : 11);
         }
-        mic.classList.toggle('off', !p.hasAudio);
         micbox.classList.toggle('off', !p.hasAudio);
 
         const speak = el.querySelector('.sp-speak');
@@ -272,7 +267,7 @@
             + '<span class="sp-av-wrap"></span>'
             + '<span class="sp-speak"><span class="sp-bars"><i></i><i></i><i></i></span></span>'
             + '<span class="sp-corner"><span class="sp-badge hidden"></span><span class="sp-hand hidden"></span></span>'
-            + '<span class="sp-label"><span class="sp-mic"></span><span class="sp-name"></span></span>'
+            + '<span class="sp-label"><span class="sp-name"></span></span>'
             + '<span class="sp-micbox"></span>';
         updateStageTile(el, p, big);
 
@@ -418,7 +413,16 @@
         }
     };
 
-    /** Measure the card and ask main to resize the window to fit. */
+    // Transparent headroom ADDED ABOVE the card for the "Drag to move" hover hint
+    // (which floats ~40px above the card and would be clipped by the window). The
+    // window is reported as card height + this; body's `padding-top` reserves the
+    // matching space so the card stays at the same on-screen spot as the window
+    // grows upward (main anchors the window's bottom-right in SET_SIZE).
+    // ⚠ Mirrors the `body { padding-top }` literal in participant-panel.css —
+    //   keep the two values in sync.
+    const CARD_HINT_HEADROOM = 46;
+
+    /** Measure the card and ask main to resize the window to fit (+ hint headroom). */
     const syncSize = () => {
         if (pillMode) {
             return;
@@ -430,7 +434,7 @@
 
             if (w && h && key !== lastSize) {
                 lastSize = key;
-                api.setSize?.(w, h);
+                api.setSize?.(w, h + CARD_HINT_HEADROOM);
             }
         });
     };

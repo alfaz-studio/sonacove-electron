@@ -90,6 +90,12 @@
     // localized too (see applyRecording / applyAnnotate below).
     let strings = {};
 
+    // Annotate is gated on an active screenshare: you annotate over the shared
+    // screen, so with nothing shared there's nothing to draw on. Track both bits
+    // so the button can read as disabled and explain why on click.
+    let isSharing = false;
+    let annotating = false;
+
     /** Set a button's tooltip text (read by showTip on hover). */
     function setTip(btn, text) {
         if (btn && text) {
@@ -225,29 +231,35 @@
     // Highlights when annotation is on (which the desktop picker's "Open
     // annotation tools" toggle drives on share start); clicking toggles it.
 
-    /** Reflect the live annotation on/off state on the Annotate button. */
-    function applyAnnotate(state) {
-        const on = Boolean(state && state.annotating);
-
-        annotateBtn?.classList.toggle('cb-btn--active', on);
-
-        // Close settles immediately here; the OPEN spinner instead waits for the
-        // overlay to actually be up (onAnnotateReady below).
-        if (!on) {
-            setLoading(annotateBtn, false);
-        }
-
-        // Tooltip flips to "Stop annotating" while on (read on next hover by
-        // showTip); refresh it live if the button is currently hovered, since
-        // the toggle happens with the cursor on it.
-        const tip = on ? strings.stopAnnotating : strings.annotate;
+    /** Set the Annotate tooltip from the current annotating state. The
+        "share first" reason is surfaced only via the click toast, never the
+        tooltip — otherwise both show the same text at once. */
+    function refreshAnnotateTip() {
+        const tip = annotating ? strings.stopAnnotating : strings.annotate;
 
         if (tip) {
             annotateBtn?.setAttribute('data-tip', tip);
         }
+
+        // Refresh live if hovered, since the state can flip with the cursor on it.
         if (annotateBtn?.matches(':hover')) {
             showTip(annotateBtn);
         }
+    }
+
+    /** Reflect the live annotation on/off state on the Annotate button. */
+    function applyAnnotate(state) {
+        annotating = Boolean(state && state.annotating);
+
+        annotateBtn?.classList.toggle('cb-btn--active', annotating);
+
+        // Close settles immediately here; the OPEN spinner instead waits for the
+        // overlay to actually be up (onAnnotateReady below).
+        if (!annotating) {
+            setLoading(annotateBtn, false);
+        }
+
+        refreshAnnotateTip();
     }
 
     api.onAnnotate?.(applyAnnotate);
@@ -256,7 +268,19 @@
     // open spinner now that annotation is really live.
     api.onAnnotateReady?.(() => setLoading(annotateBtn, false));
 
+    // Default to the disabled look until the first sharing-state replay arrives
+    // (which corrects it via applySharing).
+    annotateBtn?.classList.add('cb-btn--disabled');
+
     annotateBtn?.addEventListener('click', () => {
+        // Annotations need an active screenshare. While not sharing the button
+        // reads as disabled — surface the reason via the same toast used for the
+        // recording notifications, instead of toggling.
+        if (!isSharing) {
+            applyToast({ message: strings.annotateNeedsShare });
+
+            return;
+        }
         setLoading(annotateBtn, true);
         api.toggleAnnotate?.();
     });
@@ -269,6 +293,14 @@
     /** Reflect the live screenshare on/off state on the trailing button + status. */
     function applySharing(state) {
         const on = Boolean(state && state.sharing);
+
+        isSharing = on;
+
+        // Annotate is only usable while sharing; reflect that as a disabled look.
+        // The click still fires (no pointer-events:none) so it can show the
+        // "share first" toast.
+        annotateBtn?.classList.toggle('cb-btn--disabled', !on);
+        refreshAnnotateTip();
 
         // Share mode = NOT sharing.
         stopBtn?.classList.toggle('is-share', !on);

@@ -13,7 +13,13 @@
        one slim capsule, status IS the bar. Mark + live timer always lead; a
        compact Stop always trails; the icon-only controls reveal inline on hover. -->
   <div class="cb-root" id="cbRoot">
-    <div class="cb-thread" id="cbThread">
+    <div class="cb-thread dragwin" id="cbThread">
+
+      <!-- "Drag to move" hover hint. Below the capsule (the bar sits at the top
+           edge of the screen, so there's no room above). -->
+      <span class="draghint below">
+        <span class="gico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg></span>Drag to move
+      </span>
 
       <!-- ── Lead: mangrove mark + live timer (always visible) ───────────── -->
       <span class="cb-lead">

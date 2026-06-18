@@ -35,6 +35,14 @@ const WINDOW_PAD = 18;
 // inset (see pill.js — no MARGIN is subtracted for the pill).
 const PILL_SIZE = 110;
 
+// Extra transparent headroom ADDED ABOVE the pill window so the "Drag to move"
+// hover hint (which floats ~40px above the pill) isn't clipped by the window
+// bounds. The window grows upward by this much (height += it, y -= it) while the
+// visible pill stays pinned to the same on-screen position (see pill.js + the
+// .pill-overlay flex-end anchoring in participant-panel.css).
+// ⚠ Mirrored as the `.pill-overlay { padding-bottom }` reasoning in the CSS.
+const PILL_HINT_HEADROOM = 46;
+
 // ── Spotlight card (renderer-driven sizing) ─────────────────────────────────
 // The Spotlight panel is a fixed-width card; the renderer measures its content
 // per layout and requests the exact window size via SET_SIZE. CARD_H_DEFAULT is
@@ -109,6 +117,7 @@ module.exports = {
     MARGIN,
     WINDOW_PAD,
     PILL_SIZE,
+    PILL_HINT_HEADROOM,
     CARD_W,
     CARD_H_DEFAULT,
     FILMSTRIP_VIDEO,

@@ -79,6 +79,7 @@ function barStrings() {
         chat: t('controlsBar.chat'),
         annotate: t('controlsBar.annotate'),
         stopAnnotating: t('controlsBar.stopAnnotating'),
+        annotateNeedsShare: t('controlsBar.annotateNeedsShare'),
         more: t('controlsBar.more'),
         record: t('controlsBar.record'),
         stopRecording: t('controlsBar.stopRecording'),

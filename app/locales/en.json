@@ -38,6 +38,7 @@
         "chat": "Chat",
         "annotate": "Annotate",
         "stopAnnotating": "Stop annotating",
+        "annotateNeedsShare": "Share your screen to use annotations",
         "more": "More",
         "record": "Record",
         "stopRecording": "Stop recording",

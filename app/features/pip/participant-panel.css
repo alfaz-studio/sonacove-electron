@@ -33,7 +33,23 @@ html, body {
   color: var(--ink);
 }
 
+/* Transparent headroom ABOVE the card for the "Drag to move" hover hint (which
+   floats ~40px above the card and would otherwise be clipped by the window).
+   The renderer reports card height + this much to main, so the window grows
+   upward and the card stays at the same on-screen spot (see syncSize() +
+   CARD_HINT_HEADROOM in participant-panel.js — keep the two in sync).
+   The fixed-position pill overlay ignores this padding. */
+body {
+  padding-top: 46px;
+}
+
 /* ── Card ──────────────────────────────────────────────────────────────────── */
+
+/* Wrapper that hosts the "Drag to move" hint above the (overflow-hidden) card.
+   Positioning context for the absolute .draghint; hugs the card's width. */
+#cardWrap {
+  position: relative;
+}
 
 .sp-card {
   position: relative;
@@ -309,8 +325,8 @@ html, body {
 .sp-hand svg { animation: handBounce 2s ease-in-out infinite; }
 .sp-hand.hidden { display: none; }
 
-/* Name label (bottom-left). Small tiles keep the mic inline; the big tile uses
-   the corner mic box instead and appends " · you". */
+/* Name label (bottom-left). The mic sits in the bottom-right corner box
+   (.sp-micbox) on every tile; the big tile appends " - you" to the name. */
 .sp-label {
   position: absolute;
   bottom: 7px;
@@ -329,30 +345,27 @@ html, body {
 }
 
 .sp-tile--big .sp-label { bottom: 12px; left: 12px; padding: 5px 11px; font-size: 13.5px; }
-.sp-tile--big .sp-label .sp-mic { display: none; }
-
-.sp-mic { display: inline-flex; line-height: 0; color: #fff; }
-.sp-mic.off { color: var(--danger-hover); }
 
 .sp-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sp-you { color: var(--ink-2); }
 
-/* Corner mic box (bottom-right, big tile only). */
+/* Corner mic box (bottom-right) on every tile — compact on small tiles, larger
+   on the spotlight. */
 .sp-micbox {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  bottom: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
   background: rgba(0, 0, 0, 0.5);
   color: #fff;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.sp-tile--big .sp-micbox { display: flex; }
+.sp-tile--big .sp-micbox { bottom: 12px; right: 12px; width: 30px; height: 30px; border-radius: 9px; }
 .sp-micbox.off { color: var(--danger-hover); }
 
 /* ── Filmstrip ─────────────────────────────────────────────────────────────── */
@@ -428,8 +441,14 @@ html, body {
   display: none;
   position: fixed;
   inset: 0;
-  align-items: center;
+  /* Pill anchored to the BOTTOM (not centred): the window carries
+     PILL_HINT_HEADROOM of transparent room ABOVE the pill for the "Drag to move"
+     hover hint. padding-bottom keeps the 27px gap the old centred 110px window
+     had below the 56px pill, so the visible pill stays at the same screen spot.
+     (27 = (PILL_SIZE − 56) / 2; mirrors pill.js's PILL_HINT_HEADROOM math.) */
+  align-items: flex-end;
   justify-content: center;
+  padding-bottom: 27px;
 }
 
 .pill-overlay.active { display: flex; }
@@ -469,6 +488,80 @@ html, body {
   color: #fff;
   text-align: center;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.27);
+}
+
+/* ── "Drag to move" hint — shown on hover over a floating window ──────────── */
+/* Verbatim from the desktop-overlay design kit (ui_kits/desktop-overlay →
+   DragHint). Shared by the panel (#cardWrap) and the pill (#pillBtn). `.dragwin`
+   is position:relative (not absolute as in the kit) so the hint anchors to its
+   own host; both hosts sit at the bottom/right of the screen with room above, so
+   the hint uses its default ABOVE placement (no `.below`). */
+.dragwin {
+  position: relative;
+}
+.draghint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(4px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 9px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  background: rgba(18, 19, 22, 0.96);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 90;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.draghint.below {
+  bottom: auto;
+  top: calc(100% + 9px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.dragwin:hover > .draghint {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  animation: hintBob 1.5s ease-in-out 0.25s infinite;
+}
+.dragwin:hover > .draghint.below {
+  transform: translateX(-50%) translateY(0);
+}
+.draghint .gico {
+  display: flex;
+  color: var(--action-glyph, #f86f4d);
+  animation: gripNudge 1.5s ease-in-out infinite;
+}
+.draghint::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(18, 19, 22, 0.96);
+}
+.draghint.below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: rgba(18, 19, 22, 0.96);
+}
+@keyframes hintBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-3px); }
+}
+@keyframes gripNudge {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-2px, -2px); }
 }
 
 /* ── Animations ────────────────────────────────────────────────────────────── */
