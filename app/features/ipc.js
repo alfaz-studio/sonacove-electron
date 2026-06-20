@@ -2,8 +2,8 @@ const { BrowserWindow, shell } = require('electron');
 const isDev = require('electron-is-dev');
 
 const config = require('./config');
-const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards, getMainWindow } = require('./overlay/overlay-window');
-const { restoreMainWindow } = require('./overlay/helpers');
+const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards } = require('./overlay/overlay-window');
+const { restoreMainWindow, getMainWindow } = require('./overlay/helpers');
 const {
     openParticipantWindow,
     sendParticipantFrame,

@@ -185,13 +185,20 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
         win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
             const headers = { ...details.responseHeaders };
 
-            if (details.url.startsWith(collabOrigin)) {
+            // Match on origin + '/' so a look-alike host (e.g.
+            // https://collab.example.com.evil/) can't prefix-match the real
+            // origin. Real request URLs always carry a path, so the trailing
+            // slash never excludes a legitimate one.
+            if (details.url.startsWith(`${collabOrigin}/`)) {
                 const hasACHeader = Object.keys(headers)
                     .some(k => k.toLowerCase() === 'access-control-allow-origin');
 
                 if (!hasACHeader) {
                     headers['Access-Control-Allow-Origin'] = [ '*' ];
-                    headers['Access-Control-Allow-Headers'] = [ '*' ];
+
+                    // Only the headers the collab requests actually send, rather
+                    // than a blanket '*', to keep the relaxation minimal.
+                    headers['Access-Control-Allow-Headers'] = [ 'Content-Type', 'Authorization' ];
                 }
             }
             callback({ responseHeaders: headers });
@@ -250,29 +257,53 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
 
     armWatchdog();
 
-    // Reset the watchdog whenever a load (re)starts — a redirect, retry, or
-    // sub-frame navigation all count as progress, so the slow-network case isn't
-    // killed mid-flight. dom-ready clears it entirely (below).
-    win.webContents.on('did-start-loading', armWatchdog);
+    // Reveal the overlay once it has loaded. Hoisted so BOTH dom-ready and
+    // did-finish-load can call it; the isVisible() guard makes it idempotent so
+    // whichever fires first wins and the other no-ops.
+    const showOverlay = () => {
+        if (win && !win.isDestroyed() && !win.isVisible()) {
+            win.show();
+            win.focus();
+        }
+    };
 
-    // Clear the watchdog on dom-ready — the reliable "the page loaded" signal.
-    // We can't rely on did-finish-load (below): it waits for the `load` event,
-    // which never fires while the page holds long-lived connections (Vite HMR in
-    // dev, the Excalidraw collab socket), so the watchdog would tear down a
-    // healthy overlay. dom-ready fires once the DOM is parsed, regardless.
+    // Reset the watchdog whenever the INITIAL load (re)starts — a redirect,
+    // retry, or sub-frame navigation all count as progress, so the slow-network
+    // case isn't killed mid-flight. Gated on initialLoadComplete and removed in
+    // dom-ready: without that, a post-load did-start-loading (in-app navigation,
+    // sub-frame fetch, redirect) would re-arm the watchdog AFTER dom-ready had
+    // already cleared it — and since dom-ready is once(), nothing would clear the
+    // new timer, tearing a healthy overlay down 45s later.
+    let initialLoadComplete = false;
+    const onDidStartLoading = () => {
+        if (!initialLoadComplete) {
+            armWatchdog();
+        }
+    };
+
+    win.webContents.on('did-start-loading', onDidStartLoading);
+
+    // dom-ready is the reliable "the page loaded" signal. We can't rely on
+    // did-finish-load (below): it waits for the `load` event, which never fires
+    // while the page holds long-lived connections (Vite HMR in dev, the
+    // Excalidraw collab socket), so the watchdog would tear down a healthy
+    // overlay. dom-ready fires once the DOM is parsed, regardless — so it both
+    // clears the watchdog and owns the show() fallback for exactly that
+    // did-finish-load-never-fires case (otherwise the overlay loads but stays
+    // invisible — the very bug this lifecycle hardening targets).
     win.webContents.once('dom-ready', () => {
+        initialLoadComplete = true;
+        win.webContents.removeListener('did-start-loading', onDidStartLoading);
         if (loadWatchdog) {
             clearTimeout(loadWatchdog);
             loadWatchdog = null;
         }
+        showOverlay();
     });
 
     win.webContents.on('did-finish-load', () => {
         clearTimers();
-        if (win && !win.isDestroyed()) {
-            win.show();
-            win.focus();
-        }
+        showOverlay();
     });
 
     // Main-frame load error. Ignore -3 (ABORTED) — that fires on our own
@@ -310,6 +341,13 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
         }, UNRESPONSIVE_GRACE_MS);
     });
 
+    // Cancel a pending teardown when the renderer recovers within the grace
+    // window. NOTE: a vanishingly narrow race remains — if 'responsive' arrives
+    // AFTER the grace timer already fired fail() (graceTimer is null by then) but
+    // BEFORE the caller's async teardown runs, this handler can't cancel it.
+    // Accepted: the full UNRESPONSIVE_GRACE_MS has elapsed by that point, so the
+    // renderer was genuinely wedged, and a torn-down overlay is recoverable by
+    // re-opening.
     win.webContents.on('responsive', () => {
         if (graceTimer) {
             clearTimeout(graceTimer);

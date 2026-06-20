@@ -331,6 +331,5 @@ module.exports = {
     toggleOverlay,
     closeOverlay,
     getOverlayWindow,
-    getMainWindow,
     closeViewersWhiteboards
 };
