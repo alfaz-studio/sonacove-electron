@@ -115,7 +115,8 @@ function configurePlatform(win, screenBounds, options = {}) {
         });
     } else {
         win.setAlwaysOnTop(true, ALWAYS_ON_TOP_LEVEL);
-        win.setFullScreen(true);
+
+        // fullscreen is already set via the constructor's `fullscreen: !isMac`.
     }
 }
 
@@ -168,7 +169,7 @@ function clearOverlaySessionCors() {
  * @param {Function} callbacks.onFailure - Called with a close-reason when the overlay
  *   fails to load, crashes, or hangs — the caller tears it down and notifies the renderer.
  * @param {Function} [callbacks.onShown] - Called once the overlay has loaded and is shown.
- * @returns {void}
+ * @returns {Function} A cancel function that clears the load/grace timers immediately.
  */
 function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
     // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
@@ -304,7 +305,13 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
     });
 
     win.webContents.on('did-finish-load', () => {
-        clearTimers();
+        // Only the load watchdog — an unresponsive renderer can't reach
+        // did-finish-load, so the grace timer is never live here; clearing it too
+        // would be misleading.
+        if (loadWatchdog) {
+            clearTimeout(loadWatchdog);
+            loadWatchdog = null;
+        }
         showOverlay();
     });
 
@@ -363,6 +370,12 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
         clearTimers();
         onClosed?.();
     });
+
+    // Hand the caller a way to flush the timers immediately. The manual-close
+    // path strips this window's 'closed' listener (to avoid a double-notify),
+    // which would otherwise leave loadWatchdog/graceTimer pending in this closure
+    // until they fire and fail() guards them out.
+    return clearTimers;
 }
 
 module.exports = {

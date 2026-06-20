@@ -33,6 +33,11 @@ const {
 
 let annotationWindow = null;
 
+// Cancel handle returned by wireEvents — flushes its load/grace timers. Held so
+// the manual-close path (which strips the window's 'closed' listener) can clear
+// them immediately instead of leaving them pending in the wireEvents closure.
+let overlayCancel = null;
+
 // id of the display the overlay was opened on — tracked so the overlay can
 // follow that display's geometry changes and self-close if it's unplugged.
 let overlayDisplayId = null;
@@ -250,9 +255,10 @@ function toggleOverlay(mainWindow, data) {
         sendToMainWindow(IPC_ANNOTATION_STATUS, { type: 'shortcut-unavailable' });
     }
 
-    wireEvents(annotationWindow, data.collabServerUrl, {
+    overlayCancel = wireEvents(annotationWindow, data.collabServerUrl, {
         onClosed: () => {
             annotationWindow = null;
+            overlayCancel = null;
             teardownOverlayState();
             restoreMainWindow();
             sendToMainWindow(IPC_NOTIFY_OVERLAY_CLOSED, {
@@ -299,6 +305,11 @@ function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
         // destroy() fires 'closed' → cleanup → notify, then we'd notify again below.
         // Explicitly remove from overlayWindows since the 'closed' listener that
         // would do this is being stripped by removeAllListeners.
+        // Flush the wireEvents timers now — removeAllListeners('closed') below
+        // strips the 'closed' handler that would otherwise clear them.
+        overlayCancel?.();
+        overlayCancel = null;
+
         overlayWindows.delete(annotationWindow);
         annotationWindow.removeAllListeners('closed');
         annotationWindow.destroy();
