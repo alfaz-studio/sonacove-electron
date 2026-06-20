@@ -1,0 +1,602 @@
+/* Screenshare controls bar — "Thread" concept.
+   Ported from the design export (ui_kits/desktop-overlay/concepts.html →
+   ConceptThread): one slim capsule, status IS the bar. Mark + live timer lead,
+   compact Stop trails, icon-only controls reveal inline on hover. */
+
+/* DM Sans (variable, OFL-1.1) — bundled locally so it renders offline, the same
+   font jitsi-meet uses. One woff2 per subset covers every weight. */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url(fonts/dm-sans-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url(fonts/dm-sans-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Design tokens — verbatim from concepts.html :root. */
+:root {
+  --action: #f05023;
+  --action-hover: #f86f4d;
+  --action-soft: rgba(240, 80, 35, 0.16);
+  --action-glyph: #f86f4d;
+  --danger: #e0483b;
+  --danger-hover: #f15a4d;
+  --success: #22a55a;
+  --ink: #e9eaec;
+  --ink-2: #9a9ca3;
+  --ink-3: #6b6d74;
+  --panel: #1a1b1f;
+  --panel-2: #232429;
+  --line: rgba(255, 255, 255, 0.09);
+  --capsule: rgba(20, 21, 24, 0.96);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  /* Matches jitsi-meet's --font-family-sans (css/_theme.css). */
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button { font-family: inherit; }
+
+/* The window is fixed-size and transparent; the capsule is centred horizontally
+   and anchored near the top, so the More menu has room to open downward without
+   any horizontal resize (which caused a flash on the old strip design). */
+.cb-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 14px;
+}
+
+/* First-run hint — a subtle pill under the capsule. */
+.cb-hint {
+  margin-top: 9px;
+  padding: 3px 11px;
+  border-radius: 9999px;
+  background: rgba(10, 11, 13, 0.82);
+  border: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.cb-hint.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+/* Transient toast (recording started / saved) — overlays below the capsule so
+   it doesn't shift the column layout. The whole toast is pointer-events:none so
+   it never blocks the screen; only its action button re-enables pointer events
+   (and the window's click-through treats that button as interactive). */
+.cb-toast {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 92%;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
+  background: rgba(10, 11, 13, 0.95);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -5px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.cb-toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.cb-toast-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.cb-toast-msg {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+}
+.cb-toast-sub {
+  max-width: 300px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cb-toast-sub[hidden] { display: none; }
+.cb-toast-action {
+  flex: none;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--action-glyph);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.13s ease;
+}
+.cb-toast-action:hover { background: rgba(255, 255, 255, 0.14); }
+.cb-toast-action[hidden] { display: none; }
+
+/* ── The capsule ────────────────────────────────────────────────────────── */
+.cb-thread {
+  /* Positioning context for the absolute "Drag to move" hint (.draghint). */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px 6px 6px;
+  border-radius: 9999px;
+  background: var(--capsule);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  /* Normal cursor on hover (the bar is draggable, but a persistent grab cursor
+     flickered against the buttons' pointer cursor). Grabbing shows only while
+     actually dragging — see .is-dragging, toggled in controls-bar.js. */
+  cursor: default;
+}
+.cb-thread.is-dragging,
+.cb-thread.is-dragging * { cursor: grabbing; }
+
+/* ── Lead: mangrove mark + live timer (always visible) ──────────────────── */
+.cb-lead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-right: 4px;
+}
+.cb-mark {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cb-mark-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--success);
+  animation: liveRing 2.4s ease-out infinite;
+}
+.cb-mark-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: linear-gradient(160deg, #f4faf4, #dfeadf);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cb-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.1;
+}
+.cb-timer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cb-timer-ico {
+  flex-shrink: 0;
+  color: var(--ink-2);
+}
+.cb-timer-val {
+  /* Fixed width + tabular figures so the ticking digits never reflow the
+     capsule. Sized for mm:ss; grows once past an hour (H:mm:ss). */
+  display: inline-block;
+  min-width: 48px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0.01em;
+}
+.cb-live {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--success);
+}
+/* Author display:flex above overrides the UA [hidden] rule — restore it so the
+   renderer can hide the SHARING status when not screensharing. */
+.cb-live[hidden] { display: none; }
+.cb-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--success);
+  animation: liveDot 1.4s infinite;
+}
+
+/* ── Controls: icon-only, revealed inline on hover ──────────────────────── */
+/* The grid column animates 0fr → 1fr so the capsule's WIDTH grows smoothly; a
+   back-out (overshoot) easing gives it the bounce. The inner flex row is clipped
+   while it grows (overflow: hidden), then switched to visible once settled so the
+   chat badge and the More menu can escape (toggled in controls-bar.js). */
+.cb-controls {
+  display: grid;
+  grid-template-columns: 0fr;
+  /* Smooth ease-out for the WIDTH (no overshoot — overshoot would briefly open a
+     gap before the Stop button). The bounce lives on the inner content below. */
+  transition: grid-template-columns 0.44s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cb-thread.is-expanded .cb-controls {
+  grid-template-columns: 1fr;
+}
+/* First paint only: show the intro's expanded state instantly (no grow-in);
+   transitions are re-enabled on the next frame so the collapse still animates. */
+.cb-root.no-anim .cb-controls,
+.cb-root.no-anim .cb-controls-inner {
+  transition: none;
+}
+.cb-controls-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(-12px);
+  /* Back-out (overshoot) easing — the controls spring in past their resting spot
+     and settle: that's the bounce. */
+  transition: opacity 0.26s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cb-thread.is-expanded .cb-controls-inner {
+  opacity: 1;
+  transform: none;
+}
+/* Settled (post-grow) — let the badge + More menu overflow the clipped row. */
+.cb-controls-inner.is-settled {
+  overflow: visible;
+}
+
+.cb-divider {
+  width: 1px;
+  height: 26px;
+  background: var(--line);
+  flex: none;
+}
+
+.cb-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  transition: background 0.13s ease, transform 0.12s ease;
+}
+.cb-btn > svg { width: 18px; height: 18px; }
+.cb-btn:hover { background: rgba(255, 255, 255, 0.09); }
+.cb-btn:active { transform: scale(0.94); }
+.cb-btn--danger { color: var(--danger-hover); }
+.cb-btn--danger:hover { background: rgba(224, 72, 59, 0.14); }
+.cb-btn--active {
+  background: var(--action-soft);
+  color: var(--action-glyph);
+}
+
+/* Annotate while not screensharing: reads as disabled but still accepts the
+   click (to surface the "share your screen" toast), so no pointer-events:none. */
+.cb-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cb-btn--disabled:hover { background: transparent; }
+
+/* Audio/Video carry both glyphs; the muted (danger) state swaps on → off. */
+.cb-btn .cb-ico-off { display: none; }
+.cb-btn--danger .cb-ico-on { display: none; }
+.cb-btn--danger .cb-ico-off { display: block; }
+
+/* The badge's display:flex would otherwise beat the UA [hidden] rule. */
+.cb-badge[hidden] { display: none; }
+.cb-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--action);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #14151a;
+  box-sizing: content-box;
+}
+
+/* Participant count — not a notification: no fill/ring, drawn in the icon's
+   own colour and tucked at its lower-right so it reads as part of the glyph. */
+.cb-count[hidden] { display: none; }
+.cb-count {
+  position: absolute;
+  right: 6px;
+  top: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+/* ── Pending (loading) state ─────────────────────────────────────────────── */
+/* Mic/cam/annotate/record toggles round-trip to the meeting renderer; a spinner
+   replaces the glyph on the clicked control until the resulting state echoes
+   back. border-top-color: currentColor tints it to the control's own colour. */
+.cb-btn.cb-loading { pointer-events: none; }
+.cb-btn.cb-loading > svg { visibility: hidden; }
+.cb-menu-item.cb-loading { pointer-events: none; }
+.cb-menu-item.cb-loading .cb-menu-icon { position: relative; }
+.cb-menu-item.cb-loading .cb-menu-icon > svg { visibility: hidden; }
+.cb-btn.cb-loading::after,
+.cb-menu-item.cb-loading .cb-menu-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: currentColor;
+  animation: cbSpin 0.6s linear infinite;
+}
+@keyframes cbSpin { to { transform: rotate(360deg); } }
+
+/* ── More — dropdown (opens downward; window grows to fit) ───────────────── */
+.cb-more { position: relative; display: flex; }
+.cb-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0; /* anchor right so a wide item never overflows the window edge */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(26, 27, 31, 0.98);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Hidden via opacity/transform (not display) so it animates open. */
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  transform-origin: top right;
+  pointer-events: none;
+  transition: opacity 0.17s ease, transform 0.17s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.cb-more.is-open .cb-menu {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.cb-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.12s, transform 0.15s;
+}
+.cb-menu-item:hover { background: rgba(255, 255, 255, 0.08); }
+.cb-menu-item:active { transform: scale(0.95); }
+.cb-menu-icon { display: flex; color: var(--ink-2); }
+.cb-menu-icon--rec { color: var(--danger); }
+
+/* ── Stop share (always visible) ────────────────────────────────────────── */
+.cb-stop {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+  margin-left: -2px;
+  transition: background 0.12s, transform 0.15s;
+}
+.cb-thread.is-expanded .cb-stop { margin-left: -2px; }
+.cb-stop:hover { background: var(--danger-hover); }
+.cb-stop:active { transform: scale(0.96); }
+.cb-stop-ico {
+  flex: none;
+}
+/* Share mode (not currently sharing): green button, monitor-up icon. */
+.cb-stop-ico--share { display: none; }
+.cb-stop.is-share { background: var(--success); }
+.cb-stop.is-share:hover { background: color-mix(in srgb, var(--success) 88%, #fff); }
+.cb-stop.is-share .cb-stop-ico--stop { display: none; }
+.cb-stop.is-share .cb-stop-ico--share { display: inline; }
+
+/* ── Custom tooltip ─────────────────────────────────────────────────────── */
+/* Replaces the OS-native title tooltip (which looks foreign in the overlay).
+   A single element, repositioned under the hovered control by controls-bar.js.
+   Sits below the button because the bar lives at the top edge of the screen. */
+.cb-tip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: rgba(10, 11, 13, 0.97);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, 3px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.cb-tip.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ── "Drag to move" hint — shown on hover over the capsule ──────────────── */
+/* Verbatim from the desktop-overlay design kit (ui_kits/desktop-overlay →
+   DragHint). `.dragwin` here is the capsule itself, which is position:relative
+   (not absolute as in the kit) so the hint anchors to it. The bar sits at the
+   top edge of the screen, so the hint uses `.below` (drops under the capsule). */
+.draghint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(4px);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 9px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  background: rgba(18, 19, 22, 0.96);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 90;
+  /* Hidden state owns the DISAPPEAR: a longer, gentle fade so the hint eases out
+     instead of snapping. The appear is kept snappy by the shorter transition on
+     .is-shown below. */
+  transition: opacity 0.34s ease, transform 0.34s ease;
+}
+.draghint.below {
+  bottom: auto;
+  top: calc(100% + 9px);
+  transform: translateX(-50%) translateY(-4px);
+}
+/* Timed reveal: the bar shows the hint only on the first hover for a few seconds
+   (and not while the More menu is open) — driven by the .is-shown class toggled
+   in controls-bar.js, not :hover. */
+.draghint.is-shown {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  /* Quick appear (the longer fade only applies on hide, via the base rule). */
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  animation: hintBob 1.5s ease-in-out 0.25s infinite;
+}
+.draghint.is-shown.below {
+  transform: translateX(-50%) translateY(0);
+}
+.draghint .gico {
+  display: flex;
+  color: var(--action-glyph, #f86f4d);
+  animation: gripNudge 1.5s ease-in-out infinite;
+}
+.draghint::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(18, 19, 22, 0.96);
+}
+.draghint.below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: rgba(18, 19, 22, 0.96);
+}
+@keyframes hintBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-3px); }
+}
+@keyframes gripNudge {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-2px, -2px); }
+}
+
+/* ── Keyframes (verbatim from concepts.html) ────────────────────────────── */
+@keyframes liveRing {
+  0% { transform: scale(0.7); opacity: 0.5; }
+  70% { transform: scale(1.75); opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes liveDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-mark-ring, .cb-live-dot { animation: none !important; }
+  .cb-controls, .cb-controls-inner { transition: none; }
+}

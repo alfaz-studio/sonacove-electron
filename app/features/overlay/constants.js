@@ -7,6 +7,9 @@ const OVERLAY_PRELOAD_FILENAME = 'overlay-preload.js';
 /** @type {string} IPC channel sent to renderer when the overlay closes. */
 const IPC_NOTIFY_OVERLAY_CLOSED = 'notify-overlay-closed';
 
+/** @type {string} IPC channel sent to renderer once the overlay window is shown. */
+const IPC_NOTIFY_OVERLAY_OPENED = 'notify-overlay-opened';
+
 /** @type {string} IPC channel sent to the overlay to toggle click-through. */
 const IPC_TOGGLE_CLICK_THROUGH = 'toggle-click-through-request';
 
@@ -50,6 +53,7 @@ module.exports = {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     OVERLAY_PRELOAD_FILENAME,
     IPC_NOTIFY_OVERLAY_CLOSED,
+    IPC_NOTIFY_OVERLAY_OPENED,
     IPC_TOGGLE_CLICK_THROUGH,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
     IPC_ANNOTATION_STATUS,

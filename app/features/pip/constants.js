@@ -35,6 +35,35 @@ const WINDOW_PAD = 18;
 // inset (see pill.js — no MARGIN is subtracted for the pill).
 const PILL_SIZE = 110;
 
+// Extra transparent headroom ADDED ABOVE the pill window so the "Drag to move"
+// hover hint (which floats ~40px above the pill) isn't clipped by the window
+// bounds. The window grows upward by this much (height += it, y -= it) while the
+// visible pill stays pinned to the same on-screen position (see pill.js + the
+// .pill-overlay flex-end anchoring in participant-panel.css).
+// ⚠ Mirrored as the `.pill-overlay { padding-bottom }` reasoning in the CSS.
+const PILL_HINT_HEADROOM = 46;
+
+// Extra transparent room on EACH SIDE of the pill window so the "Drag to move"
+// hint — which is wider than the 110px pill window — isn't clipped left/right.
+// The window widens symmetrically and shifts left by this much, so the centered
+// pill (justify-content:center in .pill-overlay) stays at the same on-screen
+// spot. Kept under MARGIN so the window's right edge stays on-screen.
+const PILL_HINT_SIDEROOM = 16;
+
+// ── Spotlight card (renderer-driven sizing) ─────────────────────────────────
+// The Spotlight panel is a fixed-width card; the renderer measures its content
+// per layout and requests the exact window size via SET_SIZE. CARD_H_DEFAULT is
+// just the initial guess before the renderer's first measure lands.
+const CARD_W = 320;
+const CARD_H_DEFAULT = 331;
+
+// ── Spotlight ──────────────────────────────────────────────────────────────
+// Feature flag: show live video in the filmstrip thumbnails. Off for now —
+// the filmstrip shows avatars only; live video is reserved for the stage
+// tile(s). Flipping this on later also widens the on-stage set reported to
+// jitsi to include filmstrip-visible participants (cap to viewport then).
+const FILMSTRIP_VIDEO = false;
+
 // ── IPC channels ─────────────────────────────────────────────────────────────
 
 const IPC = {
@@ -48,6 +77,7 @@ const IPC = {
     // Panel renderer → main (sent from participant-panel.html via preload)
     CONTENT_SIZE: 'pp-content-size',
     PIN_STATE_CHANGED: 'pp-pin-state-changed',
+    STAGE_CHANGED: 'pp-stage-changed',
     START_DRAG: 'pp-start-window-drag',
     STOP_DRAG: 'pp-stop-window-drag',
     TOGGLE_ORIENTATION: 'pip-toggle-orientation',
@@ -60,11 +90,16 @@ const IPC = {
     START_EDGE_RESIZE: 'pp-start-edge-resize',
     STOP_EDGE_RESIZE: 'pp-stop-edge-resize',
 
+    // Spotlight: renderer-driven window size + persisted layout/auto prefs.
+    SET_SIZE: 'pp-set-size',
+    SAVE_SETTINGS: 'pp-save-settings',
+
     // Renderer → main → panel renderer (host theme tokens for live recolour)
     THEME_UPDATE: 'pp-theme-update',
 
     // Main → panel renderer
     FRAME: 'pp-frame',
+    SETTINGS: 'pp-settings',
     ORIENTATION_CHANGED: 'pp-orientation-changed',
     VISIBLE_COUNT_CHANGED: 'pp-visible-count-changed',
     ENTER_PILL_MODE: 'pp-enter-pill-mode',
@@ -72,6 +107,7 @@ const IPC = {
 
     // Main → jitsi-meet renderer
     PIN_STATE_CHANGED_RENDERER: 'pip-pin-state-changed',
+    STAGE_CHANGED_RENDERER: 'pip-stage-changed',
     PANEL_CLOSED: 'pip-panel-closed',
     PANEL_REOPENED: 'pip-panel-reopened',
     ORIENTATION_CHANGED_RENDERER: 'pip-orientation-changed',
@@ -88,5 +124,10 @@ module.exports = {
     MARGIN,
     WINDOW_PAD,
     PILL_SIZE,
+    PILL_HINT_HEADROOM,
+    PILL_HINT_SIDEROOM,
+    CARD_W,
+    CARD_H_DEFAULT,
+    FILMSTRIP_VIDEO,
     IPC,
 };

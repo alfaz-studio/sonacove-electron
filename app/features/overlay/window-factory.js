@@ -167,9 +167,10 @@ function clearOverlaySessionCors() {
  * @param {Function} callbacks.onClosed - Called when the window is closed externally.
  * @param {Function} callbacks.onFailure - Called with a close-reason when the overlay
  *   fails to load, crashes, or hangs — the caller tears it down and notifies the renderer.
+ * @param {Function} [callbacks.onShown] - Called once the overlay has loaded and is shown.
  * @returns {void}
  */
-function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
+function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
     // Allow cross-origin requests to the collab server (fonts, WebSocket handshake)
     // without disabling webSecurity globally. Scoped to the collab server origin
     // so other endpoints (auth, analytics) keep their own CORS policies.
@@ -264,6 +265,7 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure }) {
         if (win && !win.isDestroyed() && !win.isVisible()) {
             win.show();
             win.focus();
+            onShown?.();
         }
     };
 

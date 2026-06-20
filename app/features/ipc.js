@@ -17,6 +17,18 @@ const {
 const { IPC } = require('./pip/constants');
 const { getParticipantWindow } = require('./pip/helpers');
 const {
+    openControlsBarWindow,
+    closeControlsBarWindow,
+    setConferenceTimestamp,
+    setAvState,
+    setCounts,
+    setRecording,
+    setAnnotateState,
+    setSharingState,
+    sendAnnotateReady,
+    showToast
+} = require('./controls-bar/controls-bar-window');
+const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
     IPC_SET_MUTED_CHANNEL: SYSTEM_VOLUME_SET_MUTED,
     IPC_SET_VOLUME_CHANNEL: SYSTEM_VOLUME_SET_VOLUME,
@@ -190,15 +202,14 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
             const { isPillMode, expandFromPill } = require('./pip/pill');
 
             if (getParticipantWindow() && isPillMode()) {
-                const { count, orientation } = getCurrentState();
-
-                expandFromPill(count, orientation);
+                expandFromPill(getCurrentState().size);
             } else {
                 openParticipantWindow();
             }
         } catch (err) {
             console.error('❌ ParticipantPiP: Failed to open window:', err);
         }
+
     });
 
     // Renderer sends a per-participant JPEG frame — forward to the overlay.
@@ -230,11 +241,153 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
+    // ── Screenshare controls bar ──────────────────────────────────────────────
+
+    // Local screenshare started — open the floating controls bar on the
+    // meeting's display. The payload carries the conference start timestamp
+    // (epoch ms) so the bar's meeting timer ticks; cached + replayed to the bar
+    // renderer on load.
+    register('cb-show', (_event, data) => {
+        try {
+            // Pass the direct main-window ref (not getMainWindow, which resolves
+            // by visibility and can return the bar/PiP when the main window is
+            // minimized) so the bar's display targeting and crash-watch bind to
+            // the real meeting window — same reason cb-stop-share uses it.
+            openControlsBarWindow(() => mainWindow);
+            setConferenceTimestamp(data?.startTimestamp);
+            setAvState(data);
+            setCounts(data);
+            setRecording(data);
+            setAnnotateState(data);
+            setSharingState(data);
+        } catch (err) {
+            console.error('❌ ControlsBar: Failed to open window:', err);
+        }
+    });
+
+    // Local screenshare stopped / crashed / conference ended — tear it down.
+    register('cb-hide', () => {
+        closeControlsBarWindow();
+    });
+
+    // User clicked Stop on the controls bar — bring the meeting back and tell the
+    // renderer to stop screensharing (the track ending then closes the bar via
+    // cb-hide). Use the direct mainWindow ref (not getMainWindow, which can pick
+    // the bar window when the main window is minimized).
+    register('cb-stop-share', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-stop-screenshare');
+        }
+    });
+
+    // User clicked Share on the bar (shown while not sharing) — restore the meeting
+    // window so the source picker is visible, then tell the renderer to start sharing.
+    register('cb-start-share', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-start-share');
+        }
+    });
+
+    // Mic / camera buttons on the bar — forward to the renderer to toggle mute.
+    register('cb-toggle-audio', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-audio');
+        }
+    });
+    register('cb-toggle-video', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-video');
+        }
+    });
+
+    // Record menu item — forward to the renderer (local recording runs in the
+    // background, so the meeting window is not restored).
+    register('cb-toggle-record', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-record');
+        }
+    });
+
+    // Annotate button — forward to the renderer to start/stop the annotation
+    // overlay (runs over the shared screen, so the meeting window is not restored).
+    register('cb-toggle-annotate', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-toggle-annotate');
+        }
+    });
+
+    // Renderer reports the live mic/cam muted state — cache + forward to the bar.
+    register('cb-av-state', (_event, data) => {
+        setAvState(data);
+    });
+
+    // Renderer reports annotation on/off — cache + forward to the bar.
+    register('cb-annotate-state', (_event, data) => {
+        setAnnotateState(data);
+    });
+
+    // Renderer reports local screenshare on/off — cache + forward to the bar.
+    register('cb-sharing-state', (_event, data) => {
+        setSharingState(data);
+    });
+
+    // Renderer reports the annotation overlay is actually up — clear the bar's
+    // Annotate open spinner.
+    register('cb-annotate-ready', () => {
+        sendAnnotateReady();
+    });
+
+    // Participants / Chat buttons — restore the meeting + open the pane there.
+    register('cb-open-participants', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-open-participants');
+        }
+    });
+    register('cb-open-chat', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            restoreMainWindow(mainWindow);
+            mainWindow.webContents.send('cb-open-chat');
+        }
+    });
+
+    // Renderer reports the live participant / unread counts — cache + forward.
+    register('cb-counts', (_event, data) => {
+        setCounts(data);
+    });
+
+    // Renderer reports local recording on/off — cache + forward to the bar.
+    register('cb-recording', (_event, data) => {
+        setRecording(data);
+    });
+
+    // Transient toast from the renderer (recording start / saved) → the bar.
+    register('cb-toast', (_event, data) => {
+        showToast(data);
+    });
+
+    // Toast's "Show in folder" button → run jitsi's reveal action in the renderer.
+    register('cb-open-recording', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cb-open-recording');
+        }
+    });
+
     // User toggled pin state in the PiP panel — forward to main renderer
     // so jitsi-meet can protect pinned participants from dominant speaker swapping.
     register(IPC.PIN_STATE_CHANGED, (_event, pinnedIds) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC.PIN_STATE_CHANGED_RENDERER, pinnedIds);
+        }
+    });
+
+    // Spotlight: the PiP panel reports which participants are on-stage — forward
+    // to the main renderer so jitsi captures frames + attaches video for them.
+    register(IPC.STAGE_CHANGED, (_event, stageIds) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC.STAGE_CHANGED_RENDERER, stageIds);
         }
     });
 

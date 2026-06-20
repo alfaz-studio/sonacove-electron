@@ -4,6 +4,7 @@ const isDev = require('electron-is-dev');
 const {
     SHORTCUT_TOGGLE_CLICK_THROUGH,
     IPC_NOTIFY_OVERLAY_CLOSED,
+    IPC_NOTIFY_OVERLAY_OPENED,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
     IPC_ANNOTATION_STATUS,
     ALWAYS_ON_TOP_LEVEL,
@@ -264,7 +265,16 @@ function toggleOverlay(mainWindow, data) {
         // renderer can drop its "annotating" state and warn the presenter. Deferred
         // to the next tick: these fire from inside the overlay's own webContents
         // handlers, where a synchronous destroy() can be fragile.
-        onFailure: reason => setImmediate(() => closeOverlay(true, reason))
+        onFailure: reason => setImmediate(() => closeOverlay(true, reason)),
+
+        // Fires once the overlay has loaded and is shown — the real "annotation
+        // is up" moment (a few seconds after the toggle), used to settle the
+        // controls bar's Annotate button and clear its loading spinner.
+        onShown: () => {
+            sendToMainWindow(IPC_NOTIFY_OVERLAY_OPENED, {
+                timestamp: Date.now()
+            });
+        }
     });
 
     attachDisplayListeners();

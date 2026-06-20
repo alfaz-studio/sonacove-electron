@@ -6,10 +6,9 @@
  */
 
 const { ipcMain, screen } = require('electron');
-const { PILL_SIZE, IPC } = require('./constants');
+const { PILL_SIZE, PILL_HINT_HEADROOM, PILL_HINT_SIDEROOM, MARGIN, IPC } = require('./constants');
 const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
-const { computeWindowSize, getWindowPosition } = require('./sizing');
-const { setVisibleTileCount } = require('./resize');
+const { getCardPosition } = require('./sizing');
 
 let _getWindow = null;
 let _restoreConstraints = null;
@@ -57,10 +56,20 @@ function shrinkToPill() {
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
     const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
-    // No screen-edge margin here: PILL_SIZE includes transparent padding around
-    // the visible pill, which doubles as the visual inset from the screen edge.
-    const pillX = waX + waW - PILL_SIZE;
-    const pillY = waY + waH - PILL_SIZE;
+
+    // The window is WIDER than PILL_SIZE by 2× PILL_HINT_SIDEROOM (transparent
+    // room on each side for the "Drag to move" hint, which is wider than the
+    // pill). It widens symmetrically and shifts left by PILL_HINT_SIDEROOM so the
+    // centered pill (justify-content:center in .pill-overlay) stays put.
+    const pillW = PILL_SIZE + (2 * PILL_HINT_SIDEROOM);
+    const pillX = waX + waW - PILL_SIZE - MARGIN - PILL_HINT_SIDEROOM;
+
+    // The window is taller than PILL_SIZE by PILL_HINT_HEADROOM (transparent room
+    // above the pill for the "Drag to move" hint). Shift its top up by the same
+    // amount so the window's BOTTOM — and thus the bottom-anchored visible pill —
+    // lands exactly where the plain PILL_SIZE window would have.
+    const pillH = PILL_SIZE + PILL_HINT_HEADROOM;
+    const pillY = waY + waH - pillH - MARGIN;
 
     const mw = getMainWindow();
 
@@ -74,26 +83,29 @@ function shrinkToPill() {
             return;
         }
 
-        // Lock to pill size — prevent resize while in pill mode.
-        win.setMinimumSize(PILL_SIZE, PILL_SIZE);
-        win.setMaximumSize(PILL_SIZE, PILL_SIZE);
+        // Lock to the padded pill size — prevent resize while in pill mode. The
+        // window carries transparent headroom above (PILL_HINT_HEADROOM) and on
+        // each side (PILL_HINT_SIDEROOM) for the hover hint; the pill itself is
+        // bottom-anchored and centered in the overlay so it stays PILL_SIZE-square
+        // at the window's bottom-centre.
+        win.setMinimumSize(pillW, pillH);
+        win.setMaximumSize(pillW, pillH);
         win.setBounds({
             x: Math.max(0, pillX),
             y: Math.max(0, pillY),
-            width: PILL_SIZE,
-            height: PILL_SIZE,
+            width: pillW,
+            height: pillH,
         });
     }, 220);
 }
 
 /**
- * Expands the floating pill back to a full participant panel.
+ * Expands the floating pill back to a full participant card.
  * Sends 'pip-panel-reopened' to the main renderer so frame-sending resumes.
  *
- * @param {number} count - Current participant count.
- * @param {string} orientation - Current orientation.
+ * @param {{ width: number, height: number }} size - Current card size to restore.
  */
-function expandFromPill(count, orientation) {
+function expandFromPill(size) {
     const win = _getWindow?.();
 
     if (!win || win.isDestroyed()) {
@@ -102,21 +114,16 @@ function expandFromPill(count, orientation) {
 
     _isPillMode = false;
 
-    // Reset visible count to show all tiles when reopening from pill.
-    setVisibleTileCount(count);
-
-    const { width: W, height: H } = computeWindowSize(count, orientation);
+    const { width: W, height: H } = size;
     const mainWindow = getMainWindow();
     const display = mainWindow
         ? screen.getDisplayMatching(mainWindow.getBounds())
         : screen.getPrimaryDisplay();
-    const { x: posX, y: posY } = getWindowPosition(W, H, orientation, display.workArea);
+    const { x: posX, y: posY } = getCardPosition(W, H, display.workArea);
 
     // Release the pill size lock (min back to 1×1, max back to "no limit"),
-    // set bounds, then restore the participant-window panel constraints.
-    // Without the explicit restore the constraints stayed unlocked and the
-    // next native-OS resize gesture could shrink the panel below the
-    // single-tile minimum.
+    // then set the card bounds. The card is non-resizable, but the pill lock
+    // pinned min/max to PILL_SIZE — clear it before resizing.
     win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
     win.setBounds({ x: posX, y: posY, width: W, height: H });
@@ -126,7 +133,6 @@ function expandFromPill(count, orientation) {
     }
 
     win.webContents.send(IPC.ENTER_PANEL_MODE);
-    win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: count, edge: null });
 
     const mw = getMainWindow();
 
@@ -139,8 +145,8 @@ function expandFromPill(count, orientation) {
  * Registers pill-related IPC handlers.
  *
  * @param {() => Electron.BrowserWindow|null} getWindow
- * @param {() => { count: number, minTiles: number, orientation: string }} getState - Returns
- *   current participant count, pin-derived floor, and orientation for expand sizing.
+ * @param {() => { size: { width: number, height: number } }} getState - Returns
+ *   the current card size for expand sizing.
  * @param {(() => void)=} restoreConstraints - Optional callback invoked after
  *   expanding back to panel mode so participant-window can reapply min/max.
  */
@@ -149,9 +155,7 @@ function setupPillHandlers(getWindow, getState, restoreConstraints) {
     _restoreConstraints = restoreConstraints || null;
 
     ipcMain.on(IPC.REOPEN_REQUEST, () => {
-        const { count, orientation } = getState();
-
-        expandFromPill(count, orientation);
+        expandFromPill(getState().size);
     });
 }
 
