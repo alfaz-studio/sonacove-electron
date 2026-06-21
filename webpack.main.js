@@ -10,6 +10,7 @@ module.exports = {
         'overlay-preload': './app/preload/overlay-preload.js',
         'participant-panel-preload': './app/features/pip/participant-panel-preload.js',
         'controls-bar-preload': './app/features/controls-bar/controls-bar-preload.js',
+        'share-border-preload': './app/features/share-border/share-border-preload.js',
     },
     output: {
         path: path.resolve('./build'),
@@ -35,6 +36,7 @@ module.exports = {
                 { from: 'app/features/controls-bar/controls-bar.css', to: 'controls-bar.css' },
                 { from: 'app/features/controls-bar/controls-bar.js', to: 'controls-bar.js' },
                 { from: 'app/features/controls-bar/fonts', to: 'fonts' },
+                { from: 'app/features/share-border/share-border.html', to: 'share-border.html' },
                 { from: 'app/locales', to: 'locales' }
             ]
         })

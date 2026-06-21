@@ -37,6 +37,11 @@ const {
     showToast
 } = require('./controls-bar/controls-bar-window');
 const {
+    openShareBorderWindow,
+    closeShareBorderWindow,
+    sendShareBorderTheme
+} = require('./share-border/share-border-window');
+const {
     IPC_REQUEST_CHANNEL: SYSTEM_VOLUME_REQUEST,
     IPC_SET_MUTED_CHANNEL: SYSTEM_VOLUME_SET_MUTED,
     IPC_SET_VOLUME_CHANNEL: SYSTEM_VOLUME_SET_VOLUME,
@@ -144,6 +149,18 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         closeViewersWhiteboards(data?.sharerId);
     });
 
+    // Full-screen share border — the renderer signals when the local presenter
+    // is sharing an entire DISPLAY (active:true) vs not / sharing a window
+    // (active:false). Draws a sharer-only, content-protected orange frame
+    // around the shared display; window shares get no border (active:false).
+    register('share-border', (_event, data) => {
+        if (data?.active) {
+            openShareBorderWindow();
+        } else {
+            closeShareBorderWindow();
+        }
+    });
+
     // Navigation
     register('nav-to-home', () => {
         const mw = getMainWindow();
@@ -238,6 +255,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         setParticipantTheme(theme);
         sendOverlayTheme(theme);
         sendControlsBarTheme(theme);
+        sendShareBorderTheme(theme);
     });
 
     // Overlay pulls the cached theme once its listener is ready (avoids a
