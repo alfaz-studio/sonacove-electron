@@ -14,6 +14,7 @@ const {
     CLOSE_REASON_SCREENSHARE_STOPPED,
     CLOSE_REASON_DISPLAY_GONE
 } = require('./constants');
+const { attachDisplayFollow } = require('./display-follow');
 const {
     getMainWindow,
     sendToMainWindow,
@@ -43,11 +44,8 @@ let overlayCancel = null;
 // follow that display's geometry changes and self-close if it's unplugged.
 let overlayDisplayId = null;
 
-// Trailing-debounce timer for display-metrics-changed (see onDisplayMetricsChanged).
-let metricsDebounceTimer = null;
-
-// Trailing-debounce delay (ms) for coalescing display-metrics bursts.
-const METRICS_DEBOUNCE_MS = 200;
+// Detach handle for the shared display-follow watcher (see ./display-follow).
+let detachDisplayFollow = null;
 
 // ── Display-change handling ─────────────────────────────────────────────────
 
@@ -86,74 +84,6 @@ function repositionOverlay(bounds) {
     }
 }
 
-/** Handles a display being removed — self-close if it's the one we're on. */
-function onDisplayRemoved(_event, display) {
-    if (annotationWindow && display?.id === overlayDisplayId) {
-        console.warn('⚠️ Overlay display removed — closing overlay.');
-        closeOverlay(true, CLOSE_REASON_DISPLAY_GONE);
-    }
-}
-
-/**
- * Handles our display's metrics changing (resolution/scale) — refit or self-close.
- *
- * `display-metrics-changed` fires in rapid bursts for a single change, and the
- * Windows reposition path toggles fullscreen off/on (visible flicker, and races
- * if a new event lands mid-toggle). We coalesce the burst with a short trailing
- * debounce and re-validate the window/display when it finally fires.
- */
-function onDisplayMetricsChanged(_event, display, changedMetrics) {
-    if (!annotationWindow || display?.id !== overlayDisplayId) {
-        return;
-    }
-    if (!changedMetrics?.includes('bounds') && !changedMetrics?.includes('scaleFactor')) {
-        return;
-    }
-
-    if (metricsDebounceTimer) {
-        clearTimeout(metricsDebounceTimer);
-    }
-    metricsDebounceTimer = setTimeout(() => {
-        metricsDebounceTimer = null;
-
-        // The window may have been torn down during the debounce window.
-        if (!annotationWindow || annotationWindow.isDestroyed()) {
-            return;
-        }
-
-        const target = screen.getAllDisplays().find(d => d.id === overlayDisplayId);
-
-        if (!target) {
-            closeOverlay(true, CLOSE_REASON_DISPLAY_GONE);
-
-            return;
-        }
-        repositionOverlay(target.bounds);
-    }, METRICS_DEBOUNCE_MS);
-}
-
-let displayListenersAttached = false;
-
-/** Subscribe to display changes while the overlay is open. */
-function attachDisplayListeners() {
-    if (displayListenersAttached) {
-        return;
-    }
-    screen.on('display-removed', onDisplayRemoved);
-    screen.on('display-metrics-changed', onDisplayMetricsChanged);
-    displayListenersAttached = true;
-}
-
-/** Remove display-change subscriptions once the overlay is gone. */
-function detachDisplayListeners() {
-    if (!displayListenersAttached) {
-        return;
-    }
-    screen.removeListener('display-removed', onDisplayRemoved);
-    screen.removeListener('display-metrics-changed', onDisplayMetricsChanged);
-    displayListenersAttached = false;
-}
-
 /**
  * Shared global-state teardown run by both close paths — the manual
  * {@link closeOverlay} and the window's own 'closed' handler. Idempotent.
@@ -162,12 +92,11 @@ function detachDisplayListeners() {
  */
 function teardownOverlayState() {
     globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
-    detachDisplayListeners();
-    clearOverlaySessionCors();
-    if (metricsDebounceTimer) {
-        clearTimeout(metricsDebounceTimer);
-        metricsDebounceTimer = null;
+    if (detachDisplayFollow) {
+        detachDisplayFollow();
+        detachDisplayFollow = null;
     }
+    clearOverlaySessionCors();
     overlayDisplayId = null;
 }
 
@@ -284,7 +213,14 @@ function toggleOverlay(mainWindow, data) {
         }
     });
 
-    attachDisplayListeners();
+    // Follow the overlay's display: refit on metrics change (Windows re-asserts
+    // fullscreen via repositionOverlay), self-close if it's unplugged.
+    detachDisplayFollow = attachDisplayFollow({
+        getWindow: () => annotationWindow,
+        getDisplayId: () => overlayDisplayId,
+        reposition: target => repositionOverlay(target.bounds),
+        onGone: () => closeOverlay(true, CLOSE_REASON_DISPLAY_GONE)
+    });
 }
 
 /**

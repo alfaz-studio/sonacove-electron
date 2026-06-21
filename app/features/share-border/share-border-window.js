@@ -2,23 +2,24 @@
  * Screenshare border — window lifecycle.
  *
  * A transparent, frameless, always-on-top, click-through overlay that draws an
- * orange frame around the DISPLAY the Electron presenter is sharing (full-screen
+ * accent frame around the DISPLAY the Electron presenter is sharing (full-screen
  * shares only — window shares get no border). The frame is excluded from the
  * capture stream via setContentProtection(true), so only the presenter sees it.
  *
- * Mirrors the annotation overlay's window options + display-change handling
- * (see overlay/window-factory.js + overlay/overlay-window.js), simplified: the
- * page is a tiny static local HTML, so there's no remote-load watchdog.
+ * Mirrors the annotation overlay's window options, and shares its display-follow
+ * watcher (../overlay/display-follow) for refit-on-metrics-change / close-on-
+ * display-removed. The page is a tiny static local HTML, so there's no
+ * remote-load watchdog.
  */
 
 const { app, BrowserWindow, screen } = require('electron');
 const isDev = require('electron-is-dev');
-const fs = require('fs');
-const path = require('path');
 
 const { ALWAYS_ON_TOP_LEVEL, TRANSPARENT_BG } = require('../overlay/constants');
+const { attachDisplayFollow } = require('../overlay/display-follow');
 const { getMainWindow } = require('../overlay/helpers');
 const { getIconPath } = require('../paths');
+const { resolveFile } = require('../pip/helpers');
 const { getLastTheme } = require('../pip/participant-window');
 
 const {
@@ -35,32 +36,8 @@ let borderWindow = null;
 // display's geometry changes and self-close if the display is unplugged.
 let borderDisplayId = null;
 
-// Trailing-debounce timer for display-metrics-changed (coalesces bursts).
-let metricsDebounceTimer = null;
-
-// Trailing-debounce delay (ms) for coalescing display-metrics bursts.
-const METRICS_DEBOUNCE_MS = 200;
-
-// ── Asset resolution ─────────────────────────────────────────────────────────
-
-/**
- * Resolves a bundled border asset across the candidate dirs (build dir, app
- * dir, __dirname) — same approach as the overlay preload resolver, so it works
- * both in dev (source tree) and packaged builds.
- *
- * @param {string} filename - The file to find.
- * @returns {string|null} The resolved absolute path, or null if not found.
- */
-function resolveAsset(filename) {
-    const candidates = [
-        path.join(app.getAppPath(), 'build', filename),
-        path.join(app.getAppPath(), filename),
-        path.join(__dirname, filename),
-        path.join(__dirname, '../../../build', filename)
-    ];
-
-    return candidates.find(p => fs.existsSync(p)) || null;
-}
+// Detach handle for the shared display-follow watcher (see ../overlay/display-follow).
+let detachDisplayFollow = null;
 
 // ── Display-change handling ─────────────────────────────────────────────────
 
@@ -93,71 +70,6 @@ function repositionBorder(bounds) {
     }
 }
 
-/** Handles a display being removed — self-close if it's the one we're on. */
-function onDisplayRemoved(_event, display) {
-    if (borderWindow && display?.id === borderDisplayId) {
-        console.warn('⚠️ Share-border display removed — closing border.');
-        closeShareBorderWindow();
-    }
-}
-
-/**
- * Handles our display's metrics changing (resolution/scale) — refit or
- * self-close. Coalesced with a short trailing debounce so a burst of events
- * (e.g. resolution + scaleFactor landing together) settles to one reposition.
- */
-function onDisplayMetricsChanged(_event, display, changedMetrics) {
-    if (!borderWindow || display?.id !== borderDisplayId) {
-        return;
-    }
-    if (!changedMetrics?.includes('bounds') && !changedMetrics?.includes('scaleFactor')) {
-        return;
-    }
-
-    if (metricsDebounceTimer) {
-        clearTimeout(metricsDebounceTimer);
-    }
-    metricsDebounceTimer = setTimeout(() => {
-        metricsDebounceTimer = null;
-
-        // The window may have been torn down during the debounce window.
-        if (!borderWindow || borderWindow.isDestroyed()) {
-            return;
-        }
-
-        const target = screen.getAllDisplays().find(d => d.id === borderDisplayId);
-
-        if (!target) {
-            closeShareBorderWindow();
-
-            return;
-        }
-        repositionBorder(target.workArea);
-    }, METRICS_DEBOUNCE_MS);
-}
-
-let displayListenersAttached = false;
-
-/** Subscribe to display changes while the border is open. */
-function attachDisplayListeners() {
-    if (displayListenersAttached) {
-        return;
-    }
-    screen.on('display-removed', onDisplayRemoved);
-    screen.on('display-metrics-changed', onDisplayMetricsChanged);
-    displayListenersAttached = true;
-}
-
-/** Remove display-change subscriptions once the border is gone. */
-function detachDisplayListeners() {
-    if (!displayListenersAttached) {
-        return;
-    }
-    screen.removeListener('display-removed', onDisplayRemoved);
-    screen.removeListener('display-metrics-changed', onDisplayMetricsChanged);
-    displayListenersAttached = false;
-}
-
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -179,8 +91,8 @@ function openShareBorderWindow() {
         : screen.getPrimaryDisplay().bounds;
     const display = screen.getDisplayMatching(displayBounds);
 
-    const preloadPath = resolveAsset(SHARE_BORDER_PRELOAD_FILENAME);
-    const htmlPath = resolveAsset(SHARE_BORDER_HTML_FILENAME);
+    const preloadPath = resolveFile(SHARE_BORDER_PRELOAD_FILENAME, __dirname);
+    const htmlPath = resolveFile(SHARE_BORDER_HTML_FILENAME, __dirname);
 
     if (!preloadPath || !htmlPath) {
         console.error('❌ ShareBorder: could not resolve preload/html assets.');
@@ -264,10 +176,9 @@ function openShareBorderWindow() {
 
     borderWindow.on('closed', () => {
         borderWindow = null;
-        detachDisplayListeners();
-        if (metricsDebounceTimer) {
-            clearTimeout(metricsDebounceTimer);
-            metricsDebounceTimer = null;
+        if (detachDisplayFollow) {
+            detachDisplayFollow();
+            detachDisplayFollow = null;
         }
         borderDisplayId = null;
     });
@@ -291,7 +202,14 @@ function openShareBorderWindow() {
         borderWindow.webContents.send(IPC_SHARE_BORDER_THEME, getLastTheme());
     });
 
-    attachDisplayListeners();
+    // Follow the shared display: refit on metrics change, self-close if unplugged.
+    detachDisplayFollow = attachDisplayFollow({
+        getWindow: () => borderWindow,
+        getDisplayId: () => borderDisplayId,
+        reposition: target => repositionBorder(target.workArea),
+        onGone: closeShareBorderWindow
+    });
+
     borderWindow.loadFile(htmlPath);
 }
 
@@ -301,10 +219,9 @@ function openShareBorderWindow() {
  * @returns {void}
  */
 function closeShareBorderWindow() {
-    detachDisplayListeners();
-    if (metricsDebounceTimer) {
-        clearTimeout(metricsDebounceTimer);
-        metricsDebounceTimer = null;
+    if (detachDisplayFollow) {
+        detachDisplayFollow();
+        detachDisplayFollow = null;
     }
     borderDisplayId = null;
 

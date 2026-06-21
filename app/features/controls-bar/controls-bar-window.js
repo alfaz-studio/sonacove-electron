@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { t } = require('../i18n');
+const { resolveFile } = require('../pip/helpers');
 const { getLastTheme } = require('../pip/participant-window');
 
 const {
@@ -20,7 +21,6 @@ const {
     TOP_MARGIN,
     IPC
 } = require('./constants');
-const { resolveFile } = require('./helpers');
 
 // Persisted UI state (currently just the first-run intro flag) so the
 // hover-to-expand intro plays once ever, not on every minimize/reopen.
