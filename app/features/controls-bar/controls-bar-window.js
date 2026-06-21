@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { t } = require('../i18n');
+const { getLastTheme } = require('../pip/participant-window');
 
 const {
     WINDOW_W,
@@ -463,6 +464,10 @@ function openControlsBarWindow(mainWindowGetter) {
         // below land their labels in the right language (IPC preserves order).
         sendToBar('cb-strings', barStrings());
 
+        // Replay the cached host theme so the bar recolours to the app theme
+        // (instead of its hardcoded orange defaults) the moment it loads.
+        sendToBar('cb-theme', getLastTheme());
+
         // First-run intro: play it only the first time the bar is ever shown,
         // then persist the flag so reopening on minimize doesn't replay it.
         sendToBar('cb-intro', { play: !introShown });
@@ -485,6 +490,19 @@ function openControlsBarWindow(mainWindowGetter) {
     return controlsBarWindow;
 }
 
+/**
+ * Forwards host theme tokens to the controls bar so it recolours live with the
+ * app theme. No-op if the bar is closed (it replays the cache on next open).
+ *
+ * @param {Object|null} theme - The theme token map ({ accent, accentHover, … }).
+ * @returns {void}
+ */
+function sendControlsBarTheme(theme) {
+    if (theme) {
+        sendToBar('cb-theme', theme);
+    }
+}
+
 /** Closes the controls bar window and clears any drag state. */
 function closeControlsBarWindow() {
     if (controlsBarWindow && !controlsBarWindow.isDestroyed()) {
@@ -504,5 +522,6 @@ module.exports = {
     setAnnotateState,
     setSharingState,
     sendAnnotateReady,
+    sendControlsBarTheme,
     showToast
 };

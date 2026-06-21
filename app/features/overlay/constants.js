@@ -19,6 +19,12 @@ const IPC_CLEANUP_VIEWER_WHITEBOARDS = 'cleanup-whiteboards-for-viewers';
 /** @type {string} IPC channel for non-fatal overlay status notices (main → renderer). */
 const IPC_ANNOTATION_STATUS = 'annotation-status';
 
+/** @type {string} IPC channel pushing host theme tokens to the overlay (main → overlay). */
+const IPC_OVERLAY_THEME = 'overlay-theme-update';
+
+/** @type {string} IPC channel the overlay sends on load to pull the cached theme (overlay → main). */
+const IPC_OVERLAY_THEME_REQUEST = 'overlay-theme-request';
+
 /** @type {string} Dedicated session partition for overlay windows (CORS scoping). */
 const OVERLAY_PARTITION = 'persist:overlay';
 
@@ -57,6 +63,8 @@ module.exports = {
     IPC_TOGGLE_CLICK_THROUGH,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
     IPC_ANNOTATION_STATUS,
+    IPC_OVERLAY_THEME,
+    IPC_OVERLAY_THEME_REQUEST,
     OVERLAY_PARTITION,
     CLOSE_REASON_MANUAL,
     CLOSE_REASON_OVERLAY_CLOSED,

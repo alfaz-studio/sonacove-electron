@@ -2,13 +2,20 @@ const { BrowserWindow, shell } = require('electron');
 const isDev = require('electron-is-dev');
 
 const config = require('./config');
-const { toggleOverlay, getOverlayWindow, closeViewersWhiteboards } = require('./overlay/overlay-window');
+const { IPC_OVERLAY_THEME_REQUEST } = require('./overlay/constants');
 const { restoreMainWindow, getMainWindow } = require('./overlay/helpers');
+const {
+    toggleOverlay,
+    getOverlayWindow,
+    sendOverlayTheme,
+    closeViewersWhiteboards
+} = require('./overlay/overlay-window');
 const {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
     setParticipantTheme,
+    getLastTheme,
     closeParticipantWindow,
     shrinkToPill,
     suppressUnreadChatCount,
@@ -26,6 +33,7 @@ const {
     setAnnotateState,
     setSharingState,
     sendAnnotateReady,
+    sendControlsBarTheme,
     showToast
 } = require('./controls-bar/controls-bar-window');
 const {
@@ -222,10 +230,20 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         sendParticipantsUpdate(participants);
     });
 
-    // Renderer sends the host theme tokens (accent/danger/warn) so the PiP
-    // panel recolours live with the app theme instead of hardcoded defaults.
+    // Renderer sends the host theme tokens (accent/danger/warn) so the separate
+    // Electron windows — the PiP panel, the annotation overlay, and the
+    // screenshare controls bar — recolour live with the app theme instead of
+    // their hardcoded defaults. None of them have a theme of their own.
     register(IPC.THEME_UPDATE, (_event, theme) => {
         setParticipantTheme(theme);
+        sendOverlayTheme(theme);
+        sendControlsBarTheme(theme);
+    });
+
+    // Overlay pulls the cached theme once its listener is ready (avoids a
+    // push-before-listener race on open; live changes arrive via THEME_UPDATE).
+    register(IPC_OVERLAY_THEME_REQUEST, () => {
+        sendOverlayTheme(getLastTheme());
     });
 
     // Renderer signals screenshare stopped (main window restored, or panel

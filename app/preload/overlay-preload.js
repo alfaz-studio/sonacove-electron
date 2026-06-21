@@ -13,7 +13,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const ALLOWED_CHANNELS = [
     'toggle-click-through-request', // Main → overlay: Alt+X toggle
-    'set-ignore-mouse-events' // Overlay → main: click-through state
+    'set-ignore-mouse-events', // Overlay → main: click-through state
+    'overlay-theme-update', // Main → overlay: host theme tokens for live recolour
+    'overlay-theme-request' // Overlay → main: pull the cached theme on load
 ];
 
 contextBridge.exposeInMainWorld('sonacoveElectronAPI', {

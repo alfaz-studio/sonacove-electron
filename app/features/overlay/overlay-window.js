@@ -7,6 +7,7 @@ const {
     IPC_NOTIFY_OVERLAY_OPENED,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
     IPC_ANNOTATION_STATUS,
+    IPC_OVERLAY_THEME,
     ALWAYS_ON_TOP_LEVEL,
     CLOSE_REASON_MANUAL,
     CLOSE_REASON_OVERLAY_CLOSED,
@@ -336,6 +337,20 @@ function getOverlayWindow() {
 }
 
 /**
+ * Forwards host theme tokens to the overlay window so its pill/toolbar recolour
+ * to the live app theme (the overlay runs in its own window/storage and has no
+ * theme of its own). No-op if the overlay is closed or no theme is available.
+ *
+ * @param {Object|null} theme - The theme token map ({ accent, accentHover, … }).
+ * @returns {void}
+ */
+function sendOverlayTheme(theme) {
+    if (theme && annotationWindow && !annotationWindow.isDestroyed()) {
+        annotationWindow.webContents.send(IPC_OVERLAY_THEME, theme);
+    }
+}
+
+/**
  * Notifies the main window to clean up whiteboards for viewers when a screenshare stops.
  *
  * @param {string} sharerId - The ID of the participant who stopped sharing.
@@ -352,5 +367,6 @@ module.exports = {
     toggleOverlay,
     closeOverlay,
     getOverlayWindow,
+    sendOverlayTheme,
     closeViewersWhiteboards
 };

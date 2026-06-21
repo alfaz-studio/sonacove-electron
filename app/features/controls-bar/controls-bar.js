@@ -130,6 +130,34 @@
 
     api.onStrings?.(applyStrings);
 
+    /**
+     * Apply host theme tokens so the bar's accent/active states follow the app
+     * theme instead of the hardcoded orange defaults. --action-soft derives from
+     * --action via color-mix (see controls-bar.css), so it follows automatically.
+     */
+    function applyTheme(theme) {
+        if (!theme) {
+            return;
+        }
+        const rootStyle = document.documentElement.style;
+
+        if (theme.accent) {
+            rootStyle.setProperty('--action', theme.accent);
+        }
+        if (theme.accentHover) {
+            rootStyle.setProperty('--action-hover', theme.accentHover);
+            rootStyle.setProperty('--action-glyph', theme.accentHover);
+        }
+        if (theme.danger) {
+            rootStyle.setProperty('--danger', theme.danger);
+        }
+        if (theme.dangerIcon) {
+            rootStyle.setProperty('--danger-hover', theme.dangerIcon);
+        }
+    }
+
+    api.onTheme?.(applyTheme);
+
     // ── Meeting timer ───────────────────────────────────────────────────────
     // Main pushes the conference start timestamp (epoch ms); we tick locally,
     // mirroring jitsi's ConferenceTimer formatting (mm:ss, or H:mm:ss past 1h).
