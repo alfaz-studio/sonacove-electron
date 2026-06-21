@@ -191,6 +191,16 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
             // https://collab.example.com.evil/) can't prefix-match the real
             // origin. Real request URLs always carry a path, so the trailing
             // slash never excludes a legitimate one.
+            //
+            // SCOPE: this relaxes ACAO for EVERY collab-origin response that
+            // lacks one — not only the font / WebSocket-handshake paths the
+            // collab protocol actually needs. Accepted because (a) it is confined
+            // to the isolated persist:overlay session (the main window's session
+            // is untouched), and (b) the collab origin is our own trusted infra.
+            // Path-targeting the exact endpoints is impractical (handshake/font
+            // paths aren't stable across versions), so we scope by origin within
+            // this session. If the collab protocol ever sends custom request
+            // headers, add them to Access-Control-Allow-Headers below.
             if (details.url.startsWith(`${collabOrigin}/`)) {
                 const hasACHeader = Object.keys(headers)
                     .some(k => k.toLowerCase() === 'access-control-allow-origin');
@@ -317,9 +327,14 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
 
     // Main-frame load error. Ignore -3 (ABORTED) — that fires on our own
     // destroy() and on benign in-page navigations, not on a real load failure.
+    // Also ignore once the initial load has completed (dom-ready set
+    // initialLoadComplete): the overlay hosts a remote SPA shell whose
+    // client-side route changes / redirect chains can fail AFTER it's up, and
+    // tearing down a healthy, visible overlay for an in-page navigation failure
+    // would be wrong — mirrors the onDidStartLoading guard.
     // eslint-disable-next-line max-params -- Electron's did-fail-load passes a fixed positional signature
     win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _url, isMainFrame) => {
-        if (!isMainFrame || errorCode === -3) {
+        if (!isMainFrame || errorCode === -3 || initialLoadComplete) {
             return;
         }
         console.warn(`⚠️ Overlay did-fail-load (${errorCode}): ${errorDescription}`);
