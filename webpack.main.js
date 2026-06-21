@@ -37,6 +37,7 @@ module.exports = {
                 { from: 'app/features/controls-bar/controls-bar.js', to: 'controls-bar.js' },
                 { from: 'app/features/controls-bar/fonts', to: 'fonts' },
                 { from: 'app/features/share-border/share-border.html', to: 'share-border.html' },
+                { from: 'app/features/share-border/share-border.js', to: 'share-border.js' },
                 { from: 'app/locales', to: 'locales' }
             ]
         })

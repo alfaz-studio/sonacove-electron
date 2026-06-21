@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self';" />
     <title>Screen share border</title>
     <style>
         html, body {
@@ -33,20 +33,6 @@
 </head>
 <body>
     <div id="sbFrame"></div>
-    <script>
-        // Recolour the frame live from host theme tokens pushed by main. The
-        // preload bridge (share-border-preload.js) exposes window.shareBorderAPI.
-        (function() {
-            const api = window.shareBorderAPI;
-
-            if (api && typeof api.onTheme === 'function') {
-                api.onTheme(function(theme) {
-                    if (theme && theme.accent) {
-                        document.documentElement.style.setProperty('--sb-color', theme.accent);
-                    }
-                });
-            }
-        })();
-    </script>
+    <script src="share-border.js"></script>
 </body>
 </html>
