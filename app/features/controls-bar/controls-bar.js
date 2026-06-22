@@ -469,6 +469,7 @@
     // hint. Any hover ends the intro + dismisses the hint.
     let introActive = false;
     let introTimer = null;
+    let innerIntroTimer = null;
 
     /** Ends the intro: cancels the auto-collapse and hides the hint for good. */
     function endIntro() {
@@ -478,6 +479,9 @@
         introActive = false;
         if (introTimer) {
             clearTimeout(introTimer);
+        }
+        if (innerIntroTimer) {
+            clearTimeout(innerIntroTimer);
         }
         hint?.classList.remove('is-on');
     }
@@ -495,7 +499,8 @@
             controlsInner?.classList.remove('is-settled');
 
             // Reveal the hint once the collapse has settled.
-            setTimeout(() => {
+            innerIntroTimer = setTimeout(() => {
+                innerIntroTimer = null;
                 if (introActive) {
                     hint?.classList.add('is-on');
                 }

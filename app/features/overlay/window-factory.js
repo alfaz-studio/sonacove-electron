@@ -206,7 +206,19 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
                     .some(k => k.toLowerCase() === 'access-control-allow-origin');
 
                 if (!hasACHeader) {
-                    headers['Access-Control-Allow-Origin'] = [ '*' ];
+                    // Echo the overlay PAGE's own origin (the cross-origin
+                    // requester) rather than a wildcard — least-privilege, and the
+                    // value the browser actually requires: ACAO must match the
+                    // request's Origin (the overlay page), NOT the collab server's
+                    // origin. Falls back to '*' only if the page URL can't be read
+                    // (e.g. the window was torn down mid-response).
+                    let allowOrigin = '*';
+
+                    try {
+                        allowOrigin = new URL(win.webContents.getURL()).origin;
+                    } catch { /* keep the wildcard fallback */ }
+
+                    headers['Access-Control-Allow-Origin'] = [ allowOrigin ];
 
                     // Only the headers the collab requests actually send, rather
                     // than a blanket '*', to keep the relaxation minimal.
@@ -225,6 +237,10 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
     let loadWatchdog = null;
     let graceTimer = null;
     let tornDown = false;
+
+    // Forward-declared so fail() can strip it on a failed load; assigned below
+    // once initialLoadComplete exists.
+    let onDidStartLoading = null;
 
     const clearTimers = () => {
         if (loadWatchdog) {
@@ -247,6 +263,10 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
         }
         tornDown = true;
         clearTimers();
+
+        // dom-ready (which normally removes this) may never fire on a failed
+        // load, so strip the did-start-loading listener here too.
+        win.webContents.removeListener('did-start-loading', onDidStartLoading);
         onFailure?.(reason);
     };
 
@@ -288,7 +308,8 @@ function wireEvents(win, collabServerUrl, { onClosed, onFailure, onShown }) {
     // already cleared it — and since dom-ready is once(), nothing would clear the
     // new timer, tearing a healthy overlay down 45s later.
     let initialLoadComplete = false;
-    const onDidStartLoading = () => {
+
+    onDidStartLoading = () => {
         if (!initialLoadComplete) {
             armWatchdog();
         }

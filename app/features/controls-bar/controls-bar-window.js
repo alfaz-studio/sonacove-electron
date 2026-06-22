@@ -238,7 +238,14 @@ function attachMainWindowWatch() {
     if (!win || win.isDestroyed()) {
         return;
     }
-    const onGone = () => closeControlsBarWindow();
+    const onGone = (_event, details) => {
+        // render-process-gone fires for clean exits too (e.g. during a
+        // navigation); only tear down on an actual crash/kill — mirrors the
+        // annotation overlay's render-process-gone handler.
+        if (details?.reason !== 'clean-exit') {
+            closeControlsBarWindow();
+        }
+    };
 
     win.once('closed', closeControlsBarWindow);
     win.webContents.once('render-process-gone', onGone);
@@ -419,7 +426,7 @@ function openControlsBarWindow(mainWindowGetter) {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
+            sandbox: true,
             preload: preloadPath
         }
     });

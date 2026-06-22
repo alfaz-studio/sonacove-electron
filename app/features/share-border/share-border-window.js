@@ -284,6 +284,9 @@ function closeShareBorderWindow() {
     borderDisplayId = null;
 
     if (borderWindow && !borderWindow.isDestroyed()) {
+        // Strip the 'closed' handler first — destroy() would otherwise fire it
+        // and redundantly re-run this teardown (mirrors the overlay's close path).
+        borderWindow.removeAllListeners('closed');
         borderWindow.destroy();
     }
     borderWindow = null;
