@@ -659,14 +659,27 @@
             api.setIgnoreMouse?.(mouseIgnored);
         }
 
-        // Expand/collapse follows the capsule only (hovering the toast must not expand).
-        if (overCapsule !== hoverExpanded) {
-            hoverExpanded = overCapsule;
-            if (overCapsule) {
+        // Expand ONLY when over the lead (logo/timer) or the controls row — NOT the
+        // Stop/Share button, nor the capsule's padding/gaps (the capsule has 6px
+        // padding + gaps around the Stop, so "anywhere on the capsule except Stop"
+        // would still expand as the cursor crosses that dead-space reaching Stop).
+        // Collapse only when the cursor leaves the whole capsule. Everything in
+        // between — the Stop button + internal padding/gaps — is NEUTRAL: it leaves
+        // the expand state untouched, so the always-visible Stop stays put (reaching
+        // it never grows the bar from collapsed nor shrinks it from expanded). Stop
+        // stays clickable via the interactive check above (whole capsule captured).
+        // (lead/controls live inside the capsule, so this can only be true when
+        // overCapsule is — short-circuit skips the extra walk on off-capsule frames.)
+        const overExpander = overCapsule && Boolean(el?.closest('.cb-lead, .cb-controls'));
+
+        if (overExpander) {
+            if (!hoverExpanded) {
+                hoverExpanded = true;
                 expandBar();
-            } else {
-                collapseBar();
             }
+        } else if (!overCapsule && hoverExpanded) {
+            hoverExpanded = false;
+            collapseBar();
         }
     });
 })();
