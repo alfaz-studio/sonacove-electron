@@ -133,7 +133,10 @@ function resolvePreloadPath() {
  * @returns {string|null} The fully-formed overlay URL, or null if validation fails.
  */
 function buildOverlayUrl(data) {
-    const { annotationsUrl, roomUrl, collabDetails, collabServerUrl, localParticipantName } = data;
+    const {
+        annotationsUrl, roomUrl, collabDetails, collabServerUrl, localParticipantName,
+        sourceWidth, sourceHeight
+    } = data;
 
     if (annotationsUrl) {
         try {
@@ -177,6 +180,18 @@ function buildOverlayUrl(data) {
     joinUrl.searchParams.set('whiteboardId', collabDetails.roomId);
     joinUrl.searchParams.set('whiteboardKey', collabDetails.roomKey);
     joinUrl.searchParams.set('whiteboardServer', collabServerUrl);
+
+    // Physical capture resolution (from the screenshare track's getSettings()).
+    // The overlay's AnnotationOverlay maps pointer→scene against these dims and must
+    // match the resolution broadcast to viewers; without them it falls back to
+    // window.screen.width/height (logical CSS px), which is DPR-scaled on HiDPI
+    // displays and shifts every stroke toward the top-left for remote viewers.
+    if (sourceWidth) {
+        joinUrl.searchParams.set('sourceWidth', String(sourceWidth));
+    }
+    if (sourceHeight) {
+        joinUrl.searchParams.set('sourceHeight', String(sourceHeight));
+    }
 
     if (localParticipantName) {
         joinUrl.searchParams.set('userName', localParticipantName);
