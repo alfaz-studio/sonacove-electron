@@ -43,7 +43,7 @@ function loadAzureCredentials() {
 async function signWithAzure(filePath, credentials) {
     return new Promise((resolve, reject) => {
         const args = [
-            'code', 'trusted-signing',
+            'code', 'artifact-signing',
             '-tse', AZURE_CONFIG.endpoint,
             '-tsa', AZURE_CONFIG.accountName,
             '-tscp', AZURE_CONFIG.certificateProfileName,
