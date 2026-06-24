@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self';" />
+    <title>Screen share border</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        /* Full-viewport frame. The border eats into the box (border-box), the
+           center stays fully transparent so the shared screen shows through, and
+           pointer-events:none makes the whole overlay click-through at the DOM
+           level too (the window is also setIgnoreMouseEvents at the OS level). */
+        #sbFrame {
+            box-sizing: border-box;
+            position: fixed;
+            inset: 0;
+            border: 2px solid var(--sb-color, #f05023);
+            box-shadow: inset 0 0 5px color-mix(in srgb, var(--sb-color, #f05023) 22%, transparent);
+            background: transparent;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="sbFrame"></div>
+    <script src="share-border.js"></script>
+</body>
+</html>

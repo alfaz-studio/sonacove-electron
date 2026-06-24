@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('controlsBarAPI', {
     // Localized UI strings (tooltips, labels) pushed from main on load.
     onStrings: onChannel('cb-strings'),
 
+    // Host theme tokens ({ accent, accentHover, danger, … }) → live recolour of
+    // the bar's accent/active states, instead of the hardcoded orange defaults.
+    onTheme: onChannel('cb-theme'),
+
     // First-run intro gate ({ play }) — true only the very first time the bar
     // is shown (the main process persists the "already shown" flag).
     onIntro: onChannel('cb-intro'),

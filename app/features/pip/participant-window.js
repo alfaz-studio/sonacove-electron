@@ -358,11 +358,23 @@ function setParticipantTheme(theme) {
     }
 }
 
+/**
+ * Returns the last host theme tokens received from the renderer, or null if none
+ * have been sent yet. Shared with the annotation overlay so it can recolour to
+ * the live app theme too (it has no theme of its own — separate window/storage).
+ *
+ * @returns {Object|null} The cached theme token map, or null.
+ */
+function getLastTheme() {
+    return lastThemeData;
+}
+
 module.exports = {
     openParticipantWindow,
     sendParticipantFrame,
     sendParticipantsUpdate,
     setParticipantTheme,
+    getLastTheme,
     closeParticipantWindow,
     shrinkToPill,
     suppressUnreadChatCount,

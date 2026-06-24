@@ -6,10 +6,15 @@ const {
     IPC_NOTIFY_OVERLAY_CLOSED,
     IPC_NOTIFY_OVERLAY_OPENED,
     IPC_CLEANUP_VIEWER_WHITEBOARDS,
+    IPC_ANNOTATION_STATUS,
+    IPC_OVERLAY_THEME,
+    ALWAYS_ON_TOP_LEVEL,
     CLOSE_REASON_MANUAL,
     CLOSE_REASON_OVERLAY_CLOSED,
-    CLOSE_REASON_SCREENSHARE_STOPPED
+    CLOSE_REASON_SCREENSHARE_STOPPED,
+    CLOSE_REASON_DISPLAY_GONE
 } = require('./constants');
+const { attachDisplayFollow } = require('./display-follow');
 const {
     getMainWindow,
     sendToMainWindow,
@@ -21,6 +26,7 @@ const {
     createOverlayWindow,
     configurePlatform,
     registerShortcut,
+    clearOverlaySessionCors,
     wireEvents,
     overlayWindows
 } = require('./window-factory');
@@ -28,6 +34,71 @@ const {
 // ── Module state ────────────────────────────────────────────────────────────
 
 let annotationWindow = null;
+
+// Cancel handle returned by wireEvents — flushes its load/grace timers. Held so
+// the manual-close path (which strips the window's 'closed' listener) can clear
+// them immediately instead of leaving them pending in the wireEvents closure.
+let overlayCancel = null;
+
+// id of the display the overlay was opened on — tracked so the overlay can
+// follow that display's geometry changes and self-close if it's unplugged.
+let overlayDisplayId = null;
+
+// Detach handle for the shared display-follow watcher (see ./display-follow).
+let detachDisplayFollow = null;
+
+// ── Display-change handling ─────────────────────────────────────────────────
+
+/**
+ * Re-applies the overlay's geometry to the given display bounds. On Windows the
+ * window is pinned fullscreen, so we drop out of fullscreen to move/resize, then
+ * re-assert it; macOS positions via setBounds directly.
+ *
+ * @param {{ x: number, y: number, width: number, height: number }} bounds - Target bounds.
+ * @returns {void}
+ */
+function repositionOverlay(bounds) {
+    if (!annotationWindow || annotationWindow.isDestroyed()) {
+        return;
+    }
+
+    const target = {
+        x: Math.floor(bounds.x),
+        y: Math.floor(bounds.y),
+        width: Math.floor(bounds.width),
+        height: Math.floor(bounds.height)
+    };
+
+    try {
+        if (process.platform === 'darwin') {
+            annotationWindow.setBounds(target);
+            annotationWindow.setAlwaysOnTop(true, ALWAYS_ON_TOP_LEVEL);
+        } else {
+            annotationWindow.setFullScreen(false);
+            annotationWindow.setBounds(target);
+            annotationWindow.setAlwaysOnTop(true, ALWAYS_ON_TOP_LEVEL);
+            annotationWindow.setFullScreen(true);
+        }
+    } catch (e) {
+        console.error('❌ Failed to reposition overlay after display change:', e);
+    }
+}
+
+/**
+ * Shared global-state teardown run by both close paths — the manual
+ * {@link closeOverlay} and the window's own 'closed' handler. Idempotent.
+ *
+ * @returns {void}
+ */
+function teardownOverlayState() {
+    globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
+    if (detachDisplayFollow) {
+        detachDisplayFollow();
+        detachDisplayFollow = null;
+    }
+    clearOverlaySessionCors();
+    overlayDisplayId = null;
+}
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -74,6 +145,8 @@ function toggleOverlay(mainWindow, data) {
         : screen.getPrimaryDisplay().bounds;
     const currentScreen = screen.getDisplayMatching(displayBounds);
 
+    overlayDisplayId = currentScreen.id;
+
     if (isDev) {
         console.log(
             `🖌️ Launching Overlay on Screen: ${currentScreen.label}`
@@ -105,17 +178,30 @@ function toggleOverlay(mainWindow, data) {
     }
 
     annotationWindow.loadURL(overlayUrl);
-    registerShortcut(annotationWindow);
-    wireEvents(annotationWindow, data.collabServerUrl, {
+
+    // Surface a dead toggle shortcut (another app already owns Alt+X) so the
+    // user isn't left wondering why Draw-mode toggling does nothing.
+    if (!registerShortcut(annotationWindow)) {
+        sendToMainWindow(IPC_ANNOTATION_STATUS, { type: 'shortcut-unavailable' });
+    }
+
+    overlayCancel = wireEvents(annotationWindow, data.collabServerUrl, {
         onClosed: () => {
             annotationWindow = null;
-            globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
+            overlayCancel = null;
+            teardownOverlayState();
             restoreMainWindow();
             sendToMainWindow(IPC_NOTIFY_OVERLAY_CLOSED, {
                 reason: CLOSE_REASON_OVERLAY_CLOSED,
                 timestamp: Date.now()
             });
         },
+
+        // Load failure / crash / hang — tear down with the specific reason so the
+        // renderer can drop its "annotating" state and warn the presenter. Deferred
+        // to the next tick: these fire from inside the overlay's own webContents
+        // handlers, where a synchronous destroy() can be fragile.
+        onFailure: reason => setImmediate(() => closeOverlay(true, reason)),
 
         // Fires once the overlay has loaded and is shown — the real "annotation
         // is up" moment (a few seconds after the toggle), used to settle the
@@ -125,6 +211,15 @@ function toggleOverlay(mainWindow, data) {
                 timestamp: Date.now()
             });
         }
+    });
+
+    // Follow the overlay's display: refit on metrics change (Windows re-asserts
+    // fullscreen via repositionOverlay), self-close if it's unplugged.
+    detachDisplayFollow = attachDisplayFollow({
+        getWindow: () => annotationWindow,
+        getDisplayId: () => overlayDisplayId,
+        reposition: target => repositionOverlay(target.bounds),
+        onGone: () => closeOverlay(true, CLOSE_REASON_DISPLAY_GONE)
     });
 }
 
@@ -136,7 +231,7 @@ function toggleOverlay(mainWindow, data) {
  * @returns {void}
  */
 function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
-    globalShortcut.unregister(SHORTCUT_TOGGLE_CLICK_THROUGH);
+    teardownOverlayState();
 
     if (annotationWindow) {
         if (isDev) {
@@ -147,6 +242,11 @@ function closeOverlay(notifyOthers = false, reason = CLOSE_REASON_MANUAL) {
         // destroy() fires 'closed' → cleanup → notify, then we'd notify again below.
         // Explicitly remove from overlayWindows since the 'closed' listener that
         // would do this is being stripped by removeAllListeners.
+        // Flush the wireEvents timers now — removeAllListeners('closed') below
+        // strips the 'closed' handler that would otherwise clear them.
+        overlayCancel?.();
+        overlayCancel = null;
+
         overlayWindows.delete(annotationWindow);
         annotationWindow.removeAllListeners('closed');
         annotationWindow.destroy();
@@ -173,6 +273,20 @@ function getOverlayWindow() {
 }
 
 /**
+ * Forwards host theme tokens to the overlay window so its pill/toolbar recolour
+ * to the live app theme (the overlay runs in its own window/storage and has no
+ * theme of its own). No-op if the overlay is closed or no theme is available.
+ *
+ * @param {Object|null} theme - The theme token map ({ accent, accentHover, … }).
+ * @returns {void}
+ */
+function sendOverlayTheme(theme) {
+    if (theme && annotationWindow && !annotationWindow.isDestroyed()) {
+        annotationWindow.webContents.send(IPC_OVERLAY_THEME, theme);
+    }
+}
+
+/**
  * Notifies the main window to clean up whiteboards for viewers when a screenshare stops.
  *
  * @param {string} sharerId - The ID of the participant who stopped sharing.
@@ -189,6 +303,6 @@ module.exports = {
     toggleOverlay,
     closeOverlay,
     getOverlayWindow,
-    getMainWindow,
+    sendOverlayTheme,
     closeViewersWhiteboards
 };

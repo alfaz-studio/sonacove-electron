@@ -11,6 +11,8 @@ const fs = require('fs');
 const path = require('path');
 
 const { t } = require('../i18n');
+const { resolveFile } = require('../pip/helpers');
+const { getLastTheme } = require('../pip/participant-window');
 
 const {
     WINDOW_W,
@@ -19,7 +21,6 @@ const {
     TOP_MARGIN,
     IPC
 } = require('./constants');
-const { resolveFile } = require('./helpers');
 
 // Persisted UI state (currently just the first-run intro flag) so the
 // hover-to-expand intro plays once ever, not on every minimize/reopen.
@@ -237,7 +238,14 @@ function attachMainWindowWatch() {
     if (!win || win.isDestroyed()) {
         return;
     }
-    const onGone = () => closeControlsBarWindow();
+    const onGone = (_event, details) => {
+        // render-process-gone fires for clean exits too (e.g. during a
+        // navigation); only tear down on an actual crash/kill — mirrors the
+        // annotation overlay's render-process-gone handler.
+        if (details?.reason !== 'clean-exit') {
+            closeControlsBarWindow();
+        }
+    };
 
     win.once('closed', closeControlsBarWindow);
     win.webContents.once('render-process-gone', onGone);
@@ -418,7 +426,7 @@ function openControlsBarWindow(mainWindowGetter) {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
+            sandbox: true,
             preload: preloadPath
         }
     });
@@ -463,6 +471,10 @@ function openControlsBarWindow(mainWindowGetter) {
         // below land their labels in the right language (IPC preserves order).
         sendToBar('cb-strings', barStrings());
 
+        // Replay the cached host theme so the bar recolours to the app theme
+        // (instead of its hardcoded orange defaults) the moment it loads.
+        sendToBar('cb-theme', getLastTheme());
+
         // First-run intro: play it only the first time the bar is ever shown,
         // then persist the flag so reopening on minimize doesn't replay it.
         sendToBar('cb-intro', { play: !introShown });
@@ -485,6 +497,19 @@ function openControlsBarWindow(mainWindowGetter) {
     return controlsBarWindow;
 }
 
+/**
+ * Forwards host theme tokens to the controls bar so it recolours live with the
+ * app theme. No-op if the bar is closed (it replays the cache on next open).
+ *
+ * @param {Object|null} theme - The theme token map ({ accent, accentHover, … }).
+ * @returns {void}
+ */
+function sendControlsBarTheme(theme) {
+    if (theme) {
+        sendToBar('cb-theme', theme);
+    }
+}
+
 /** Closes the controls bar window and clears any drag state. */
 function closeControlsBarWindow() {
     if (controlsBarWindow && !controlsBarWindow.isDestroyed()) {
@@ -504,5 +529,6 @@ module.exports = {
     setAnnotateState,
     setSharingState,
     sendAnnotateReady,
+    sendControlsBarTheme,
     showToast
 };

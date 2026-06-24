@@ -26,7 +26,9 @@
 :root {
   --action: #f05023;
   --action-hover: #f86f4d;
-  --action-soft: rgba(240, 80, 35, 0.16);
+  /* Derived from --action so it follows the host theme when --action is
+     overridden over IPC (see applyTheme in controls-bar.js). */
+  --action-soft: color-mix(in srgb, var(--action) 16%, transparent);
   --action-glyph: #f86f4d;
   --danger: #e0483b;
   --danger-hover: #f15a4d;

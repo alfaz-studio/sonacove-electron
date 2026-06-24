@@ -11,7 +11,6 @@ const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
 const { getCardPosition } = require('./sizing');
 
 let _getWindow = null;
-let _restoreConstraints = null;
 let _isPillMode = false;
 
 /**
@@ -128,10 +127,6 @@ function expandFromPill(size) {
     win.setMinimumSize(1, 1);
     win.setBounds({ x: posX, y: posY, width: W, height: H });
 
-    if (_restoreConstraints) {
-        _restoreConstraints();
-    }
-
     win.webContents.send(IPC.ENTER_PANEL_MODE);
 
     const mw = getMainWindow();
@@ -147,12 +142,9 @@ function expandFromPill(size) {
  * @param {() => Electron.BrowserWindow|null} getWindow
  * @param {() => { size: { width: number, height: number } }} getState - Returns
  *   the current card size for expand sizing.
- * @param {(() => void)=} restoreConstraints - Optional callback invoked after
- *   expanding back to panel mode so participant-window can reapply min/max.
  */
-function setupPillHandlers(getWindow, getState, restoreConstraints) {
+function setupPillHandlers(getWindow, getState) {
     _getWindow = getWindow;
-    _restoreConstraints = restoreConstraints || null;
 
     ipcMain.on(IPC.REOPEN_REQUEST, () => {
         expandFromPill(getState().size);

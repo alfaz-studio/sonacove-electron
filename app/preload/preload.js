@@ -67,6 +67,7 @@ const whitelistedIpcChannels = [
     'cb-recording',
     'cb-toast',
     'cb-open-recording',
+    'share-border',
     'show-about-dialog',
     'check-for-updates',
     'open-help-docs',
