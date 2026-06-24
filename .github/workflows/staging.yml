@@ -15,7 +15,7 @@ jobs:
   create-staging-release:
     # Only run for PRs from this repo (not forks) to protect secrets
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
@@ -57,17 +57,21 @@ jobs:
   build-staging:
     needs: create-staging-release
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        # Pin Windows runner to 2022 image. GitHub's `windows-latest` rolled
-        # forward to win25-vs2026 in early May 2026, which ships a Visual
-        # Studio install whose PowerShell-based discovery overflows Node's
-        # 1 MB stdout buffer inside node-gyp (ERR_CHILD_PROCESS_STDIO_MAXBUFFER),
-        # so the @jitsi/electron-sdk native rebuild can't find VS at all.
-        # win22-vs2022 matches the environment that built successfully through
-        # late April; revisit once node-gyp ships a fix.
-        os: [windows-2022, macos-latest]
+        # `os` is the platform KEY for the `matrix.os == …` step conditions;
+        # `runner` is the Blacksmith machine. Windows runs on Blacksmith Server
+        # 2025, which ships VS Build Tools 2022, so the @jitsi/electron-sdk
+        # node-gyp native rebuild finds VS2022. (GitHub's windows-2025 label
+        # moved to VS2026, which node-gyp can't yet detect — the reason GH runs
+        # had to stay pinned to windows-2022. Blacksmith keeps VS2022 Build
+        # Tools, so we're no longer stuck on the old image.)
+        include:
+          - os: windows-2022
+            runner: blacksmith-4vcpu-windows-2025
+          - os: macos-latest
+            runner: blacksmith-6vcpu-macos-latest
     permissions:
       contents: write
     steps:
@@ -81,6 +85,18 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ matrix.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-${{ matrix.os }}-
 
       - name: Install dependencies
         run: npm ci
@@ -215,7 +231,7 @@ jobs:
   comment-on-pr:
     needs: build-staging
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       pull-requests: write
     steps:

@@ -9,7 +9,7 @@ on:
 
 jobs:
   create-release:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
@@ -30,10 +30,17 @@ jobs:
 
   build-launcher:
     needs: create-release
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        os: [windows-2022, macos-latest]
+        # `os` is the platform KEY for the `matrix.os == …` step conditions;
+        # `runner` is the Blacksmith machine. The launcher has no native deps
+        # (electron-updater only), so the VS toolchain is irrelevant here.
+        include:
+          - os: windows-2022
+            runner: blacksmith-4vcpu-windows-2025
+          - os: macos-latest
+            runner: blacksmith-6vcpu-macos-latest
     permissions:
       contents: write
     steps:
@@ -44,6 +51,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-launcher-${{ matrix.os }}-${{ hashFiles('staging-launcher/package.json') }}
+          restore-keys: |
+            electron-launcher-${{ matrix.os }}-
 
       - name: Bump version for auto-update detection
         working-directory: staging-launcher
