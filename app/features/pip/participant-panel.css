@@ -230,7 +230,13 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* contain, not cover: a portrait (phone-camera) source is letterboxed inside
+     the tile so the whole face stays visible, instead of being centre-cropped
+     into the landscape tile and cut off. The per-video aspect-ratio tile sizing
+     from #146 was dropped when the Spotlight grid (#147) moved to fixed cells;
+     contain restores the no-crop guarantee without reintroducing variable tiles
+     (PostHog inbox 019ebd69 / jitsi-meet#637). */
+  object-fit: contain;
   display: none;
 }
 
