@@ -7,7 +7,7 @@ on:
 
 jobs:
   version:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       new_tag: ${{ steps.versioning.outputs.target_version }}
       skipped: ${{ steps.versioning.outputs.skipped }}
@@ -75,10 +75,20 @@ jobs:
   build:
     needs: version
     if: needs.version.outputs.skipped == 'false'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        os: [windows-2022, macos-latest]
+        # `os` stays as the platform KEY for the downstream `matrix.os == …`
+        # step conditions; `runner` is the actual Blacksmith machine. Windows
+        # runs on Blacksmith Windows Server 2025, which ships VS Build Tools
+        # 2022 — so the @jitsi/electron-sdk node-gyp native rebuild still finds
+        # VS2022. (GitHub's windows-2025 label moved to VS2026, which node-gyp
+        # can't yet detect — that's why GH builds were pinned to windows-2022.)
+        include:
+          - os: windows-2022
+            runner: blacksmith-4vcpu-windows-2025
+          - os: macos-latest
+            runner: blacksmith-6vcpu-macos-latest
     steps:
       - name: Check out the NEW tag
         uses: actions/checkout@v4

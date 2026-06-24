@@ -9,7 +9,7 @@ on:
 jobs:
   add-to-project:
     name: Add issue or PR to project board
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/add-to-project@v1.0.2
         with:
