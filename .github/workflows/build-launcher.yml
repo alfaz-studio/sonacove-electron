@@ -7,20 +7,44 @@ on:
         description: 'Launcher version (e.g. 1.0.0)'
         required: true
         default: '1.0.0'
+      platform:
+        description: "Platform(s) to build"
+        required: true
+        type: choice
+        options:
+          - mac
+          - win
+          - all
 
 jobs:
+  setup:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - name: Build matrix from requested platform
+        id: m
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          set -euo pipefail
+          INCLUDES=""
+          if [ "$PLATFORM" = "win" ] || [ "$PLATFORM" = "all" ]; then
+            INCLUDES="${INCLUDES}{\"os\":\"windows-2022\",\"runner\":\"blacksmith-4vcpu-windows-2025\"},"
+          fi
+          if [ "$PLATFORM" = "mac" ] || [ "$PLATFORM" = "all" ]; then
+            INCLUDES="${INCLUDES}{\"os\":\"macos-latest\",\"runner\":\"blacksmith-6vcpu-macos-latest\"},"
+          fi
+          echo "matrix={\"include\":[${INCLUDES%,}]}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: setup
     runs-on: ${{ matrix.runner }}
     strategy:
-      matrix:
-        # `os` is the platform KEY for the `matrix.os == …` step conditions;
-        # `runner` is the Blacksmith machine. The launcher has no native deps
-        # (electron-updater only), so the VS toolchain is irrelevant here.
-        include:
-          - os: windows-2022
-            runner: blacksmith-4vcpu-windows-2025
-          - os: macos-latest
-            runner: blacksmith-6vcpu-macos-latest
+      # Dynamic matrix — only the requested platform(s) build. The launcher has
+      # no native deps (electron-updater only), so the VS toolchain is
+      # irrelevant here.
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     permissions:
       contents: write
     steps:
@@ -30,7 +54,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Pinned patch for reproducible builds (was floating '22').
+          node-version: '22.12.0'
 
       - name: Cache Electron binaries
         uses: actions/cache@v4

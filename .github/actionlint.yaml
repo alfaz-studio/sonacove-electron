@@ -1,0 +1,7 @@
+# Register our self-hosted Blacksmith runner labels so actionlint doesn't flag
+# them as unknown. See https://github.com/rhysd/actionlint/blob/main/docs/config.md
+self-hosted-runner:
+  labels:
+    - blacksmith-2vcpu-ubuntu-2404
+    - blacksmith-4vcpu-windows-2025
+    - blacksmith-6vcpu-macos-latest

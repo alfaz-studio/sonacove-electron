@@ -1,20 +1,137 @@
-name: Staging PR Builds
+name: Staging Build (manual)
 
+# Intentional, on-demand staging builds — they no longer run automatically on
+# every PR commit (Windows + macOS electron builds are the most expensive jobs
+# on our Blacksmith bill). Trigger one of two ways:
+#
+#   • Comment `/build <platform>` on a PR — platform is REQUIRED:
+#       /build mac      → macOS only
+#       /build win      → Windows only        (alias: windows)
+#       /build all      → both
+#       /build mac win  → both (explicit)
+#     A bare `/build` with no platform posts a usage hint and does nothing, so
+#     the 6 vCPU macOS runner only spins up when explicitly asked for.
+#
+#   • Actions tab → "Staging Build (manual)" → Run workflow → pick a PR number
+#     and platform.
+#
+# Cleanup of closed-PR releases is handled by cleanup-stale-staging.yml.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
-    paths-ignore:
-      - '.github/**'
-      - '!.github/workflows/staging.yml'
-      - '*.md'
-  # Note: cleanup of closed PR releases is handled by cleanup-stale-staging.yml
-  # (daily cron with 14-day retention) instead of deleting immediately on close.
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to build"
+        required: true
+      platform:
+        description: "Platform(s) to build"
+        required: true
+        type: choice
+        options:
+          - mac
+          - win
+          - all
+
+# A newer /build on the same PR cancels an in-progress build.
+concurrency:
+  group: staging-build-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: true
 
 jobs:
+  setup:
+    # Gate: manual dispatch, OR a `/build` comment on a PR from an authorized
+    # user (protects secrets — forks/outside contributors can't trigger builds).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request != null &&
+       startsWith(github.event.comment.body, '/build') &&
+       contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+      pr_title: ${{ steps.resolve.outputs.pr_title }}
+    steps:
+      - name: Acknowledge the command
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST \
+            "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
+            -f content='eyes' >/dev/null 2>&1 || true
+
+      - name: Resolve PR + platform → build matrix
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          # Untrusted PR-comment text — kept in an env var (never interpolated
+          # into the script body) to avoid shell injection.
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_PR: ${{ inputs.pr_number }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # --- Determine the platform spec and PR number from the trigger ---
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            SPEC="$INPUT_PLATFORM"
+            PR_NUM="$INPUT_PR"
+          else
+            # Strip the leading "/build" and keep the rest of the first line.
+            BODY=$(printf '%s' "$COMMENT_BODY" | head -n1)
+            SPEC=$(printf '%s' "$BODY" | sed -E 's@^/build@@' | tr '[:upper:]' '[:lower:]' | xargs || true)
+            PR_NUM="$ISSUE_NUMBER"
+          fi
+
+          # --- Parse the spec into platform flags ---
+          WANT_MAC=false; WANT_WIN=false
+          for tok in $SPEC; do
+            case "$tok" in
+              all)            WANT_MAC=true; WANT_WIN=true ;;
+              mac|macos|osx)  WANT_MAC=true ;;
+              win|windows)    WANT_WIN=true ;;
+              *) ;;  # ignore unknown tokens
+            esac
+          done
+
+          if [ "$WANT_MAC" = false ] && [ "$WANT_WIN" = false ]; then
+            echo "::error::No valid platform specified (got: '$SPEC')."
+            if [ "${{ github.event_name }}" = "issue_comment" ]; then
+              gh pr comment "$PR_NUM" --repo "$REPO" --body \
+                "⚠️ Specify a platform: \`/build mac\`, \`/build win\`, or \`/build all\`." || true
+            fi
+            exit 1
+          fi
+
+          # --- Build the matrix include list ---
+          INCLUDES=""
+          if [ "$WANT_WIN" = true ]; then
+            INCLUDES="${INCLUDES}{\"os\":\"windows-2022\",\"runner\":\"blacksmith-4vcpu-windows-2025\"},"
+          fi
+          if [ "$WANT_MAC" = true ]; then
+            INCLUDES="${INCLUDES}{\"os\":\"macos-latest\",\"runner\":\"blacksmith-6vcpu-macos-latest\"},"
+          fi
+          MATRIX="{\"include\":[${INCLUDES%,}]}"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "Resolved matrix: $MATRIX"
+
+          # --- Resolve PR head SHA + title ---
+          PR_JSON=$(gh pr view "$PR_NUM" --repo "$REPO" --json headRefOid,title)
+          echo "pr_number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(printf '%s' "$PR_JSON" | jq -r .headRefOid)" >> "$GITHUB_OUTPUT"
+          echo "pr_title=$(printf '%s' "$PR_JSON" | jq -r .title)" >> "$GITHUB_OUTPUT"
+
   create-staging-release:
-    # Only run for PRs from this repo (not forks) to protect secrets
-    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: setup
     runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -23,12 +140,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_TITLE: ${{ needs.setup.outputs.pr_title }}
         run: |
-          PR_NUM=${{ github.event.pull_request.number }}
+          PR_NUM=${{ needs.setup.outputs.pr_number }}
           TAG="staging-pr-${PR_NUM}"
           TITLE="Staging: PR #${PR_NUM} - ${PR_TITLE}"
-          SHA="${{ github.event.pull_request.head.sha }}"
+          SHA="${{ needs.setup.outputs.head_sha }}"
           SHORT_SHA="${SHA:0:7}"
 
           # Create or update the tag
@@ -55,35 +172,25 @@ jobs:
           fi
 
   build-staging:
-    needs: create-staging-release
-    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [setup, create-staging-release]
     runs-on: ${{ matrix.runner }}
     strategy:
-      matrix:
-        # `os` is the platform KEY for the `matrix.os == …` step conditions;
-        # `runner` is the Blacksmith machine. Windows runs on Blacksmith Server
-        # 2025, which ships VS Build Tools 2022, so the @jitsi/electron-sdk
-        # node-gyp native rebuild finds VS2022. (GitHub's windows-2025 label
-        # moved to VS2026, which node-gyp can't yet detect — the reason GH runs
-        # had to stay pinned to windows-2022. Blacksmith keeps VS2022 Build
-        # Tools, so we're no longer stuck on the old image.)
-        include:
-          - os: windows-2022
-            runner: blacksmith-4vcpu-windows-2025
-          - os: macos-latest
-            runner: blacksmith-6vcpu-macos-latest
+      fail-fast: false
+      # Dynamic matrix — only the requested platform(s) build (see setup job).
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     permissions:
       contents: write
     steps:
       - name: Checkout PR code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ needs.setup.outputs.head_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Pinned patch for reproducible builds (was floating '22').
+          node-version: '22.12.0'
           cache: 'npm'
 
       - name: Cache Electron binaries
@@ -104,7 +211,6 @@ jobs:
       - name: Patch app identity for staging build
         shell: bash
         run: |
-          PR_NUM=${{ github.event.pull_request.number }}
           node -e "
             const fs = require('fs');
             const pkg = require('./package.json');
@@ -217,7 +323,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          PR_NUM=${{ github.event.pull_request.number }}
+          PR_NUM=${{ needs.setup.outputs.pr_number }}
           TAG="staging-pr-${PR_NUM}"
 
           # Upload zip artifacts (clobber existing ones from previous push)
@@ -229,20 +335,22 @@ jobs:
           done
 
   comment-on-pr:
-    needs: build-staging
-    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [setup, build-staging]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       pull-requests: write
     steps:
       - name: Comment on PR with build links
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.setup.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.setup.outputs.head_sha }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const pr = context.payload.pull_request.number;
+            const pr = Number(process.env.PR_NUMBER);
             const tag = `staging-pr-${pr}`;
-            const sha = context.payload.pull_request.head.sha.substring(0, 7);
+            const sha = process.env.HEAD_SHA.substring(0, 7);
             const releaseUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${tag}`;
 
             const body = [
@@ -257,6 +365,8 @@ jobs:
               `| Windows x64 | \`sonacove-staging-win-x64.zip\` |`,
               `| macOS x64 (Intel) | \`sonacove-staging-mac-x64.zip\` |`,
               `| macOS arm64 (Apple Silicon) | \`sonacove-staging-mac-arm64.zip\` |`,
+              ``,
+              `> Only the platform(s) you requested via \`/build\` were built — others may be absent.`,
               ``,
               `Or use the **[Sonacove Staging Launcher](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/staging-launcher)** to download and run automatically.`,
             ].join('\n');
@@ -287,4 +397,3 @@ jobs:
                 body,
               });
             }
-
