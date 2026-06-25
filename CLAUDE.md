@@ -46,18 +46,17 @@ The application follows Electron's main/renderer process model:
 - Manages BrowserWindow lifecycle
 - Handles protocol calls (`jitsi-meet://` deeplinks)
 - Configures security policies (CSP, file:// blocking, redirect filtering)
-- Integrates `@jitsi/electron-sdk` features:
-  - Popup configuration (`setWindowOpenHandler` for OAuth popups + external-link routing) — actively used
-  - Power monitor: main-side hook is registered, but its renderer-side counterpart is unused, so it is currently inert
-  - Note: screen sharing is a custom `desktopCapturer` implementation (not the SDK module); the SDK's picture-in-picture (the app uses its own PiP in `app/features/pip`) and remote control have been removed
+- Native Electron helpers in `app/electron-native/` (these replaced `@jitsi/electron-sdk`, which the app no longer depends on):
+  - `window-open.js` — `setWindowOpenHandler` for OAuth popups (Google/Dropbox) + external-link/allowed-host routing
+  - `power-monitor.js` — forwards OS power/presence events to the renderer over IPC; main side is wired but currently inert (no renderer subscriber yet)
+  - Note: screen sharing is a custom `desktopCapturer` implementation; picture-in-picture is the app's own (`app/features/pip`); remote control was removed
 - Auto-update handling via `electron-updater`
 - IPC communication with renderer
 
 **Renderer Process** (`app/` directory):
 - React application bundled via webpack
 - Contains all UI components and business logic
-- Uses `@jitsi/electron-sdk` via preload script (`app/preload/preload.js`)
-- Communicates with main process via IPC
+- Communicates with main process via IPC (preload bridge in `app/preload/preload.js`)
 
 ### Build System
 Uses two separate webpack configurations:
@@ -137,16 +136,18 @@ Uses i18next with react-i18next:
 - New translations require updating `app/i18n/index.js`
 - Locale passed to Jitsi Meet iframe via URL parameters
 
-## Working with @jitsi/electron-sdk
+## Native Electron Helpers
 
-The project depends on `@jitsi/electron-sdk` for Electron-specific features. To develop with a local version:
+The app previously depended on `@jitsi/electron-sdk` for Electron-specific
+features. That dependency has been removed; the features the app actually used
+are now thin local wrappers over native Electron APIs in `app/electron-native/`:
 
-1. Update `package.json` dependency path:
-   ```json
-   "@jitsi/electron-sdk": "file:///path/to/jitsi-meet-electron-sdk-copy"
-   ```
-2. Force install: `npm install @jitsi/electron-sdk --force`
-3. See the SDK's README for environment configuration
+- `window-open.js` — `setupWindowOpenHandler(mainWindow, { getAllowedHosts, openExternalLink })`
+- `power-monitor.js` — `setupPowerMonitorMain(mainWindow)` (returns a cleanup fn)
+
+Import them from `./app/electron-native`. Removing the SDK also removed the app's
+only native-code dependency (the Windows remote-control addon), which is why the
+build no longer needs a node-gyp rebuild step.
 
 ## ESLint Configuration
 
@@ -185,7 +186,6 @@ Documented in README.md Publishing section:
 ## Key Dependencies
 
 - **electron**: Desktop application framework (v37.6.0)
-- **@jitsi/electron-sdk**: Jitsi-specific Electron utilities (v7.0.6)
 - **react** & **react-dom**: UI framework (v17.0.2)
 - **redux**: State management
 - **@atlaskit/***: UI component library (buttons, toggles, spinners, navigation)

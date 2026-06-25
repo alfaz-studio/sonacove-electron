@@ -88,33 +88,19 @@ SHOW_DEV_TOOLS=true npm start
 npm run dist
 ```
 
-#### Working with `jitsi-meet-electron-sdk`
+#### Native Electron helpers
 
-[`jitsi-meet-electron-sdk`] is a helper package which implements many features
-such as remote control and the always-on-top window. If new features are to be
-added or tested, running with a local version of these utils is very handy.
+This project used to depend on `@jitsi/electron-sdk` for Electron-specific
+features. That dependency has been removed; the features the app actually uses
+are now small local wrappers over native Electron APIs in
+[`app/electron-native/`](app/electron-native):
 
-By default, the @jitsi/electron-sdk is build from `npm`. The default dependency path in `package.json` is:
+- `window-open.js` — routes `window.open()` calls (OAuth popups open in-app, allowed
+  hosts open in-app, everything else opens in the system browser).
+- `power-monitor.js` — forwards OS power/presence events to the renderer over IPC.
 
-```json
-"@jitsi/electron-sdk": "^3.0.0"
-```
-
-To work with a local copy, you must change the path to:
-
-```json
-"@jitsi/electron-sdk": "file:///Users/name/jitsi-meet-electron-sdk-copy",
-```
-
-To build the project, you must force it to take the sources, as `npm update` will
-not do it.
-
-```bash
-npm install @jitsi/electron-sdk --force
-```
-
-NOTE: Also check the [`jitsi-meet-electron-sdk` `README`] to see how to configure
-your environment.
+Screen sharing (custom `desktopCapturer` implementation) and picture-in-picture
+(`app/features/pip`) are first-party features, not SDK wrappers.
 
 #### Publishing
 
@@ -193,8 +179,6 @@ please join the [community forum].
 [Jitsi Meet]: https://github.com/jitsi/jitsi-meet
 [Electron]: https://electronjs.org/
 [latest release]: https://github.com/jitsi/jitsi-meet-electron/releases/latest
-[`jitsi-meet-electron-sdk`]: https://github.com/jitsi/jitsi-meet-electron-sdk
-[`jitsi-meet-electron-sdk` `README`]: https://github.com/jitsi/jitsi-meet-electron-sdk/blob/master/README.md
 [community forum]: https://community.jitsi.org/
 [LICENSE]: LICENSE
 
