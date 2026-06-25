@@ -5,7 +5,6 @@ const {
     Menu,
     app,
     ipcMain,
-    desktopCapturer,
     screen,
     shell
 } = require('electron');
@@ -20,6 +19,7 @@ const nodeURL = require('url');
 
 const { setupWindowOpenHandler, setupPowerMonitorMain } = require('./app/electron-native');
 const { setupPictureInPicture } = require('./app/features/pip/main');
+const { setupScreenSharingMain } = require('./app/features/screen-sharing/main');
 const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
 const { initI18n, t } = require('./app/features/i18n');
@@ -601,35 +601,8 @@ function createJitsiMeetWindow() {
         }
     });
 
-    // Enable Screen Sharing
-    ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, options) => {
-        const validOptions = {
-            types: options?.types || [ 'screen', 'window' ],
-            thumbnailSize: options?.thumbnailSize || { width: 300,
-                height: 300 },
-            fetchWindowIcons: true
-        };
-
-        try {
-            const sources = await desktopCapturer.getSources(validOptions);
-
-            const mappedSources = sources.map(source => {
-                return {
-                    id: source.id,
-                    name: source.name,
-                    thumbnail: {
-                        dataUrl: source.thumbnail.toDataURL()
-                    }
-                };
-            });
-
-            return mappedSources;
-        } catch (error) {
-            console.error('❌ Main: Error getting desktop sources:', error);
-
-            return [];
-        }
-    });
+    // Screen sharing: desktop source picker (app/features/screen-sharing).
+    const cleanupScreenSharing = setupScreenSharingMain();
 
     // Navigation Router (Dashboard -> Meeting)
     mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -994,7 +967,7 @@ function createJitsiMeetWindow() {
         ipcMain.removeListener('retry-load', onRetryLoad);
         ipcMain.removeListener('update-toast-action', onUpdateToast);
         ipcMain.removeListener('leave-modal-action', onLeaveModal);
-        ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
+        cleanupScreenSharing();
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {
