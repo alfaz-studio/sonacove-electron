@@ -14,6 +14,7 @@ const {
     CLOSE_REASON_SCREENSHARE_STOPPED,
     CLOSE_REASON_DISPLAY_GONE
 } = require('./constants');
+const { attachCursorForward } = require('./cursor-forward');
 const { attachDisplayFollow } = require('./display-follow');
 const {
     getMainWindow,
@@ -46,6 +47,18 @@ let overlayDisplayId = null;
 
 // Detach handle for the shared display-follow watcher (see ./display-follow).
 let detachDisplayFollow = null;
+
+// Detach handle for the synthetic-cursor forwarder (see ./cursor-forward).
+let detachCursorForward = null;
+
+// The overlay's last-known click-through (ignore-mouse) state, fed by the
+// renderer via the 'set-ignore-mouse-events' IPC (see setOverlayIgnoreState).
+// The cursor forwarder injects ONLY while this is true — once the window has
+// solidified the OS delivers real moves, so injecting would double the input on
+// the drawing path. Defaults true (inject) so the renderer is bootstrapped even
+// before it reports a state: a stray injection is harmless, a missed one would
+// leave annotation unusable.
+let overlayIgnoresMouse = true;
 
 // ── Display-change handling ─────────────────────────────────────────────────
 
@@ -95,6 +108,10 @@ function teardownOverlayState() {
     if (detachDisplayFollow) {
         detachDisplayFollow();
         detachDisplayFollow = null;
+    }
+    if (detachCursorForward) {
+        detachCursorForward();
+        detachCursorForward = null;
     }
     clearOverlaySessionCors();
     overlayDisplayId = null;
@@ -221,6 +238,16 @@ function toggleOverlay(mainWindow, data) {
         reposition: target => repositionOverlay(target.bounds),
         onGone: () => closeOverlay(true, CLOSE_REASON_DISPLAY_GONE)
     });
+
+    // Feed the OS cursor into the overlay as synthetic mouse-moves so the
+    // renderer's click-through hover detection works even though the overlay is
+    // never the focused window during a screenshare (see ./cursor-forward). Reset
+    // the click-through state for this fresh window (gates the forwarder).
+    overlayIgnoresMouse = true;
+    detachCursorForward = attachCursorForward({
+        getWindow: () => annotationWindow,
+        isClickThrough: () => overlayIgnoresMouse
+    });
 }
 
 /**
@@ -273,6 +300,22 @@ function getOverlayWindow() {
 }
 
 /**
+ * Records the overlay's click-through (ignore-mouse) state, fed by the shared
+ * 'set-ignore-mouse-events' IPC handler. A no-op for any other window — the
+ * controls-bar uses the same channel — so only the overlay's state is tracked.
+ * Gates the cursor forwarder (see ./cursor-forward).
+ *
+ * @param {BrowserWindow} win - The window the IPC targeted.
+ * @param {boolean} ignore - Whether that window now ignores mouse events.
+ * @returns {void}
+ */
+function setOverlayIgnoreState(win, ignore) {
+    if (win === annotationWindow) {
+        overlayIgnoresMouse = ignore;
+    }
+}
+
+/**
  * Forwards host theme tokens to the overlay window so its pill/toolbar recolour
  * to the live app theme (the overlay runs in its own window/storage and has no
  * theme of its own). No-op if the overlay is closed or no theme is available.
@@ -303,6 +346,7 @@ module.exports = {
     toggleOverlay,
     closeOverlay,
     getOverlayWindow,
+    setOverlayIgnoreState,
     sendOverlayTheme,
     closeViewersWhiteboards
 };

@@ -7,6 +7,7 @@ const { restoreMainWindow, getMainWindow } = require('./overlay/helpers');
 const {
     toggleOverlay,
     getOverlayWindow,
+    setOverlayIgnoreState,
     sendOverlayTheme,
     closeViewersWhiteboards
 } = require('./overlay/overlay-window');
@@ -138,6 +139,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
             if (win && !win.isDestroyed()) {
                 win.setIgnoreMouseEvents(ignore, { forward: true });
+                setOverlayIgnoreState(win, ignore);
             }
         } catch (err) {
             console.error('❌ Failed to set ignore mouse events:', err);

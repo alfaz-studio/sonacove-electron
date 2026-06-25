@@ -1,104 +1,73 @@
-name: Unified Auto Release
+name: Release (on tag)
 
+# Cut a production release by pushing a version tag — merging to main no longer
+# builds or releases anything (that was the per-merge Windows+macOS cost). The
+# TAG is the source of truth for the version: it's read at build time and
+# injected into electron-builder, so nothing is ever committed back to git
+# (no version-bump commit, no [skip ci], no push-with-token).
+#
+# To release:
+#   • GitHub UI:  Releases → Draft new release → choose tag `vX.Y.Z` → Publish, or
+#   • Terminal:   git tag vX.Y.Z && git push origin vX.Y.Z
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    tags:
+      - 'v*'
 
 jobs:
-  version:
+  create-release:
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    outputs:
-      new_tag: ${{ steps.versioning.outputs.target_version }}
-      skipped: ${{ steps.versioning.outputs.skipped }}
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
-          
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          
-      - name: Increment version and Tag
-        id: versioning
-        shell: bash
+      - name: Ensure a (draft) release exists for this tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action Bot"
-          git fetch --tags --force origin
-          VERSION=$(node -p "require('./package.json').version")
-          
-          while git rev-parse "v$VERSION" >/dev/null 2>&1; do
-            echo "Tag v$VERSION already exists. Bumping patch..."
-            npm version patch --no-git-tag-version
-            VERSION=$(node -p "require('./package.json').version")
-          done
-          
-          echo "target_version=v$VERSION" >> $GITHUB_OUTPUT
-          echo "skipped=false" >> $GITHUB_OUTPUT
-          
-          if [[ "$(git log -1 --pretty=format:%s)" == *"chore: bump version to $VERSION"* ]]; then
-            echo "Version $VERSION is already committed."
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          # If the tag was created via the Releases UI the release already
+          # exists — leave it as-is. Otherwise create a draft to publish later.
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — leaving it untouched."
           else
-            git add package.json package-lock.json
-            git commit -m "chore: bump version to $VERSION [skip ci]" || true
-            git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git ${GITHUB_REF_NAME}
+            gh release create "$TAG" \
+              --repo "$REPO" \
+              --title "Version $VERSION" \
+              --notes "Automatically generated draft release." \
+              --draft
           fi
-          
-          git tag "v$VERSION"
-          git push https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git "v$VERSION"
-
-      - name: Create Draft Release
-        if: steps.versioning.outputs.skipped == 'false'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.RELEASE_TOKEN }}
-          script: |
-            const tag = '${{ steps.versioning.outputs.target_version }}';
-            const version = tag.replace('v', '');
-            await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              name: `Version ${version}`,
-              body: 'Automatically generated draft release.',
-              draft: true
-            });
-            console.log(`Created draft release for tag ${tag}`);
 
   build:
-    needs: version
-    if: needs.version.outputs.skipped == 'false'
+    needs: create-release
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        # `os` stays as the platform KEY for the downstream `matrix.os == …`
-        # step conditions; `runner` is the actual Blacksmith machine. Windows
-        # runs on Blacksmith Windows Server 2025, which ships VS Build Tools
-        # 2022 — so the @jitsi/electron-sdk node-gyp native rebuild still finds
-        # VS2022. (GitHub's windows-2025 label moved to VS2026, which node-gyp
-        # can't yet detect — that's why GH builds were pinned to windows-2022.)
+        # A release ships every platform. `os` stays as the platform KEY for the
+        # downstream `matrix.os == …` step conditions; `runner` is the actual
+        # Blacksmith machine. Windows runs on Blacksmith Windows Server 2025,
+        # which ships VS Build Tools 2022 — so the @jitsi/electron-sdk node-gyp
+        # native rebuild still finds VS2022 (GitHub's windows-2025 label moved to
+        # VS2026, which node-gyp can't yet detect).
         include:
           - os: windows-2022
             runner: blacksmith-4vcpu-windows-2025
           - os: macos-latest
             runner: blacksmith-6vcpu-macos-latest
     steps:
-      - name: Check out the NEW tag
+      - name: Check out the tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.version.outputs.new_tag }}
+          ref: ${{ github.ref }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Pinned patch for reproducible builds (was floating '22').
+          node-version: '22.12.0'
           cache: 'npm'
 
       - name: Cache Electron binaries
@@ -116,6 +85,14 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      # The marketing version comes from the tag (v1.4.2 → 1.4.2) and is passed
+      # to electron-builder via --config.extraMetadata.version, so package.json
+      # is never modified or committed.
+      - name: Derive version from tag
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Build without publishing (Windows)
         if: matrix.os == 'windows-2022'
         env:
@@ -123,7 +100,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: npm run dist -- --publish=never
+        run: npm run dist -- --publish=never --config.extraMetadata.version=${{ steps.ver.outputs.version }}
 
       - name: Build and publish (macOS)
         if: matrix.os == 'macos-latest'
@@ -134,40 +111,41 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run dist
+        run: npm run dist -- --config.extraMetadata.version=${{ steps.ver.outputs.version }}
 
       - name: Regenerate and upload latest.yml (Windows)
         if: matrix.os == 'windows-2022'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG_NAME: ${{ github.ref_name }}
         run: |
           $file = "dist\Sonacove-Meets-Setup.exe"
           $hash = Get-FileHash -Path $file -Algorithm SHA512
           $sha512 = $hash.Hash.ToLower()
           $size = (Get-Item $file).Length
-          $version = node -p "require('./package.json').version"
+          $version = $env:VERSION
           $date = Get-Date -Format "yyyy-MM-dd"
-          
+
           Write-Host "Generating latest.yml"
           Write-Host "SHA512: $sha512"
-          
+
           $yaml = "version: $version`nfiles:`n  - url: Sonacove-Meets-Setup.exe`n    sha512: $sha512`n    size: $size`npath: Sonacove-Meets-Setup.exe`nsha512: $sha512`nreleaseDate: '$date'"
-          
+
           Set-Content -Path "dist/latest.yml" -Value $yaml
-          
+
           Write-Host ""
           Write-Host "=== Generated latest.yml ==="
           Get-Content "dist/latest.yml"
           Write-Host ""
-          
-          $TAG_NAME = "${{ needs.version.outputs.new_tag }}"
-          Write-Host "Uploading to release: $TAG_NAME"
-          
-          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe
-          gh release upload $TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe.blockmap
-          gh release upload $TAG_NAME --clobber dist/latest.yml
-          
+
+          Write-Host "Uploading to release: $env:TAG_NAME"
+
+          gh release upload $env:TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe
+          gh release upload $env:TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe.blockmap
+          gh release upload $env:TAG_NAME --clobber dist/latest.yml
+
           Write-Host "Upload complete!"
 
       - name: Verify mac universal and notarization
