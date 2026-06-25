@@ -63,10 +63,13 @@ jobs:
         # `os` is the platform KEY for the `matrix.os == …` step conditions;
         # `runner` is the Blacksmith machine. Windows runs on Blacksmith Server
         # 2025, which ships VS Build Tools 2022, so the @jitsi/electron-sdk
-        # node-gyp native rebuild finds VS2022. (GitHub's windows-2025 label
-        # moved to VS2026, which node-gyp can't yet detect — the reason GH runs
-        # had to stay pinned to windows-2022. Blacksmith keeps VS2022 Build
-        # Tools, so we're no longer stuck on the old image.)
+        # node-gyp native rebuild — and the winaudio addon postinstall — find
+        # VS2022. (GitHub's windows-2025 label moved to VS2026, which node-gyp
+        # can't yet detect: vswhere.exe output exceeds the 1MB child_process
+        # stdout buffer, ERR_CHILD_PROCESS_STDIO_MAXBUFFER → "Could not find any
+        # Visual Studio installation" — the reason GH runs had to stay pinned to
+        # windows-2022. Blacksmith keeps VS2022 Build Tools, so we're no longer
+        # stuck on the old image.)
         include:
           - os: windows-2022
             runner: blacksmith-4vcpu-windows-2025

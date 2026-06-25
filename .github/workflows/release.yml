@@ -81,9 +81,11 @@ jobs:
         # `os` stays as the platform KEY for the downstream `matrix.os == …`
         # step conditions; `runner` is the actual Blacksmith machine. Windows
         # runs on Blacksmith Windows Server 2025, which ships VS Build Tools
-        # 2022 — so the @jitsi/electron-sdk node-gyp native rebuild still finds
-        # VS2022. (GitHub's windows-2025 label moved to VS2026, which node-gyp
-        # can't yet detect — that's why GH builds were pinned to windows-2022.)
+        # 2022 — so the @jitsi/electron-sdk node-gyp native rebuild (and the
+        # winaudio addon postinstall) still find VS2022. (GitHub's windows-2025
+        # label moved to VS2026, which node-gyp can't yet detect — it breaks
+        # vswhere with ERR_CHILD_PROCESS_STDIO_MAXBUFFER — which is why GH builds
+        # were pinned to windows-2022.)
         include:
           - os: windows-2022
             runner: blacksmith-4vcpu-windows-2025

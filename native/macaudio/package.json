@@ -1,0 +1,19 @@
+{
+  "name": "@sonacove/macaudio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "macOS native system-audio capture (ScreenCaptureKit) for Sonacove Electron — captures system loopback while excluding our own process audio, eliminating screen-share echo.",
+  "main": "index.js",
+  "os": ["darwin"],
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "rebuild": "node-gyp rebuild",
+    "clean": "node-gyp clean"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

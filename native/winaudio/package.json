@@ -1,0 +1,19 @@
+{
+  "name": "@sonacove/winaudio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows native system-audio capture (WASAPI process-loopback) for Sonacove Electron — captures system loopback while excluding our own process audio, eliminating screen-share echo. Requires Win11 21H2+ (build 22000+) where ActivateAudioInterfaceAsync with PROCESS_LOOPBACK activation is supported.",
+  "main": "index.js",
+  "os": ["win32"],
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "rebuild": "node-gyp rebuild",
+    "clean": "node-gyp clean"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
