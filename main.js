@@ -850,7 +850,7 @@ function createJitsiMeetWindow() {
     // Power monitor (app/electron-native/power-monitor.js): the main side forwards
     // OS power/presence events to the renderer over IPC. Currently inert — no
     // renderer code subscribes yet (see the module's SCAFFOLD note).
-    setupPowerMonitorMain(mainWindow);
+    const cleanupPowerMonitor = setupPowerMonitorMain(mainWindow);
 
     // Set up the custom in-page title bar (Windows + macOS).
     setupTitlebar(mainWindow);
@@ -968,6 +968,7 @@ function createJitsiMeetWindow() {
         ipcMain.removeListener('update-toast-action', onUpdateToast);
         ipcMain.removeListener('leave-modal-action', onLeaveModal);
         cleanupScreenSharing();
+        cleanupPowerMonitor();
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {
