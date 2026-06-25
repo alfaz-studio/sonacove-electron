@@ -1,10 +1,5 @@
-const {
-    initPopupsConfigurationRender,
-    setupPictureInPictureRender,
-    setupRemoteControlRender,
-    setupPowerMonitorRender
-} = require('@jitsi/electron-sdk');
 const { ipcRenderer } = require('electron');
+
 const {
     IPC_BROADCAST_CHANNEL,
     IPC_REQUEST_CHANNEL,
@@ -109,24 +104,6 @@ function openExternalLink(url) {
     ipcRenderer.send('open-external', url);
 }
 
-/**
- * Setup the renderer process.
- *
- * @param {*} api - API object.
- * @param {*} options - Options for what to enable.
- * @returns {void}
- */
-function setupRenderer(api, options = {}) {
-    initPopupsConfigurationRender(api);
-    if (options.enableRemoteControl) {
-        setupRemoteControlRender(api);
-    }
-    if (options.enableAlwaysOnTopWindow) {
-        setupPictureInPictureRender(api);
-    }
-    setupPowerMonitorRender(api);
-}
-
 // Intercept getUserMedia to track the last selected screenshare source
 // navigator.mediaDevices may not be available at preload time, so defer the patch
 function patchGetUserMedia() {
@@ -163,7 +140,6 @@ if (navigator.mediaDevices) {
 
 window.sonacoveElectronAPI = {
     openExternalLink,
-    setupRenderer,
     captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
     saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),

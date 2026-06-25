@@ -47,11 +47,9 @@ The application follows Electron's main/renderer process model:
 - Handles protocol calls (`jitsi-meet://` deeplinks)
 - Configures security policies (CSP, file:// blocking, redirect filtering)
 - Integrates `@jitsi/electron-sdk` features:
-  - Remote control (controlled by `ENABLE_REMOTE_CONTROL` flag)
-  - Always-on-top window
-  - Screen sharing
-  - Power monitor
-  - Popup configuration
+  - Popup configuration (`setWindowOpenHandler` for OAuth popups + external-link routing) — actively used
+  - Power monitor: main-side hook is registered, but its renderer-side counterpart is unused, so it is currently inert
+  - Note: screen sharing is a custom `desktopCapturer` implementation (not the SDK module); the SDK's picture-in-picture (the app uses its own PiP in `app/features/pip`) and remote control have been removed
 - Auto-update handling via `electron-updater`
 - IPC communication with renderer
 
@@ -114,10 +112,8 @@ The `Conference` component (`app/features/conference/components/Conference.js`) 
 - Creates iframe using `JitsiMeetExternalAPI` from `external_api.js`
 - Handles meeting lifecycle events (`videoConferenceJoined`, `readyToClose`, `suspendDetected`)
 - Configures Jitsi Meet via `configOverwrite` and `interfaceConfigOverwrite`
-- Integrates with `@jitsi/electron-sdk` via `window.jitsiNodeAPI.setupRenderer()`
 - Parses URL parameters and hash config overrides (e.g., `#config.startWithAudioMuted=true`)
 - Implements loading timeout with configurable `serverTimeout`
-- Supports remote control (controlled by `ENABLE_REMOTE_CONTROL` flag)
 
 ### Security Features
 Implemented in `main.js`:
@@ -199,7 +195,6 @@ Documented in README.md Publishing section:
 
 ## Important Flags and Constants
 
-- `ENABLE_REMOTE_CONTROL`: Must be enabled in both `main.js:34` and `Conference.js:18`
 - `config.defaultServerURL`: Default Jitsi Meet server (meet.jit.si)
 - `config.appProtocolPrefix`: Protocol scheme (jitsi-meet)
 - `config.defaultServerTimeout`: Loading timeout in seconds (30)

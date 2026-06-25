@@ -3,8 +3,6 @@
 const {
     initPopupsConfigurationMain,
     getPopupTarget,
-    setupPictureInPictureMain,
-    setupRemoteControlMain,
     setupPowerMonitorMain
 } = require('@jitsi/electron-sdk');
 const {
@@ -77,10 +75,6 @@ const isStaging = _appNameLower.includes('staging');
 if (!isStaging) {
     registerProtocol();
 }
-
-// Remote control is disabled. The feature requires renderer-side integration
-// that was removed with the local renderer app.
-const ENABLE_REMOTE_CONTROL = false;
 
 // Fix screen-sharing thumbnails being missing sometimes.
 // https://github.com/electron/electron/issues/44504
@@ -909,11 +903,12 @@ function createJitsiMeetWindow() {
     });
 
     initPopupsConfigurationMain(mainWindow, windowOpenHandler);
-    setupPictureInPictureMain(mainWindow);
+
+    // NOTE: This SDK hook is registered on the main side but is currently inert — it
+    // requires its renderer-side counterpart (setupPowerMonitorRender), which was only
+    // wired through the now-removed setupRenderer() path. Kept because power-monitor has
+    // no in-app replacement; safe to remove if the renderer-side integration stays dropped.
     setupPowerMonitorMain(mainWindow);
-    if (ENABLE_REMOTE_CONTROL) {
-        setupRemoteControlMain(mainWindow);
-    }
 
     // Set up the custom in-page title bar (Windows + macOS).
     setupTitlebar(mainWindow);
@@ -1214,9 +1209,9 @@ app.on('second-instance', (event, commandLine) => {
     }
 });
 
-if (isDev) {
-    app.on('ready', createWebRTCInternalsWindow);
-}
+// if (isDev) {
+//     app.on('ready', createWebRTCInternalsWindow);
+// }
 
 app.on('window-all-closed', () => {
     app.quit();
