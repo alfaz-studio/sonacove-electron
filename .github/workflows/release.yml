@@ -1,72 +1,155 @@
-name: Release (on tag)
+name: Release
 
-# Cut a production release by pushing a version tag — merging to main no longer
-# builds or releases anything (that was the per-merge Windows+macOS cost). The
-# TAG is the source of truth for the version: it's read at build time and
-# injected into electron-builder, so nothing is ever committed back to git
-# (no version-bump commit, no [skip ci], no push-with-token).
+# Cut a production release. This workflow OWNS the entire release lifecycle —
+# there is no manual GitHub-UI step and no hand-tagging:
 #
-# To release:
-#   • GitHub UI:  Releases → Draft new release → choose tag `vX.Y.Z` → Publish, or
-#   • Terminal:   git tag vX.Y.Z && git push origin vX.Y.Z
+#   1. prepare    – resolve + validate the next version, create the tag and a
+#                   DRAFT release for it.
+#   2. build      – build, sign and notarize Windows + macOS (electron-builder
+#                   runs with `--publish never`; CI does all uploading). Asserts
+#                   the built version matches the tag.
+#   3. publish    – upload every platform's artifacts to the DRAFT in one step,
+#                   verify the release is complete, then flip it to public
+#                   "Latest" in a single atomic action.
+#   4. smoke-test – confirm the public /releases/latest/download/* URLs the
+#                   website depends on actually serve the new version.
+#
+# Until step 3's final flip, all state lives only in CI artifacts or a draft
+# (excluded from /releases/latest), so a failed/cancelled run can never expose a
+# half-finished "Latest" release. DO NOT create or publish releases in the
+# GitHub UI — this workflow is the only supported path.
+#
+# To release: Actions → Release → "Run workflow" → pick a bump (patch/minor/
+# major) or type an exact version override.
+
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Version bump (ignored if an explicit version is given below)'
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version_override:
+        description: 'Explicit version, e.g. 2025.15.124 (leave blank to auto-bump)'
+        type: string
+        default: ''
+
+# A release must never overlap with another. The in-flight release keeps
+# priority; a second trigger queues behind it and runs once it finishes.
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  create-release:
+  prepare:
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
-      - name: Ensure a (draft) release exists for this tag
+      - name: Resolve, validate and tag the new version
+        id: resolve
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
         run: |
           set -euo pipefail
-          VERSION="${TAG#v}"
-          # If the tag was created via the Releases UI the release already
-          # exists — leave it as-is. Otherwise create a draft to publish later.
-          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — leaving it untouched."
+
+          # Latest existing version tag (vX.Y.Z), highest by version sort.
+          latest="$(git -c versionsort.suffix=- ls-remote --tags --refs "https://github.com/${REPO}.git" \
+            | sed -n 's#.*refs/tags/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' \
+            | sort -V | tail -1 || true)"
+          echo "Latest existing version: ${latest:-<none>}"
+
+          if [ -n "${VERSION_OVERRIDE}" ]; then
+            version="${VERSION_OVERRIDE}"
           else
-            gh release create "$TAG" \
-              --repo "$REPO" \
-              --title "Version $VERSION" \
-              --notes "Automatically generated draft release." \
-              --draft
+            if [ -z "${latest}" ]; then
+              echo "::error::No existing v* tag found; cannot auto-bump. Provide an explicit version_override." && exit 1
+            fi
+            IFS='.' read -r major minor patch <<< "${latest}"
+            case "${RELEASE_TYPE}" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+              *) echo "::error::Unknown release_type '${RELEASE_TYPE}'" && exit 1 ;;
+            esac
+            version="${major}.${minor}.${patch}"
           fi
 
+          # Format gate.
+          if ! printf '%s' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '${version}' is not X.Y.Z" && exit 1
+          fi
+
+          tag="v${version}"
+
+          # Must be strictly greater than the latest existing version. This single
+          # check kills the "published to an old/duplicate release" class of bug.
+          if [ -n "${latest}" ]; then
+            if [ "${version}" = "${latest}" ] || \
+               [ "$(printf '%s\n%s\n' "${latest}" "${version}" | sort -V | tail -1)" != "${version}" ]; then
+              echo "::error::Version ${version} is not greater than the latest released ${latest}" && exit 1
+            fi
+          fi
+
+          # Refuse to clobber a *published* release. A leftover DRAFT for this tag
+          # (e.g. from a previous failed run) is deleted so re-runs are clean.
+          if gh release view "${tag}" --repo "${REPO}" >/dev/null 2>&1; then
+            is_draft="$(gh release view "${tag}" --repo "${REPO}" --json isDraft --jq .isDraft)"
+            if [ "${is_draft}" = "true" ]; then
+              echo "Deleting stale draft release ${tag} for a clean re-run."
+              gh release delete "${tag}" --repo "${REPO}" --yes --cleanup-tag
+            else
+              echo "::error::A published release ${tag} already exists. Pick a new version." && exit 1
+            fi
+          fi
+
+          # Create the tag (at this commit) and a fresh draft release in one step.
+          gh release create "${tag}" \
+            --repo "${REPO}" \
+            --target "${SHA}" \
+            --title "Version ${version}" \
+            --notes "Automatically generated release." \
+            --draft
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}"        >> "$GITHUB_OUTPUT"
+          echo "Prepared draft release ${tag}."
+
   build:
-    needs: create-release
+    needs: prepare
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        # A release ships every platform. `os` stays as the platform KEY for the
-        # downstream `matrix.os == …` step conditions; `runner` is the actual
-        # Blacksmith machine. Windows runs on Blacksmith Windows Server 2025,
-        # which ships VS Build Tools 2022 — so the @jitsi/electron-sdk node-gyp
-        # native rebuild still finds VS2022 (GitHub's windows-2025 label moved to
-        # VS2026, which node-gyp can't yet detect).
+        # `os` is the platform KEY used by the `matrix.os == …` step conditions;
+        # `runner` is the actual Blacksmith machine. Windows runs on Blacksmith
+        # Windows Server 2025 (ships VS Build Tools 2022, which the
+        # @jitsi/electron-sdk node-gyp native rebuild needs).
         include:
           - os: windows-2022
             runner: blacksmith-4vcpu-windows-2025
+            update_yml: latest.yml
           - os: macos-latest
             runner: blacksmith-6vcpu-macos-latest
+            update_yml: latest-mac.yml
     steps:
-      - name: Check out the tag
+      - name: Check out the release commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          # Pinned patch for reproducible builds (was floating '22').
           node-version: '22.12.0'
           cache: 'npm'
 
@@ -85,74 +168,177 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      # The marketing version comes from the tag (v1.4.2 → 1.4.2) and is passed
-      # to electron-builder via --config.extraMetadata.version, so package.json
-      # is never modified or committed.
-      - name: Derive version from tag
-        id: ver
-        shell: bash
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Build without publishing (Windows)
-        if: matrix.os == 'windows-2022'
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: npm run dist -- --publish=never --config.extraMetadata.version=${{ steps.ver.outputs.version }}
-
-      - name: Build and publish (macOS)
+      # electron-builder runs with `--publish never`: it still writes the update
+      # metadata (latest*.yml) to dist/, but uploads nothing. CI owns uploading
+      # (the `publish` job) so there is exactly one controlled, atomic path.
+      # The version comes from the tag via --config.extraMetadata.version, so
+      # package.json is never modified.
+      - name: Build, sign & notarize (macOS)
         if: matrix.os == 'macos-latest'
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run dist -- --config.extraMetadata.version=${{ steps.ver.outputs.version }}
-
-      - name: Regenerate and upload latest.yml (Windows)
-        if: matrix.os == 'windows-2022'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          VERSION: ${{ steps.ver.outputs.version }}
-          TAG_NAME: ${{ github.ref_name }}
         run: |
-          $file = "dist\Sonacove-Meets-Setup.exe"
-          $hash = Get-FileHash -Path $file -Algorithm SHA512
-          $sha512 = $hash.Hash.ToLower()
-          $size = (Get-Item $file).Length
-          $version = $env:VERSION
-          $date = Get-Date -Format "yyyy-MM-dd"
+          set -euo pipefail
+          npm run build
+          npx electron-builder --mac --publish never \
+            --config.extraMetadata.version="${{ needs.prepare.outputs.version }}"
 
-          Write-Host "Generating latest.yml"
-          Write-Host "SHA512: $sha512"
+      - name: Build & sign (Windows)
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        env:
+          # Consumed by the electron-builder Windows sign hook (code-signing.js)
+          # via Azure Trusted Signing — signs the installer during the build so
+          # latest.yml is generated over the signed artifact.
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          npm run build
+          npx electron-builder --win --publish never \
+            --config.extraMetadata.version="${{ needs.prepare.outputs.version }}"
 
-          $yaml = "version: $version`nfiles:`n  - url: Sonacove-Meets-Setup.exe`n    sha512: $sha512`n    size: $size`npath: Sonacove-Meets-Setup.exe`nsha512: $sha512`nreleaseDate: '$date'"
+      # Guard against silent version drift (e.g. the inject flag being dropped):
+      # the version electron-builder actually stamped into the update feed must
+      # equal the tag.
+      - name: Assert built version matches the tag
+        shell: bash
+        env:
+          EXPECTED: ${{ needs.prepare.outputs.version }}
+          YML: ${{ matrix.update_yml }}
+        run: |
+          set -euo pipefail
+          built="$(sed -n 's/^version:[[:space:]]*//p' "dist/${YML}" | head -1 | tr -d '\r')"
+          echo "Built version: ${built} | Expected: ${EXPECTED}"
+          if [ "${built}" != "${EXPECTED}" ]; then
+            echo "::error::Built version '${built}' != tag version '${EXPECTED}' (in dist/${YML})" && exit 1
+          fi
 
-          Set-Content -Path "dist/latest.yml" -Value $yaml
-
-          Write-Host ""
-          Write-Host "=== Generated latest.yml ==="
-          Get-Content "dist/latest.yml"
-          Write-Host ""
-
-          Write-Host "Uploading to release: $env:TAG_NAME"
-
-          gh release upload $env:TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe
-          gh release upload $env:TAG_NAME --clobber dist/Sonacove-Meets-Setup.exe.blockmap
-          gh release upload $env:TAG_NAME --clobber dist/latest.yml
-
-          Write-Host "Upload complete!"
-
-      - name: Verify mac universal and notarization
+      - name: Verify mac universal binary & notarization
         if: matrix.os == 'macos-latest'
         run: |
-          hdiutil attach -quiet -mountpoint /Volumes/SonacoveMeets "dist/Sonacove Meets.dmg"
+          hdiutil attach -quiet -mountpoint /Volumes/SonacoveMeets "dist/Sonacove-Meets.dmg"
           file "/Volumes/SonacoveMeets/Sonacove Meets.app/Contents/MacOS/Sonacove Meets"
           codesign --verify --deep --strict "/Volumes/SonacoveMeets/Sonacove Meets.app"
           spctl --assess --type execute --verbose "/Volumes/SonacoveMeets/Sonacove Meets.app" || true
           hdiutil detach -quiet /Volumes/SonacoveMeets
+
+      - name: Upload macOS artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          # Blockmaps are optional (differential-update optimization); the
+          # publish job's gate enforces the required core assets.
+          if-no-files-found: warn
+          path: |
+            dist/Sonacove-Meets.dmg
+            dist/Sonacove-Meets.dmg.blockmap
+            dist/Sonacove-Meets.zip
+            dist/Sonacove-Meets.zip.blockmap
+            dist/latest-mac.yml
+
+      - name: Upload Windows artifacts
+        if: matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          # Blockmap is optional; the publish job's gate enforces the core assets.
+          if-no-files-found: warn
+          path: |
+            dist/Sonacove-Meets-Setup.exe
+            dist/Sonacove-Meets-Setup.exe.blockmap
+            dist/latest.yml
+
+  publish:
+    needs: [prepare, build]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Upload assets, verify completeness, then publish atomically
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          echo "Downloaded assets:" && ls -la
+
+          # Upload everything to the draft (it is not yet public).
+          gh release upload "${TAG}" --repo "${REPO}" --clobber ./*
+
+          # --- Verification gate -------------------------------------------
+          # These names are the DOWNLOAD CONTRACT with the website
+          # (../sonacove → src/lib/downloads). Renaming any of them here without
+          # updating the website must fail the release.
+          required=(
+            "Sonacove-Meets.dmg"            # macOS — website download link
+            "Sonacove-Meets.zip"            # macOS — auto-update feed payload
+            "Sonacove-Meets-Setup.exe"      # Windows — website download link
+            "latest-mac.yml"                # macOS update feed
+            "latest.yml"                    # Windows update feed
+          )
+          for f in "${required[@]}"; do
+            if [ ! -s "${f}" ]; then
+              echo "::error::Required asset missing or empty: ${f}" && exit 1
+            fi
+          done
+
+          # Update feeds must describe THIS version.
+          for yml in latest.yml latest-mac.yml; do
+            v="$(sed -n 's/^version:[[:space:]]*//p' "${yml}" | head -1 | tr -d '\r')"
+            if [ "${v}" != "${VERSION}" ]; then
+              echo "::error::${yml} version '${v}' != ${VERSION}" && exit 1
+            fi
+          done
+          echo "Verification gate passed."
+
+          # --- The single atomic flip to public "Latest" ------------------
+          gh release edit "${TAG}" --repo "${REPO}" --draft=false --latest
+          echo "Published ${TAG} as Latest."
+
+  smoke-test:
+    needs: [prepare, publish]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Verify the public /releases/latest download URLs
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${REPO}/releases/latest/download"
+
+          # The two installers the website links to must be downloadable.
+          for asset in "Sonacove-Meets.dmg" "Sonacove-Meets-Setup.exe"; do
+            code="$(curl -sSL -o /dev/null -w '%{http_code}' "${base}/${asset}")"
+            echo "${asset}: HTTP ${code}"
+            if [ "${code}" != "200" ]; then
+              echo "::error::${asset} is not downloadable from /releases/latest (HTTP ${code})" && exit 1
+            fi
+          done
+
+          # The update feeds served by /latest must be the new version (proves
+          # /latest actually points at this release).
+          for yml in latest.yml latest-mac.yml; do
+            v="$(curl -sSL "${base}/${yml}" | sed -n 's/^version:[[:space:]]*//p' | head -1 | tr -d '\r')"
+            echo "${yml} served version: ${v}"
+            if [ "${v}" != "${VERSION}" ]; then
+              echo "::error::/releases/latest ${yml} serves '${v}', expected ${VERSION}" && exit 1
+            fi
+          done
+          echo "Smoke test passed — /releases/latest serves ${VERSION}."

@@ -18,9 +18,14 @@ Desktop application for [Jitsi Meet] built with [Electron].
 
 Download our latest release and you're off to the races!
 
-| Windows | macOS | GNU/Linux (AppImage) | GNU/Linux (Deb) |
-| -- | -- | -- | -- |
-| [Download](https://github.com/jitsi/jitsi-meet-electron/releases/latest/download/jitsi-meet.exe) | [Download](https://github.com/jitsi/jitsi-meet-electron/releases/latest/download/jitsi-meet.dmg) | [x64_64](https://github.com/jitsi/jitsi-meet-electron/releases/latest/download/jitsi-meet-x86_64.AppImage) [arm64](https://github.com/jitsi/jitsi-meet-electron/releases/latest/download/jitsi-meet-arm64.AppImage) | [x86_64](https://github.com/jitsi/jitsi-meet-electron/releases/latest/download/jitsi-meet-amd64.deb) [arm64](https://github.com/jitsi/jitsi-meet-electron/releases/latest/download/jitsi-meet-arm64.deb) |
+| Windows | macOS (Universal) |
+| -- | -- |
+| [Download](https://github.com/alfaz-studio/sonacove-electron/releases/latest/download/Sonacove-Meets-Setup.exe) | [Download](https://github.com/alfaz-studio/sonacove-electron/releases/latest/download/Sonacove-Meets.dmg) |
+
+> Sonacove Meets ships for **Windows and macOS** only. These asset names
+> (`Sonacove-Meets-Setup.exe`, `Sonacove-Meets.dmg`) are a contract with the
+> website's download page — see [`build.win`/`build.mac` `artifactName`](/package.json)
+> and the release workflow's verification gate.
 
 ### Third-Party builds
 
@@ -118,15 +123,31 @@ your environment.
 
 #### Publishing
 
-1. Create release branch: `git checkout -b release-1-2-3`, replacing `1-2-3` with the desired release version
-2. Increment the version: `npm version patch`, replacing `patch` with `minor` or `major` as required
-3. Push release branch to github: `git push -u origin release-1-2-3`
-4. Create PR: `gh pr create`
-5. Once PR is reviewed and ready to merge, create draft Github release: `gh release create v1.2.3 --draft --title 1.2.3`, replacing `v1.2.3` and `1.2.3` with the desired release version
-6. Merge PR
-7. Github action will build binaries and attach to the draft release
-8. Test binaries from draft release
-9. If all tests are fine, publish draft release
+Releases are cut entirely by the **Release** GitHub Actions workflow
+(`.github/workflows/release.yml`). It owns the whole lifecycle — versioning,
+tagging, building, signing, notarizing, uploading and publishing — so there is
+nothing to do by hand.
+
+1. Go to **Actions → Release → Run workflow**.
+2. Pick a version bump (`patch` / `minor` / `major`) or type an exact
+   `version_override` (e.g. `2025.15.124`).
+3. Run it. The workflow:
+   - resolves and validates the new version (must be `X.Y.Z` and strictly
+     greater than the latest release), creates the tag, and opens a **draft**
+     release;
+   - builds + signs Windows and macOS (the version is injected from the tag —
+     `package.json` is never modified or committed);
+   - uploads every artifact to the draft, verifies the release is complete, then
+     flips it to public **Latest** in a single atomic step;
+   - smoke-tests the public `/releases/latest/download/*` URLs.
+
+The release only becomes the public "Latest" once every asset is present and
+verified, so the website's download links can never point at a half-built
+release.
+
+> **Do not create or publish releases from the GitHub UI**, and do not push
+> tags by hand. The Release workflow is the only supported path; a manually
+> published, asset-less release would break the website's download page.
 
 </details>
 

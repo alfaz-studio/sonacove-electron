@@ -57,7 +57,7 @@ async function signWithAzure(filePath, credentials) {
         const userProfile = process.env.USERPROFILE || process.env.HOME;
         const toolsDir = path.join(userProfile, '.dotnet', 'tools');
         const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
-        
+
         if (fs.existsSync(signExe)) {
             signToolPath = signExe;
             console.log(`   Using sign tool: ${signToolPath}`);
@@ -126,10 +126,10 @@ async function embedIcon(exePath, iconPath) {
         }
 
         console.log(`   📎 Embedding icon in: ${path.basename(exePath)}`);
-        
+
         // Try different ways to call rcedit
         let success = false;
-        
+
         // Method 1: Direct function call
         if (typeof rcedit === 'function') {
             try {
@@ -139,7 +139,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 1 failed: ${e.message}`);
             }
         }
-        
+
         // Method 2: rcedit.default
         if (!success && rcedit.default && typeof rcedit.default === 'function') {
             try {
@@ -149,7 +149,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 2 failed: ${e.message}`);
             }
         }
-        
+
         // Method 3: rcedit.edit
         if (!success && typeof rcedit.edit === 'function') {
             try {
@@ -159,7 +159,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 3 failed: ${e.message}`);
             }
         }
-        
+
         // Method 4: Try all properties that might be functions
         if (!success) {
             for (const key of Object.keys(rcedit)) {
@@ -175,7 +175,7 @@ async function embedIcon(exePath, iconPath) {
                 }
             }
         }
-        
+
         if (success) {
             console.log(`   ✅ Icon embedded: ${path.basename(exePath)}`);
         } else {
@@ -227,7 +227,7 @@ async function installSignTool() {
     });
 }
 
-async function checkAndInstallDotNetTools() {
+function checkDotNetSdk() {
     return new Promise((resolve, reject) => {
         console.log('🔍 Checking .NET SDK...');
 
@@ -247,22 +247,7 @@ async function checkAndInstallDotNetTools() {
             }
 
             console.log(`   ✅ .NET SDK found (${version.trim()})`);
-            console.log('   Checking sign tool...');
-
-            // Same fs.existsSync probe as the main flow — avoids both
-            // the cwd-PATH cmd.exe collision and the stderr-as-success
-            // false-positive that the previous spawn-based check had.
-            const userProfile = process.env.USERPROFILE || process.env.HOME;
-            const toolsDir = path.join(userProfile, '.dotnet', 'tools');
-            const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
-
-            if (fs.existsSync(signExe)) {
-                console.log('   ✅ Sign tool found\n');
-                resolve();
-            } else {
-                installSignTool().then(resolve)
-.catch(reject);
-            }
+            resolve();
         });
 
         check.on('error', error => {
@@ -271,143 +256,100 @@ async function checkAndInstallDotNetTools() {
     });
 }
 
-exports.default = async function(context) {
+// Prepare the signing toolchain (credentials + the Microsoft `sign` CLI) exactly
+// once per build, regardless of how many files electron-builder asks us to sign
+// (it calls the sign hook for both the installer and the uninstaller).
+let signingSetupPromise = null;
+
+function ensureSigningSetup() {
+    if (signingSetupPromise == null) {
+        signingSetupPromise = (async () => {
+            console.log('\n═══════════════════════════════════════════════════');
+            console.log('   Azure Trusted Signing - Sonacove Meets');
+            console.log('═══════════════════════════════════════════════════\n');
+
+            console.log('📋 Loading Azure credentials...');
+            const credentials = loadAzureCredentials();
+            console.log('   ✅ Credentials loaded\n');
+
+            await checkDotNetSdk();
+
+            // Probe the dotnet-tools install location directly. A naive
+            // `spawn('sign', ['--version'], { shell: true })` is unreliable on
+            // the Windows runner: (1) cmd.exe's cwd-first PATH lookup can match
+            // a local `sign.*` file and hang; (2) when the tool is absent cmd
+            // writes to stderr but may exit 0, so the tool is never installed
+            // and the later sign call hits `spawn sign ENOENT`.
+            console.log('   Checking sign tool...');
+            const userProfile = process.env.USERPROFILE || process.env.HOME;
+            const toolsDir = path.join(userProfile, '.dotnet', 'tools');
+            const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
+
+            if (fs.existsSync(signExe)) {
+                console.log('   ✅ Sign tool found\n');
+            } else {
+                await installSignTool();
+            }
+
+            return credentials;
+        })().catch(error => {
+            // Reset so a retry can re-attempt setup, then surface the failure.
+            signingSetupPromise = null;
+            throw error;
+        });
+    }
+
+    return signingSetupPromise;
+}
+
+/**
+ * electron-builder Windows sign hook (`build.win.signtoolOptions.sign`).
+ *
+ * electron-builder invokes this for every artifact it signs during the build —
+ * notably the NSIS installer and uninstaller — *before* it computes the update
+ * metadata (latest.yml). Signing here (rather than in afterAllArtifactBuild)
+ * means latest.yml is generated over the already-signed installer, so its
+ * checksum is correct and we no longer hand-roll latest.yml in CI.
+ *
+ * `build.win.signtoolOptions.signingHashAlgorithms` is pinned to ['sha256'] so
+ * this runs once per file (Azure Trusted Signing is SHA-256 only).
+ */
+exports.sign = async function(configuration) {
     if (process.platform !== 'win32') {
         console.log('⏭️  Skipping code signing (not running on Windows)');
 
         return;
     }
 
-    console.log('\n═══════════════════════════════════════════════════');
-    console.log('   Azure Trusted Signing - Sonacove Meets');
-    console.log('═══════════════════════════════════════════════════\n');
+    const credentials = await ensureSigningSetup();
 
-    try {
-        console.log('📋 Loading Azure credentials...');
-        const credentials = loadAzureCredentials();
+    await signFile(configuration.path, credentials);
+};
 
-        console.log('   ✅ Credentials loaded\n');
+/**
+ * electron-builder afterPack hook (`build.afterPack`).
+ *
+ * With `signAndEditExecutable: false`, electron-builder does not edit the packed
+ * executable, so we embed the app icon ourselves here. Signing of the app exe is
+ * intentionally not done (matching historical behaviour); the installer — the
+ * artifact users download and that latest.yml describes — is signed via the
+ * sign hook above.
+ */
+exports.default = async function(context) {
+    if (process.platform !== 'win32') {
+        console.log('⏭️  Skipping icon embedding (not running on Windows)');
 
-    console.log('🔍 Checking .NET SDK...');
-    await new Promise((resolve, reject) => {
-      const check = spawn('dotnet', ['--version'], { shell: true, stdio: 'pipe' });
-      let version = '';
-      check.stdout.on('data', (data) => { version += data.toString(); });
-      check.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
-        } else {
-          console.log(`   ✅ .NET SDK found (${version.trim()})`);
-          resolve();
-        }
-      });
-      check.on('error', () => {
-        reject(new Error('.NET SDK not found'));
-      });
-    });
-
-    console.log('   Checking sign tool...');
-    {
-      // Probe the dotnet-tools install location directly. The previous
-      // `spawn('sign', ['--version'], { shell: true })` had two problems
-      // on the windows-2022 runner image: (1) cmd.exe's cwd-first PATH
-      // lookup matched this file when it was named `sign.js`, invoked
-      // it via wscript and hung forever; (2) when the tool is absent
-      // cmd writes `'sign' is not recognized...` to stderr, which the
-      // old handler treated as "found", so installSignTool() was
-      // skipped and the later signWithAzure call hit `spawn sign ENOENT`.
-      const userProfile = process.env.USERPROFILE || process.env.HOME;
-      const toolsDir = path.join(userProfile, '.dotnet', 'tools');
-      const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
-
-      if (fs.existsSync(signExe)) {
-        console.log('   ✅ Sign tool found\n');
-      } else {
-        await installSignTool();
-      }
+        return;
     }
 
-    // HANDLE AFTER_SIGN (Unpacked executables)
-    if (context.appOutDir) {
-      const appOutDir = context.appOutDir;
-      console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
-      
-      const files = fs.readdirSync(appOutDir);
-      const exeFiles = files.filter(f => f.endsWith('.exe'));
-      
-      console.log(`Found ${exeFiles.length} executable(s)`);
-
-      // EMBED ICON ONLY (do NOT sign here)
-      // Signing changes the file, breaking checksums
-      // We'll sign in afterAllArtifactBuild instead
-      console.log('\n📎 Embedding icon into executables...');
-      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-      const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
-      await embedIcon(mainExePath, iconPath);
-      
-      console.log('\n⏭️  Skipping signing in afterPack phase (will sign in afterAllArtifactBuild)');
-    } 
-    // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
-    else {
-      let exeArtifacts = [];
-      
-      // Log the context for debugging
-      console.log(`📋 Context object keys: ${Object.keys(context)}`);
-      if (context.artifactPaths) {
-        console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
-      }
-      
-      // Check if we have artifactPaths (from afterAllArtifactBuild)
-      if (context.artifactPaths) {
-        console.log(`📂 Scanning for artifacts to sign from context...\n`);
-        exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
-      } 
-      // Always scan the dist directory as fallback
-      const distDir = path.join(__dirname, 'dist');
-      if (fs.existsSync(distDir)) {
-        console.log(`📂 Scanning for artifacts in dist directory...\n`);
-        const files = fs.readdirSync(distDir);
-        const distExeArtifacts = files
-          .filter(f => f.endsWith('.exe'))
-          .map(f => path.join(distDir, f));
-        
-        // Merge artifacts from both sources (context and dist directory)
-        exeArtifacts = [...new Set([...exeArtifacts, ...distExeArtifacts])];
-      }
-      
-      console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
-
-      // SIGN ALL ARTIFACTS (after checksums are locked in latest.yml)
-      console.log('\n🔐 Signing all artifacts...');
-      for (const filePath of exeArtifacts) {
-        await signFile(filePath, credentials);
-      }
-      
-      // Also sign resources if they exist
-      const resourcesDir = path.join(__dirname, 'dist', 'win-unpacked', 'resources');
-      if (fs.existsSync(resourcesDir)) {
-        const resourceFiles = fs.readdirSync(resourcesDir);
-        const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
-        
-        if (resourceExes.length > 0) {
-          console.log(`\nFound ${resourceExes.length} resource executable(s):`);
-          for (const file of resourceExes) {
-            const filePath = path.join(resourcesDir, file);
-            await signFile(filePath, credentials);
-          }
-        }
-      }
+    if (!context.appOutDir) {
+        return;
     }
 
-    console.log('\n═══════════════════════════════════════════════════');
-    console.log('      ✅ Signing & Icon Embedding Completed Successfully');
-    console.log('═══════════════════════════════════════════════════\n');
+    const appOutDir = context.appOutDir;
+    console.log(`\n📎 Embedding icon into executable in: ${appOutDir}`);
 
-  } catch (error) {
-        console.error('\n═══════════════════════════════════════════════════');
-        console.error('      ❌ Signing Failed');
-        console.error('═══════════════════════════════════════════════════');
-        console.error(`Error: ${error.message}\n`);
-        throw error;
-    }
+    const iconPath = path.join(__dirname, 'resources', 'icon.ico');
+    const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
+    await embedIcon(mainExePath, iconPath);
 };
