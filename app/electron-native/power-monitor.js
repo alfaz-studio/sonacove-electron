@@ -53,7 +53,10 @@ function setupPowerMonitorMain(mainWindow) {
 
         powerMonitor.on(event, listener);
 
-        return { event, listener };
+        return {
+            event,
+            listener
+        };
     });
 
     ipcMain.handle(QUERY_IDLE_STATE_CHANNEL, (_event, idleThreshold) =>

@@ -45,7 +45,7 @@ function patchGetUserMedia() {
     }
     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-    navigator.mediaDevices.getUserMedia = async constraints => {
+    navigator.mediaDevices.getUserMedia = constraints => {
         if (constraints && constraints.video && typeof constraints.video === 'object') {
             let sourceId = null;
 
