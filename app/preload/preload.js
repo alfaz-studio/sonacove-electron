@@ -78,6 +78,7 @@ const whitelistedIpcChannels = [
     'leave-modal-action',
     'deeplink-modal-action',
     'cross-window-notification',
+    'power-monitor-event',
     IPC_REQUEST_CHANNEL,
     IPC_SET_MUTED_CHANNEL,
     IPC_SET_VOLUME_CHANNEL

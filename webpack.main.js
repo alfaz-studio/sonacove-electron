@@ -43,7 +43,6 @@ module.exports = {
         })
     ],
     externals: [ {
-        '@jitsi/electron-sdk': 'require(\'@jitsi/electron-sdk\')',
         'electron-context-menu': 'require(\'electron-context-menu\')',
         'electron-reload': 'require(\'electron-reload\')',
         'posthog-node': 'require(\'posthog-node\')',

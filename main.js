@@ -1,11 +1,6 @@
 /* global __dirname */
 
 const {
-    initPopupsConfigurationMain,
-    getPopupTarget,
-    setupPowerMonitorMain
-} = require('@jitsi/electron-sdk');
-const {
     BrowserWindow,
     Menu,
     app,
@@ -23,6 +18,7 @@ const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
 
+const { setupWindowOpenHandler, setupPowerMonitorMain } = require('./app/electron-native');
 const { setupPictureInPicture } = require('./app/features/pip/main');
 const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
@@ -394,35 +390,6 @@ function createJitsiMeetWindow() {
             webSecurity: false,
             backgroundThrottling: false
         }
-    };
-
-    const windowOpenHandler = ({ url, frameName }) => {
-        const target = getPopupTarget(url, frameName);
-
-        // Allow URLs on allowed hosts to open inside Electron instead of the browser
-        const allowedHosts = config.currentConfig.allowedHosts || [];
-
-        try {
-            const parsedUrl = new URL(url);
-
-            if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
-                return { action: 'allow' };
-            }
-        } catch (e) {
-            // ignore parse errors
-        }
-
-        if (!target || target === 'browser') {
-            openExternalLink(url);
-
-            return { action: 'deny' };
-        }
-
-        if (target === 'electron') {
-            return { action: 'allow' };
-        }
-
-        return { action: 'deny' };
     };
 
     let pendingUpdateVersion = null;
@@ -902,12 +869,14 @@ function createJitsiMeetWindow() {
         callback(true);
     });
 
-    initPopupsConfigurationMain(mainWindow, windowOpenHandler);
+    setupWindowOpenHandler(mainWindow, {
+        getAllowedHosts: () => config.currentConfig.allowedHosts || [],
+        openExternalLink
+    });
 
-    // NOTE: This SDK hook is registered on the main side but is currently inert — it
-    // requires its renderer-side counterpart (setupPowerMonitorRender), which was only
-    // wired through the now-removed setupRenderer() path. Kept because power-monitor has
-    // no in-app replacement; safe to remove if the renderer-side integration stays dropped.
+    // Power monitor (app/electron-native/power-monitor.js): the main side forwards
+    // OS power/presence events to the renderer over IPC. Currently inert — no
+    // renderer code subscribes yet (see the module's SCAFFOLD note).
     setupPowerMonitorMain(mainWindow);
 
     // Set up the custom in-page title bar (Windows + macOS).
