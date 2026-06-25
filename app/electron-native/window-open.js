@@ -48,7 +48,18 @@ function setupWindowOpenHandler(mainWindow, { getAllowedHosts, openExternalLink 
             const { hostname } = new URL(url);
 
             if (allowedHosts.some(host => hostname === host || hostname.endsWith(`.${host}`))) {
-                return { action: 'allow' };
+                // Open in-app, but as an isolated child window: drop the parent's
+                // preload (no window.sonacoveElectronAPI / IPC bridge) and node
+                // integration, so an allowed-host page can't reach privileged APIs.
+                return {
+                    action: 'allow',
+                    overrideBrowserWindowOptions: {
+                        webPreferences: {
+                            preload: '',
+                            nodeIntegration: false
+                        }
+                    }
+                };
             }
         } catch (e) {
             // Ignore URL parse errors and fall through to the browser.

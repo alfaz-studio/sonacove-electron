@@ -17,6 +17,9 @@ const { SCREEN_SHARING_GET_SOURCES_CHANNEL } = require('./constants');
  * @returns {Function} Cleanup function that removes the handler.
  */
 function setupScreenSharingMain() {
+    // removeHandler first so setup is idempotent — ipcMain.handle throws if a
+    // handler for the channel already exists (e.g. setup called twice).
+    ipcMain.removeHandler(SCREEN_SHARING_GET_SOURCES_CHANNEL);
     ipcMain.handle(SCREEN_SHARING_GET_SOURCES_CHANNEL, async (_event, options) => {
         const validOptions = {
             types: options?.types || [ 'screen', 'window' ],

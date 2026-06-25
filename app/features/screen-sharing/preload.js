@@ -43,9 +43,14 @@ function patchGetUserMedia() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         return;
     }
+
+    // Idempotent: never double-wrap, even if this runs more than once.
+    if (navigator.mediaDevices.getUserMedia._sourceTracked) {
+        return;
+    }
     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-    navigator.mediaDevices.getUserMedia = constraints => {
+    const patched = constraints => {
         if (constraints && constraints.video && typeof constraints.video === 'object') {
             let sourceId = null;
 
@@ -62,6 +67,9 @@ function patchGetUserMedia() {
 
         return originalGetUserMedia(constraints);
     };
+
+    patched._sourceTracked = true;
+    navigator.mediaDevices.getUserMedia = patched;
 }
 
 /**

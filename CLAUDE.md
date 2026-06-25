@@ -87,6 +87,7 @@ app/features/
 ├── recent-list/  - Recent conference history
 ├── redux/        - Redux store, middleware, and root reducer
 ├── router/       - React Router integration with Redux
+├── screen-sharing/ - Desktop source picker (main handler + preload bridge)
 ├── settings/     - Settings drawer with server URL, toggles, timeout
 ├── utils/        - Shared utilities (URL parsing, external link handling)
 └── welcome/      - Welcome screen with room joining

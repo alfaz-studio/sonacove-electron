@@ -59,8 +59,12 @@ function setupPowerMonitorMain(mainWindow) {
         };
     });
 
+    // removeHandler first so setup is idempotent — ipcMain.handle throws if a
+    // handler for the channel already exists (e.g. setup called twice).
+    ipcMain.removeHandler(QUERY_IDLE_STATE_CHANNEL);
     ipcMain.handle(QUERY_IDLE_STATE_CHANNEL, (_event, idleThreshold) =>
         powerMonitor.getSystemIdleState(idleThreshold));
+    ipcMain.removeHandler(QUERY_IDLE_TIME_CHANNEL);
     ipcMain.handle(QUERY_IDLE_TIME_CHANNEL, () => powerMonitor.getSystemIdleTime());
 
     return () => {

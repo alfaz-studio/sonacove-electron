@@ -1152,9 +1152,9 @@ app.on('second-instance', (event, commandLine) => {
     }
 });
 
-// if (isDev) {
-//     app.on('ready', createWebRTCInternalsWindow);
-// }
+if (isDev) {
+    app.on('ready', createWebRTCInternalsWindow);
+}
 
 app.on('window-all-closed', () => {
     app.quit();

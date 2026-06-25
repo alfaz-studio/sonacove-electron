@@ -2,9 +2,9 @@ name: CI / Electron
 
 # Cheap PR quality gate. The expensive Windows/macOS staging builds are now
 # manual (`/build` — see staging.yml), so this lightweight Linux lint runs on
-# every PR to keep a fast merge check in place. eslint doesn't need the native
-# @jitsi/electron-sdk, so we install with --ignore-scripts to skip the node-gyp
-# rebuild (which would otherwise need libx11-dev etc. and slow the job down).
+# every PR to keep a fast merge check in place. eslint only needs the source, so
+# we install with --ignore-scripts to skip package postinstall steps (e.g.
+# downloading the Electron binary) and keep the job fast.
 on:
   pull_request:
 
@@ -30,7 +30,7 @@ jobs:
           node-version: '22.12.0'
           cache: 'npm'
 
-      - name: Install dependencies (skip native rebuild)
+      - name: Install dependencies (skip postinstall scripts)
         run: npm ci --ignore-scripts
 
       - name: Lint
