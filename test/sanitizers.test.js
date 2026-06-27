@@ -1,7 +1,5 @@
-'use strict';
-
-const test = require('node:test');
 const assert = require('node:assert/strict');
+const test = require('node:test');
 
 const { sanitizeOutputFilename, sanitizeOverride, MAX_FILENAME_BYTES }
     = require('../app/features/sanitizers');
@@ -22,6 +20,7 @@ test('sanitizeOutputFilename strips directory components', () => {
         sanitizeOutputFilename('C:\\Users\\someone\\meeting.webm', '.webm'),
         'meeting.webm'
     );
+
     // `..` is treated as a path component by basename, so traversal attempts
     // are flattened to just the filename.
     assert.equal(
@@ -94,6 +93,7 @@ test('sanitizeOutputFilename truncation never cuts in the middle of a code point
 
     // No replacement characters (U+FFFD) or stray surrogate pairs.
     assert.ok(!result.includes('\uFFFD'));
+
     // Round-trip through UTF-8 must give the same string back.
     assert.equal(Buffer.from(result, 'utf8').toString('utf8'), result);
 });
@@ -104,6 +104,7 @@ test('sanitizeOutputFilename prepends underscore when result starts with -', () 
         sanitizeOutputFilename('-rf something.webm', '.webm'),
         '_-rf_something.webm'
     );
+
     // Double-dash long-flag form, no extension supplied.
     assert.equal(
         sanitizeOutputFilename('--foo', '.webm'),

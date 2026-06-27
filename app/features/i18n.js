@@ -1,9 +1,7 @@
-'use strict';
-
 const { app } = require('electron');
-const path = require('path');
-const fs = require('fs');
 const isDev = require('electron-is-dev');
+const fs = require('fs');
+const path = require('path');
 
 let translations = {};
 
@@ -43,9 +41,14 @@ function t(key, params) {
         return value;
     }
 
-    return value.replace(/\{\{(\w+)\}\}/g, (_, name) =>
-        params[name] !== undefined ? params[name] : `{{${name}}}`
-    );
+    return value.replace(/\{\{(\w+)\}\}/g, (_, name) => {
+        if (params[name] === undefined) {
+            return `{{${name}}}`;
+        }
+
+        return params[name];
+    });
 }
 
-module.exports = { initI18n, t };
+module.exports = { initI18n,
+    t };

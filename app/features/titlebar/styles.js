@@ -61,4 +61,5 @@ const MAC_TITLEBAR_CSS = ''
     + '#sonacove-mac-titlebar .stb-update-dot{width:5px;height:5px;border-radius:50%;background:#4CAF50;'
     + 'display:inline-block;margin-right:4px;vertical-align:middle;}';
 
-module.exports = { TITLEBAR_CSS, MAC_TITLEBAR_CSS };
+module.exports = { TITLEBAR_CSS,
+    MAC_TITLEBAR_CSS };

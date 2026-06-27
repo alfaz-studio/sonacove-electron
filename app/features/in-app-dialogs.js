@@ -1,5 +1,3 @@
-'use strict';
-
 /**
  * In-app dialog injection module.
  *
@@ -58,7 +56,7 @@ function esc(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\'");
+        .replace(/'/g, '\\\'');
 }
 
 /**
@@ -110,7 +108,8 @@ const SHARED_STYLES = ''
     + '@keyframes snc-progress{from{width:100%}to{width:0%}}'
     + '@keyframes snc-fade-in{from{opacity:0}to{opacity:1}}'
     + '@keyframes snc-scale-in{from{transform:scale(0.95);opacity:0}to{transform:scale(1);opacity:1}}'
-    + '.snc-btn{border:none;font-size:13px;font-weight:500;padding:8px 18px;border-radius:8px;cursor:pointer;transition:background 0.15s ease,filter 0.15s ease;}'
+    + '.snc-btn{border:none;font-size:13px;font-weight:500;padding:8px 18px;'
+    + 'border-radius:8px;cursor:pointer;transition:background 0.15s ease,filter 0.15s ease;}'
     + '.snc-btn:hover{filter:brightness(0.92);}'
     + '.snc-btn:active{filter:brightness(0.85);}';
 
@@ -120,18 +119,18 @@ const SHARED_STYLES = ''
  * @returns {string} JS code that ensures the shared style tag exists.
  */
 function injectStylesJS() {
-    return `var _sid='sonacove-dialog-styles';`
-        + `if(!document.getElementById(_sid)){`
-        + `var _s=document.createElement('style');_s.id=_sid;`
+    return 'var _sid=\'sonacove-dialog-styles\';'
+        + 'if(!document.getElementById(_sid)){'
+        + 'var _s=document.createElement(\'style\');_s.id=_sid;'
         + `_s.textContent=${JSON.stringify(SHARED_STYLES)};`
-        + `document.head.appendChild(_s);}`;
+        + 'document.head.appendChild(_s);}';
 }
 
 // ── Mutual Exclusion ────────────────────────────────────────────────────
 // Only one toast/panel should be visible at a time (About, Info, Update).
 // Modals (leave, deeplink) are excluded — they're user-blocking and critical.
 
-const TOAST_PANEL_IDS = ['sonacove-update-toast', 'sonacove-info-toast', 'sonacove-about-panel'];
+const TOAST_PANEL_IDS = [ 'sonacove-update-toast', 'sonacove-info-toast', 'sonacove-about-panel' ];
 
 /**
  * Returns JS code that removes all existing toast/panel elements.
@@ -141,7 +140,7 @@ const TOAST_PANEL_IDS = ['sonacove-update-toast', 'sonacove-info-toast', 'sonaco
  */
 function dismissOtherToastsJS() {
     return `${JSON.stringify(TOAST_PANEL_IDS)}.forEach(function(id){`
-        + `var el=document.getElementById(id);if(el)el.remove();});`;
+        + 'var el=document.getElementById(id);if(el)el.remove();});';
 }
 
 // ── Toast: Update Ready ─────────────────────────────────────────────────
@@ -167,7 +166,8 @@ t.id='sonacove-update-toast';
 t.style.cssText=${JSON.stringify(TOAST_CSS)};
 t.innerHTML=''
 +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
-+'<div style="width:36px;height:36px;border-radius:8px;background:${ACCENT_BG};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
++'<div style="width:36px;height:36px;border-radius:8px;background:${ACCENT_BG};'
++'display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
 +'${icon}'
 +'</div>'
 +'<div style="flex:1;min-width:0;">'
@@ -175,10 +175,13 @@ t.innerHTML=''
 +'<div style="font-size:13px;color:#8a8a9a;line-height:1.4;">${messageText}</div>'
 +'</div></div>'
 +'<div style="display:flex;gap:8px;justify-content:flex-end;">'
-+'<button id="snc-toast-later" class="snc-btn" style="background:#fff;border:1px solid #e0e0e0;color:#5a5a6a;">${laterText}</button>'
++'<button id="snc-toast-later" class="snc-btn" '
++'style="background:#fff;border:1px solid #e0e0e0;color:#5a5a6a;">${laterText}</button>'
 +'<button id="snc-toast-install" class="snc-btn" style="background:${ACCENT};color:#fff;">${installText}</button>'
 +'</div>'
-+'<div style="position:absolute;bottom:0;left:0;height:3px;background:rgba(244,81,30,0.35);animation:snc-progress 15s linear forwards;border-radius:0 0 0 12px;"></div>';
++'<div style="position:absolute;bottom:0;left:0;height:3px;'
++'background:rgba(244,81,30,0.35);animation:snc-progress 15s linear forwards;'
++'border-radius:0 0 0 12px;"></div>';
 document.body.appendChild(t);
 var _tm=setTimeout(function(){_dism();},15000);
 function _dism(){
@@ -225,14 +228,24 @@ var old=document.getElementById('${id}');if(old)old.remove();
 ${injectStylesJS()}
 var m=document.createElement('div');
 m.id='${id}';
-m.style.cssText='position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:snc-fade-in 0.2s ease;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
+m.style.cssText='position:fixed;inset:0;z-index:999999;display:flex;'
++'align-items:center;justify-content:center;background:rgba(0,0,0,0.6);'
++'backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);'
++'animation:snc-fade-in 0.2s ease;'
++'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
 m.innerHTML=''
-+'<div style="background:#1e1e3a;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:32px;max-width:380px;width:90%;text-align:center;animation:snc-scale-in 0.25s ease;box-shadow:0 16px 48px rgba(0,0,0,0.5);">'
++'<div style="background:#1e1e3a;border:1px solid rgba(255,255,255,0.08);'
++'border-radius:16px;padding:32px;max-width:380px;width:90%;text-align:center;'
++'animation:snc-scale-in 0.25s ease;box-shadow:0 16px 48px rgba(0,0,0,0.5);">'
 +'<div style="font-size:18px;font-weight:600;color:#fff;margin-bottom:8px;">${title}</div>'
 +'<div style="font-size:14px;color:rgba(255,255,255,0.55);line-height:1.5;margin-bottom:28px;">${message}</div>'
 +'<div style="display:flex;gap:12px;justify-content:center;">'
-+'<button id="${id}-cancel" class="snc-btn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);padding:10px 24px;font-size:14px;">${cancelLabel}</button>'
-+'<button id="${id}-confirm" class="snc-btn" style="background:${confirmColor};color:#fff;padding:10px 24px;font-size:14px;">${confirmLabel}</button>'
++'<button id="${id}-cancel" class="snc-btn" '
++'style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);'
++'color:rgba(255,255,255,0.8);padding:10px 24px;font-size:14px;">${cancelLabel}</button>'
++'<button id="${id}-confirm" class="snc-btn" '
++'style="background:${confirmColor};color:#fff;padding:10px 24px;font-size:14px;">'
++'${confirmLabel}</button>'
 +'</div></div>';
 document.body.appendChild(m);
 function _cl(a){
@@ -313,7 +326,8 @@ t.id='sonacove-info-toast';
 t.style.cssText=${JSON.stringify(TOAST_CSS)};
 t.innerHTML=''
 +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">'
-+'<div style="width:36px;height:36px;border-radius:8px;background:${iconBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
++'<div style="width:36px;height:36px;border-radius:8px;background:${iconBg};'
++'display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
 +'${icon}'
 +'</div>'
 +'<div style="flex:1;min-width:0;">'
@@ -349,7 +363,6 @@ document.getElementById('snc-info-ok').onclick=_dism;
  */
 function showAboutPanel(webContents, info, strings = {}) {
     const appName = esc(info.appName);
-    const appVersion = esc(info.appVersion);
     const electronVersion = esc(info.electronVersion);
     const chromeVersion = esc(info.chromeVersion);
     const nodeVersion = esc(info.nodeVersion);
@@ -361,21 +374,33 @@ ${dismissOtherToastsJS()}
 ${injectStylesJS()}
 var t=document.createElement('div');
 t.id='sonacove-about-panel';
-t.style.cssText=${JSON.stringify(TOAST_CSS + 'padding:24px;')};
+t.style.cssText=${JSON.stringify(`${TOAST_CSS}padding:24px;`)};
 t.innerHTML=''
-+'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,${ACCENT},${ACCENT_HOVER});"></div>'
++'<div style="position:absolute;top:0;left:0;right:0;height:3px;'
++'background:linear-gradient(90deg,${ACCENT},${ACCENT_HOVER});"></div>'
 +'<div style="text-align:center;margin-bottom:18px;padding-top:4px;">'
-+'<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,${ACCENT},${ACCENT_HOVER});margin:0 auto 12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(244,81,30,0.3);">'
++'<div style="width:48px;height:48px;border-radius:14px;'
++'background:linear-gradient(135deg,${ACCENT},${ACCENT_HOVER});margin:0 auto 12px;'
++'display:flex;align-items:center;justify-content:center;'
++'box-shadow:0 2px 8px rgba(244,81,30,0.3);">'
 +'${icon}'
 +'</div>'
 +'<div style="font-weight:700;font-size:17px;color:#2d2d3a;margin-bottom:3px;">${appName}</div>'
 +'<div style="font-size:13px;color:#8a8a9a;">${esc(strings.version)}</div>'
 +'</div>'
 +'<div style="background:#f8f8fa;border:1px solid #f0f0f2;border-radius:10px;padding:12px 14px;margin-bottom:18px;">'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.electron)}</span><span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.chrome)}</span><span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.node)}</span><span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
-+'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8a8a9a;"><span>${esc(strings.platform)}</span><span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;'
++'color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.electron)}</span>'
++'<span style="color:#2d2d3a;font-weight:500;">${electronVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;'
++'color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.chrome)}</span>'
++'<span style="color:#2d2d3a;font-weight:500;">${chromeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;'
++'color:#8a8a9a;margin-bottom:8px;"><span>${esc(strings.node)}</span>'
++'<span style="color:#2d2d3a;font-weight:500;">${nodeVersion}</span></div>'
++'<div style="display:flex;justify-content:space-between;font-size:12px;'
++'color:#8a8a9a;"><span>${esc(strings.platform)}</span>'
++'<span style="color:#2d2d3a;font-weight:500;">${platform}</span></div>'
 +'</div>'
 +'<div style="display:flex;align-items:center;justify-content:space-between;">'
 +'<span style="font-size:11px;color:#b0b0b8;">${esc(strings.copyright)}</span>'

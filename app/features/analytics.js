@@ -1,10 +1,8 @@
-'use strict';
-
-const { app } = require('electron');
-const { PostHog } = require('posthog-node');
 const crypto = require('crypto');
+const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { PostHog } = require('posthog-node');
 
 const { isProd } = require('./config');
 
@@ -59,11 +57,19 @@ function baseProperties() {
     return {
         app: 'electron',
         env: isProd ? 'prod' : 'staging',
+
+        // eslint-disable-next-line camelcase -- external PostHog property name (dashboard contract)
         app_version: app.getVersion(),
         platform: process.platform,
         arch: process.arch,
+
+        // eslint-disable-next-line camelcase -- external PostHog property name (dashboard contract)
         electron_version: process.versions.electron,
+
+        // eslint-disable-next-line camelcase -- external PostHog property name (dashboard contract)
         node_version: process.versions.node,
+
+        // eslint-disable-next-line camelcase -- external PostHog property name (dashboard contract)
         is_packaged: app.isPackaged
     };
 }

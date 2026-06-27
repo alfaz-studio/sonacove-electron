@@ -59,7 +59,7 @@ contextBridge.exposeInMainWorld('panelAPI', {
      * @param {boolean} openPanel - Whether to also open the chat panel.
      */
     openChat(openPanel) {
-        ipcRenderer.send('pp-open-chat', { openPanel: !!openPanel });
+        ipcRenderer.send('pp-open-chat', { openPanel: Boolean(openPanel) });
     },
 
     /**
@@ -220,5 +220,5 @@ contextBridge.exposeInMainWorld('panelAPI', {
      */
     onSettings(cb) {
         ipcRenderer.on('pp-settings', (_event, settings) => cb(settings));
-    },
+    }
 });

@@ -10,6 +10,12 @@ const AZURE_CONFIG = {
 
 const TIMESTAMP_URL = 'http://timestamp.acs.microsoft.com';
 
+/**
+ * Loads Azure Trusted Signing credentials from a JSON file (checked in several
+ * locations) or, failing that, from environment variables.
+ *
+ * @returns {Object} The Azure credentials.
+ */
 function loadAzureCredentials() {
     const possiblePaths = [
         path.join(__dirname, '.azure-credentials.json'),
@@ -40,7 +46,14 @@ function loadAzureCredentials() {
     throw new Error('Azure credentials not found!');
 }
 
-async function signWithAzure(filePath, credentials) {
+/**
+ * Signs a file with Azure Trusted Signing via the dotnet `sign` tool.
+ *
+ * @param {string} filePath - Path to the file to sign.
+ * @param {Object} credentials - Azure credentials.
+ * @returns {Promise<void>} Resolves when signing completes successfully.
+ */
+function signWithAzure(filePath, credentials) {
     return new Promise((resolve, reject) => {
         const args = [
             'code', 'trusted-signing',
@@ -57,7 +70,7 @@ async function signWithAzure(filePath, credentials) {
         const userProfile = process.env.USERPROFILE || process.env.HOME;
         const toolsDir = path.join(userProfile, '.dotnet', 'tools');
         const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
-        
+
         if (fs.existsSync(signExe)) {
             signToolPath = signExe;
             console.log(`   Using sign tool: ${signToolPath}`);
@@ -88,6 +101,13 @@ async function signWithAzure(filePath, credentials) {
     });
 }
 
+/**
+ * Signs a single file if it exists, logging the outcome.
+ *
+ * @param {string} filePath - Path to the file to sign.
+ * @param {Object} credentials - Azure credentials.
+ * @returns {Promise<void>} Resolves when the file is signed or skipped.
+ */
 async function signFile(filePath, credentials) {
     if (!fs.existsSync(filePath)) {
         console.log(`   ⏭️  Skipped (not found): ${path.basename(filePath)}`);
@@ -105,31 +125,70 @@ async function signFile(filePath, credentials) {
     }
 }
 
+/**
+ * Signs every `.exe` found in a resources directory, if that directory exists.
+ *
+ * @param {string} resourcesDir - Directory to scan for executables.
+ * @param {Object} credentials - Azure credentials.
+ * @returns {Promise<void>} Resolves when all found executables are signed.
+ */
+async function signResourcesIfPresent(resourcesDir, credentials) {
+    if (!fs.existsSync(resourcesDir)) {
+        return;
+    }
+
+    const resourceFiles = fs.readdirSync(resourcesDir);
+    const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
+
+    if (resourceExes.length === 0) {
+        return;
+    }
+
+    console.log(`\nFound ${resourceExes.length} resource executable(s):`);
+    for (const file of resourceExes) {
+        const filePath = path.join(resourcesDir, file);
+
+        await signFile(filePath, credentials);
+    }
+}
+
+/**
+ * Embeds an icon into a Windows executable using rcedit (best-effort; failures
+ * are logged but never thrown).
+ *
+ * @param {string} exePath - Path to the executable.
+ * @param {string} iconPath - Path to the .ico file.
+ * @returns {Promise<void>} Resolves when embedding completes or is skipped.
+ */
 async function embedIcon(exePath, iconPath) {
     try {
         let rcedit;
+
         try {
             rcedit = require('rcedit');
         } catch (e) {
-            console.warn(`   ⚠️  rcedit not available, skipping icon embedding`);
+            console.warn('   ⚠️  rcedit not available, skipping icon embedding');
+
             return;
         }
 
         if (!fs.existsSync(exePath)) {
             console.log(`   ⏭️  Skipped (exe not found): ${path.basename(exePath)}`);
+
             return;
         }
 
         if (!fs.existsSync(iconPath)) {
             console.log(`   ⏭️  Skipped (icon not found): ${path.basename(iconPath)}`);
+
             return;
         }
 
         console.log(`   📎 Embedding icon in: ${path.basename(exePath)}`);
-        
+
         // Try different ways to call rcedit
         let success = false;
-        
+
         // Method 1: Direct function call
         if (typeof rcedit === 'function') {
             try {
@@ -139,7 +198,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 1 failed: ${e.message}`);
             }
         }
-        
+
         // Method 2: rcedit.default
         if (!success && rcedit.default && typeof rcedit.default === 'function') {
             try {
@@ -149,7 +208,7 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 2 failed: ${e.message}`);
             }
         }
-        
+
         // Method 3: rcedit.edit
         if (!success && typeof rcedit.edit === 'function') {
             try {
@@ -159,34 +218,41 @@ async function embedIcon(exePath, iconPath) {
                 console.log(`   ⏭️  Method 3 failed: ${e.message}`);
             }
         }
-        
+
         // Method 4: Try all properties that might be functions
         if (!success) {
             for (const key of Object.keys(rcedit)) {
-                if (typeof rcedit[key] === 'function') {
-                    try {
-                        await rcedit[key](exePath, { icon: iconPath });
-                        success = true;
-                        console.log(`   ✅ Icon embedded using method: ${key}`);
-                        break;
-                    } catch (e) {
-                        // Try next method
-                    }
+                if (typeof rcedit[key] !== 'function') {
+                    continue;
+                }
+                try {
+                    await rcedit[key](exePath, { icon: iconPath });
+                    success = true;
+                    console.log(`   ✅ Icon embedded using method: ${key}`);
+                    break;
+                } catch (e) {
+                    // Try next method
                 }
             }
         }
-        
+
         if (success) {
             console.log(`   ✅ Icon embedded: ${path.basename(exePath)}`);
         } else {
-            console.warn(`   ⚠️  Could not determine how to call rcedit - skipping icon embedding`);
+            console.warn('   ⚠️  Could not determine how to call rcedit - skipping icon embedding');
         }
     } catch (error) {
         console.warn(`   ⚠️  Could not embed icon: ${error.message}`);
     }
 }
 
-async function installSignTool() {
+/**
+ * Installs, or updates if already present, the Microsoft dotnet `sign` global
+ * tool.
+ *
+ * @returns {Promise<void>} Resolves when the tool is installed or updated.
+ */
+function installSignTool() {
     return new Promise((resolve, reject) => {
         console.log('   📦 Installing Microsoft sign tool...');
 
@@ -227,50 +293,6 @@ async function installSignTool() {
     });
 }
 
-async function checkAndInstallDotNetTools() {
-    return new Promise((resolve, reject) => {
-        console.log('🔍 Checking .NET SDK...');
-
-        const check = spawn('dotnet', [ '--version' ], { shell: true,
-            stdio: 'pipe' });
-        let version = '';
-
-        check.stdout.on('data', data => {
-            version += data.toString();
-        });
-
-        check.on('close', code => {
-            if (code !== 0) {
-                reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
-
-                return;
-            }
-
-            console.log(`   ✅ .NET SDK found (${version.trim()})`);
-            console.log('   Checking sign tool...');
-
-            // Same fs.existsSync probe as the main flow — avoids both
-            // the cwd-PATH cmd.exe collision and the stderr-as-success
-            // false-positive that the previous spawn-based check had.
-            const userProfile = process.env.USERPROFILE || process.env.HOME;
-            const toolsDir = path.join(userProfile, '.dotnet', 'tools');
-            const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
-
-            if (fs.existsSync(signExe)) {
-                console.log('   ✅ Sign tool found\n');
-                resolve();
-            } else {
-                installSignTool().then(resolve)
-.catch(reject);
-            }
-        });
-
-        check.on('error', error => {
-            reject(error);
-        });
-    });
-}
-
 exports.default = async function(context) {
     if (process.platform !== 'win32') {
         console.log('⏭️  Skipping code signing (not running on Windows)');
@@ -288,122 +310,120 @@ exports.default = async function(context) {
 
         console.log('   ✅ Credentials loaded\n');
 
-    console.log('🔍 Checking .NET SDK...');
-    await new Promise((resolve, reject) => {
-      const check = spawn('dotnet', ['--version'], { shell: true, stdio: 'pipe' });
-      let version = '';
-      check.stdout.on('data', (data) => { version += data.toString(); });
-      check.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
-        } else {
-          console.log(`   ✅ .NET SDK found (${version.trim()})`);
-          resolve();
+        console.log('🔍 Checking .NET SDK...');
+        await new Promise((resolve, reject) => {
+            const check = spawn('dotnet', [ '--version' ], { shell: true,
+                stdio: 'pipe' });
+            let version = '';
+
+            check.stdout.on('data', data => {
+                version += data.toString();
+            });
+            check.on('close', code => {
+                if (code === 0) {
+                    console.log(`   ✅ .NET SDK found (${version.trim()})`);
+                    resolve();
+                } else {
+                    reject(new Error('.NET SDK not found. Install from: https://dotnet.microsoft.com/download'));
+                }
+            });
+            check.on('error', () => {
+                reject(new Error('.NET SDK not found'));
+            });
+        });
+
+        console.log('   Checking sign tool...');
+        {
+            // Probe the dotnet-tools install location directly. The previous
+            // `spawn('sign', ['--version'], { shell: true })` had two problems
+            // on the windows-2022 runner image: (1) cmd.exe's cwd-first PATH
+            // lookup matched this file when it was named `sign.js`, invoked
+            // it via wscript and hung forever; (2) when the tool is absent
+            // cmd writes `'sign' is not recognized...` to stderr, which the
+            // old handler treated as "found", so installSignTool() was
+            // skipped and the later signWithAzure call hit `spawn sign ENOENT`.
+            const userProfile = process.env.USERPROFILE || process.env.HOME;
+            const toolsDir = path.join(userProfile, '.dotnet', 'tools');
+            const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
+
+            if (fs.existsSync(signExe)) {
+                console.log('   ✅ Sign tool found\n');
+            } else {
+                await installSignTool();
+            }
         }
-      });
-      check.on('error', () => {
-        reject(new Error('.NET SDK not found'));
-      });
-    });
 
-    console.log('   Checking sign tool...');
-    {
-      // Probe the dotnet-tools install location directly. The previous
-      // `spawn('sign', ['--version'], { shell: true })` had two problems
-      // on the windows-2022 runner image: (1) cmd.exe's cwd-first PATH
-      // lookup matched this file when it was named `sign.js`, invoked
-      // it via wscript and hung forever; (2) when the tool is absent
-      // cmd writes `'sign' is not recognized...` to stderr, which the
-      // old handler treated as "found", so installSignTool() was
-      // skipped and the later signWithAzure call hit `spawn sign ENOENT`.
-      const userProfile = process.env.USERPROFILE || process.env.HOME;
-      const toolsDir = path.join(userProfile, '.dotnet', 'tools');
-      const signExe = path.join(toolsDir, process.platform === 'win32' ? 'sign.exe' : 'sign');
+        // HANDLE AFTER_SIGN (Unpacked executables)
+        if (context.appOutDir) {
+            const appOutDir = context.appOutDir;
 
-      if (fs.existsSync(signExe)) {
-        console.log('   ✅ Sign tool found\n');
-      } else {
-        await installSignTool();
-      }
-    }
+            console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
 
-    // HANDLE AFTER_SIGN (Unpacked executables)
-    if (context.appOutDir) {
-      const appOutDir = context.appOutDir;
-      console.log(`📂 Scanning for unpacked executables in: ${appOutDir}\n`);
-      
-      const files = fs.readdirSync(appOutDir);
-      const exeFiles = files.filter(f => f.endsWith('.exe'));
-      
-      console.log(`Found ${exeFiles.length} executable(s)`);
+            const files = fs.readdirSync(appOutDir);
+            const exeFiles = files.filter(f => f.endsWith('.exe'));
 
-      // EMBED ICON ONLY (do NOT sign here)
-      // Signing changes the file, breaking checksums
-      // We'll sign in afterAllArtifactBuild instead
-      console.log('\n📎 Embedding icon into executables...');
-      const iconPath = path.join(__dirname, 'resources', 'icon.ico');
-      const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
-      await embedIcon(mainExePath, iconPath);
-      
-      console.log('\n⏭️  Skipping signing in afterPack phase (will sign in afterAllArtifactBuild)');
-    } 
-    // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
-    else {
-      let exeArtifacts = [];
-      
-      // Log the context for debugging
-      console.log(`📋 Context object keys: ${Object.keys(context)}`);
-      if (context.artifactPaths) {
-        console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
-      }
-      
-      // Check if we have artifactPaths (from afterAllArtifactBuild)
-      if (context.artifactPaths) {
-        console.log(`📂 Scanning for artifacts to sign from context...\n`);
-        exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
-      } 
-      // Always scan the dist directory as fallback
-      const distDir = path.join(__dirname, 'dist');
-      if (fs.existsSync(distDir)) {
-        console.log(`📂 Scanning for artifacts in dist directory...\n`);
-        const files = fs.readdirSync(distDir);
-        const distExeArtifacts = files
+            console.log(`Found ${exeFiles.length} executable(s)`);
+
+            // EMBED ICON ONLY (do NOT sign here)
+            // Signing changes the file, breaking checksums
+            // We'll sign in afterAllArtifactBuild instead
+            console.log('\n📎 Embedding icon into executables...');
+            const iconPath = path.join(__dirname, 'resources', 'icon.ico');
+            const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
+
+            await embedIcon(mainExePath, iconPath);
+
+            console.log('\n⏭️  Skipping signing in afterPack phase (will sign in afterAllArtifactBuild)');
+
+        // HANDLE AFTER_ALL_ARTIFACT_BUILD or ON_BEFORE_PUBLISH (Installer)
+        } else {
+            let exeArtifacts = [];
+
+            // Log the context for debugging
+            console.log(`📋 Context object keys: ${Object.keys(context)}`);
+            if (context.artifactPaths) {
+                console.log(`📋 Artifact paths from context: ${context.artifactPaths}`);
+            }
+
+            // Check if we have artifactPaths (from afterAllArtifactBuild)
+            if (context.artifactPaths) {
+                console.log('📂 Scanning for artifacts to sign from context...\n');
+                exeArtifacts = context.artifactPaths.filter(f => f.endsWith('.exe'));
+            }
+
+            // Always scan the dist directory as fallback
+            const distDir = path.join(__dirname, 'dist');
+
+            if (fs.existsSync(distDir)) {
+                console.log('📂 Scanning for artifacts in dist directory...\n');
+                const files = fs.readdirSync(distDir);
+                const distExeArtifacts = files
           .filter(f => f.endsWith('.exe'))
           .map(f => path.join(distDir, f));
-        
-        // Merge artifacts from both sources (context and dist directory)
-        exeArtifacts = [...new Set([...exeArtifacts, ...distExeArtifacts])];
-      }
-      
-      console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
 
-      // SIGN ALL ARTIFACTS (after checksums are locked in latest.yml)
-      console.log('\n🔐 Signing all artifacts...');
-      for (const filePath of exeArtifacts) {
-        await signFile(filePath, credentials);
-      }
-      
-      // Also sign resources if they exist
-      const resourcesDir = path.join(__dirname, 'dist', 'win-unpacked', 'resources');
-      if (fs.existsSync(resourcesDir)) {
-        const resourceFiles = fs.readdirSync(resourcesDir);
-        const resourceExes = resourceFiles.filter(f => f.endsWith('.exe'));
-        
-        if (resourceExes.length > 0) {
-          console.log(`\nFound ${resourceExes.length} resource executable(s):`);
-          for (const file of resourceExes) {
-            const filePath = path.join(resourcesDir, file);
-            await signFile(filePath, credentials);
-          }
+                // Merge artifacts from both sources (context and dist directory)
+                exeArtifacts = [ ...new Set([ ...exeArtifacts, ...distExeArtifacts ]) ];
+            }
+
+            console.log(`Found ${exeArtifacts.length} artifact(s) to sign: ${exeArtifacts}`);
+
+            // SIGN ALL ARTIFACTS (after checksums are locked in latest.yml)
+            console.log('\n🔐 Signing all artifacts...');
+            for (const filePath of exeArtifacts) {
+                await signFile(filePath, credentials);
+            }
+
+            // Also sign resources if they exist
+            const resourcesDir = path.join(__dirname, 'dist', 'win-unpacked', 'resources');
+
+            await signResourcesIfPresent(resourcesDir, credentials);
         }
-      }
-    }
 
-    console.log('\n═══════════════════════════════════════════════════');
-    console.log('      ✅ Signing & Icon Embedding Completed Successfully');
-    console.log('═══════════════════════════════════════════════════\n');
+        console.log('\n═══════════════════════════════════════════════════');
+        console.log('      ✅ Signing & Icon Embedding Completed Successfully');
+        console.log('═══════════════════════════════════════════════════\n');
 
-  } catch (error) {
+    } catch (error) {
         console.error('\n═══════════════════════════════════════════════════');
         console.error('      ❌ Signing Failed');
         console.error('═══════════════════════════════════════════════════');

@@ -33,7 +33,11 @@ contextBridge.exposeInMainWorld('sonacoveElectronAPI', {
          */
         on: (channel, listener) => {
             if (!ALLOWED_CHANNELS.includes(channel)) {
-                return () => {};
+                // Channel not allowed: return a no-op unsubscribe so callers
+                // can always invoke the returned function safely.
+                return () => {
+                    // Nothing was registered, so there is nothing to remove.
+                };
             }
             const cb = (_event, ...args) => listener(...args);
 

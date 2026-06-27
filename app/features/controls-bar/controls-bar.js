@@ -36,6 +36,12 @@
     const MIN_SPINNER_MS = 400;
     const MAX_SPINNER_MS = 4000;
 
+    /**
+     * Clears the loading (spinner) state for a control and removes its timer.
+     *
+     * @param {Element} el - The control element to clear.
+     * @returns {void}
+     */
     function clearLoading(el) {
         const s = loadingState.get(el);
 
@@ -46,6 +52,13 @@
         el.classList.remove('cb-loading');
     }
 
+    /**
+     * Toggles the loading (spinner) state for a control.
+     *
+     * @param {Element} el - The control element to update.
+     * @param {boolean} on - Whether to show (true) or hide (false) the spinner.
+     * @returns {void}
+     */
     function setLoading(el, on) {
         if (!el) {
             return;
@@ -555,6 +568,7 @@
     recordItem?.addEventListener('click', () => {
         setLoading(recordItem, true);
         api.toggleRecord?.();
+
         // Keep the menu open so the spinner stays visible; applyRecording closes
         // it once the recording state confirms (or the loading timeout fires).
     });

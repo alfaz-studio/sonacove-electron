@@ -1,11 +1,9 @@
-'use strict';
-
-const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
+const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const test = require('node:test');
 
 /**
  * Same module-cache trick as recording.test.js: inject a fake `electron`
@@ -16,17 +14,26 @@ function installFakeElectron(userDataDir, documentsDir, picturesDir) {
     const fakeElectron = {
         app: {
             getPath: k => {
-                if (k === 'userData') return userDataDir;
-                if (k === 'documents') return documentsDir;
-                if (k === 'pictures') return picturesDir;
+                if (k === 'userData') {
+                    return userDataDir;
+                }
+                if (k === 'documents') {
+                    return documentsDir;
+                }
+                if (k === 'pictures') {
+                    return picturesDir;
+                }
 
                 return path.join(os.tmpdir(), `fake-${k}`);
             }
         },
-        ipcMain: { handle: () => {} },
-        BrowserWindow: { fromWebContents: () => null, getAllWindows: () => [] },
-        dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
-        shell: { openPath: async () => '', showItemInFolder: () => {} }
+        ipcMain: { handle: () => { /* no-op: handlers are unused in these tests */ } },
+        BrowserWindow: { fromWebContents: () => null,
+            getAllWindows: () => [] },
+        dialog: { showOpenDialog: () => Promise.resolve({ canceled: true,
+            filePaths: [] }) },
+        shell: { openPath: () => Promise.resolve(''),
+            showItemInFolder: () => { /* no-op: nothing to reveal in tests */ } }
     };
 
     require.cache[require.resolve('electron')] = {
@@ -37,6 +44,12 @@ function installFakeElectron(userDataDir, documentsDir, picturesDir) {
     };
 }
 
+/**
+ * Drops the SUT and the fake electron module from the require cache so the
+ * next require() re-evaluates against a freshly installed fake.
+ *
+ * @returns {void}
+ */
 function resetSutCache() {
     const toDrop = [
         '../app/features/sonacovePaths.js'
@@ -52,7 +65,13 @@ function resetSutCache() {
     } catch { /* not cached yet */ }
 }
 
-async function mkTempDir(prefix) {
+/**
+ * Creates a uniquely named temporary directory under the OS temp dir.
+ *
+ * @param {string} prefix - Filename prefix for the temp directory.
+ * @returns {Promise<string>} Resolves to the created directory path.
+ */
+function mkTempDir(prefix) {
     return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
@@ -78,7 +97,9 @@ test('sonacovePaths.loadSettings — mismatched version falls back to defaults a
     const originalWarn = console.warn;
     const warnCalls = [];
 
-    console.warn = (...args) => { warnCalls.push(args); };
+    console.warn = (...args) => {
+        warnCalls.push(args);
+    };
 
     try {
         const { getSavePathsInfo } = require('../app/features/sonacovePaths.js');
@@ -106,9 +127,12 @@ test('sonacovePaths.loadSettings — mismatched version falls back to defaults a
         assert.ok(matched, 'console.warn carried the version-mismatch message');
     } finally {
         console.warn = originalWarn;
-        await fs.rm(userDataDir, { recursive: true, force: true });
-        await fs.rm(documentsDir, { recursive: true, force: true });
-        await fs.rm(picturesDir, { recursive: true, force: true });
+        await fs.rm(userDataDir, { recursive: true,
+            force: true });
+        await fs.rm(documentsDir, { recursive: true,
+            force: true });
+        await fs.rm(picturesDir, { recursive: true,
+            force: true });
     }
 });
 
@@ -149,9 +173,12 @@ test('sonacovePaths.saveSettings — concurrent saves of different keys both lan
         assert.equal(parsed.recordings, pathA, 'recordings override survived concurrent save');
         assert.equal(parsed.screenshots, pathB, 'screenshots override survived concurrent save');
     } finally {
-        await fs.rm(userDataDir, { recursive: true, force: true });
-        await fs.rm(documentsDir, { recursive: true, force: true });
-        await fs.rm(picturesDir, { recursive: true, force: true });
+        await fs.rm(userDataDir, { recursive: true,
+            force: true });
+        await fs.rm(documentsDir, { recursive: true,
+            force: true });
+        await fs.rm(picturesDir, { recursive: true,
+            force: true });
     }
 });
 
@@ -201,109 +228,126 @@ test('sonacovePaths.saveSettings — rename failure leaves existing file untouch
         assert.equal(afterRaw, beforeRaw, 'target file is byte-identical to pre-crash state');
     } finally {
         fsSync.promises.rename = realRename;
-        await fs.rm(userDataDir, { recursive: true, force: true });
-        await fs.rm(documentsDir, { recursive: true, force: true });
-        await fs.rm(picturesDir, { recursive: true, force: true });
+        await fs.rm(userDataDir, { recursive: true,
+            force: true });
+        await fs.rm(documentsDir, { recursive: true,
+            force: true });
+        await fs.rm(picturesDir, { recursive: true,
+            force: true });
     }
 });
 
-test('sonacovePaths.getAllowedRevealDirs — v1 file with custom overrides includes defaults, overrides, and legacy', async () => {
-    const userDataDir = await mkTempDir('sonacove-paths-ud-');
-    const documentsDir = await mkTempDir('sonacove-paths-docs-');
-    const picturesDir = await mkTempDir('sonacove-paths-pics-');
+test(
+    'sonacovePaths.getAllowedRevealDirs — v1 file with custom overrides includes defaults, overrides, and legacy',
+    async () => {
+        const userDataDir = await mkTempDir('sonacove-paths-ud-');
+        const documentsDir = await mkTempDir('sonacove-paths-docs-');
+        const picturesDir = await mkTempDir('sonacove-paths-pics-');
 
-    // Put custom overrides under documentsDir (an allowed-root in the fake
-    // electron) so loadSettings()'s allowlist check accepts them. Paths
-    // outside the allowed roots are now rejected during load and dropped
-    // back to null, which is the behaviour Fix 1 introduced.
-    const customRecordings = path.join(documentsDir, 'CustomRecordings');
-    const customScreenshots = path.join(documentsDir, 'CustomScreenshots');
+        // Put custom overrides under documentsDir (an allowed-root in the fake
+        // electron) so loadSettings()'s allowlist check accepts them. Paths
+        // outside the allowed roots are now rejected during load and dropped
+        // back to null, which is the behaviour Fix 1 introduced.
+        const customRecordings = path.join(documentsDir, 'CustomRecordings');
+        const customScreenshots = path.join(documentsDir, 'CustomScreenshots');
 
-    const settingsPath = path.join(userDataDir, '.sonacove-save-paths.json');
+        const settingsPath = path.join(userDataDir, '.sonacove-save-paths.json');
 
-    fsSync.writeFileSync(settingsPath, JSON.stringify({
-        version: 1,
-        recordings: customRecordings,
-        screenshots: customScreenshots
-    }));
+        fsSync.writeFileSync(settingsPath, JSON.stringify({
+            version: 1,
+            recordings: customRecordings,
+            screenshots: customScreenshots
+        }));
 
-    resetSutCache();
-    installFakeElectron(userDataDir, documentsDir, picturesDir);
+        resetSutCache();
+        installFakeElectron(userDataDir, documentsDir, picturesDir);
 
-    try {
-        const { getAllowedRevealDirs } = require('../app/features/sonacovePaths.js');
+        try {
+            const { getAllowedRevealDirs } = require('../app/features/sonacovePaths.js');
 
-        const dirs = getAllowedRevealDirs();
+            const dirs = getAllowedRevealDirs();
 
-        const expectedDefaultRecordings = path.join(documentsDir, 'Sonacove', 'Recordings');
-        const expectedDefaultScreenshots = path.join(documentsDir, 'Sonacove', 'Screenshots');
-        const expectedLegacy = path.join(picturesDir, 'Sonacove Screenshots');
+            const expectedDefaultRecordings = path.join(documentsDir, 'Sonacove', 'Recordings');
+            const expectedDefaultScreenshots = path.join(documentsDir, 'Sonacove', 'Screenshots');
+            const expectedLegacy = path.join(picturesDir, 'Sonacove Screenshots');
 
-        // Defaults present.
-        assert.ok(dirs.includes(expectedDefaultRecordings), 'includes default recordings dir');
-        assert.ok(dirs.includes(expectedDefaultScreenshots), 'includes default screenshots dir');
-        // Legacy ~/Pictures/Sonacove Screenshots present.
-        assert.ok(dirs.includes(expectedLegacy), 'includes legacy pictures screenshots dir');
-        // Custom overrides present.
-        assert.ok(dirs.includes(customRecordings), 'includes custom recordings override');
-        assert.ok(dirs.includes(customScreenshots), 'includes custom screenshots override');
-    } finally {
-        await fs.rm(userDataDir, { recursive: true, force: true });
-        await fs.rm(documentsDir, { recursive: true, force: true });
-        await fs.rm(picturesDir, { recursive: true, force: true });
-    }
-});
+            // Defaults present.
+            assert.ok(dirs.includes(expectedDefaultRecordings), 'includes default recordings dir');
+            assert.ok(dirs.includes(expectedDefaultScreenshots), 'includes default screenshots dir');
 
-test('sonacovePaths.loadSettings — relative/traversal stored paths are rejected and fall back to defaults', async () => {
+            // Legacy ~/Pictures/Sonacove Screenshots present.
+            assert.ok(dirs.includes(expectedLegacy), 'includes legacy pictures screenshots dir');
+
+            // Custom overrides present.
+            assert.ok(dirs.includes(customRecordings), 'includes custom recordings override');
+            assert.ok(dirs.includes(customScreenshots), 'includes custom screenshots override');
+        } finally {
+            await fs.rm(userDataDir, { recursive: true,
+                force: true });
+            await fs.rm(documentsDir, { recursive: true,
+                force: true });
+            await fs.rm(picturesDir, { recursive: true,
+                force: true });
+        }
+    });
+
+test(
+    'sonacovePaths.loadSettings — relative/traversal stored paths are rejected and fall back to defaults',
+    async () => {
     // A hand-edited .sonacove-save-paths.json with `recordings: "../../etc/creds"`
     // would otherwise flow straight into fs.promises.mkdir() via
     // getRecordingsDir(), creating directories relative to process.cwd(). Fix 1
     // validates each stored path against the allowed-roots list at load time.
-    const userDataDir = await mkTempDir('sonacove-paths-ud-');
-    const documentsDir = await mkTempDir('sonacove-paths-docs-');
-    const picturesDir = await mkTempDir('sonacove-paths-pics-');
+        const userDataDir = await mkTempDir('sonacove-paths-ud-');
+        const documentsDir = await mkTempDir('sonacove-paths-docs-');
+        const picturesDir = await mkTempDir('sonacove-paths-pics-');
 
-    const settingsPath = path.join(userDataDir, '.sonacove-save-paths.json');
+        const settingsPath = path.join(userDataDir, '.sonacove-save-paths.json');
 
-    fsSync.writeFileSync(settingsPath, JSON.stringify({
-        version: 1,
-        recordings: '../../etc/creds',
-        screenshots: '../../var/whatever'
-    }));
+        fsSync.writeFileSync(settingsPath, JSON.stringify({
+            version: 1,
+            recordings: '../../etc/creds',
+            screenshots: '../../var/whatever'
+        }));
 
-    resetSutCache();
-    installFakeElectron(userDataDir, documentsDir, picturesDir);
+        resetSutCache();
+        installFakeElectron(userDataDir, documentsDir, picturesDir);
 
-    const originalWarn = console.warn;
-    const warnCalls = [];
+        const originalWarn = console.warn;
+        const warnCalls = [];
 
-    console.warn = (...args) => { warnCalls.push(args); };
+        console.warn = (...args) => {
+            warnCalls.push(args);
+        };
 
-    try {
-        const { getSavePathsInfo } = require('../app/features/sonacovePaths.js');
+        try {
+            const { getSavePathsInfo } = require('../app/features/sonacovePaths.js');
 
-        const info = getSavePathsInfo();
+            const info = getSavePathsInfo();
 
-        // Both overrides must have been rejected.
-        assert.equal(info.recordings.override, null, 'recordings override rejected -> null');
-        assert.equal(info.screenshots.override, null, 'screenshots override rejected -> null');
+            // Both overrides must have been rejected.
+            assert.equal(info.recordings.override, null, 'recordings override rejected -> null');
+            assert.equal(info.screenshots.override, null, 'screenshots override rejected -> null');
 
-        // `current` should fall back to the platform defaults.
-        const expectedRecordings = path.join(documentsDir, 'Sonacove', 'Recordings');
-        const expectedScreenshots = path.join(documentsDir, 'Sonacove', 'Screenshots');
+            // `current` should fall back to the platform defaults.
+            const expectedRecordings = path.join(documentsDir, 'Sonacove', 'Recordings');
+            const expectedScreenshots = path.join(documentsDir, 'Sonacove', 'Screenshots');
 
-        assert.equal(info.recordings.current, expectedRecordings);
-        assert.equal(info.screenshots.current, expectedScreenshots);
+            assert.equal(info.recordings.current, expectedRecordings);
+            assert.equal(info.screenshots.current, expectedScreenshots);
 
-        // A warn must have been emitted naming validateUserPath.
-        const matched = warnCalls.some(call =>
-            call.some(arg => typeof arg === 'string' && arg.includes('validateUserPath')));
+            // A warn must have been emitted naming validateUserPath.
+            const matched = warnCalls.some(call =>
+                call.some(arg => typeof arg === 'string' && arg.includes('validateUserPath')));
 
-        assert.ok(matched, 'console.warn carried the validateUserPath-rejection message');
-    } finally {
-        console.warn = originalWarn;
-        await fs.rm(userDataDir, { recursive: true, force: true });
-        await fs.rm(documentsDir, { recursive: true, force: true });
-        await fs.rm(picturesDir, { recursive: true, force: true });
-    }
-});
+            assert.ok(matched, 'console.warn carried the validateUserPath-rejection message');
+        } finally {
+            console.warn = originalWarn;
+            await fs.rm(userDataDir, { recursive: true,
+                force: true });
+            await fs.rm(documentsDir, { recursive: true,
+                force: true });
+            await fs.rm(picturesDir, { recursive: true,
+                force: true });
+        }
+    });

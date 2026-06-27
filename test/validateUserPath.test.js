@@ -1,9 +1,7 @@
-'use strict';
-
-const test = require('node:test');
 const assert = require('node:assert/strict');
 const os = require('node:os');
 const path = require('node:path');
+const test = require('node:test');
 
 const { validateUserPath } = require('../app/features/sanitizers');
 
@@ -62,6 +60,7 @@ test('validateUserPath accepts a `..` traversal that normalizes back into an all
     const out = validateUserPath(candidate, [ ALLOWED_ROOT ]);
 
     assert.ok('ok' in out, `expected ok, got ${JSON.stringify(out)}`);
+
     // After normalization the `..` is gone.
     assert.ok(!out.ok.includes(`${path.sep}..${path.sep}`));
 });

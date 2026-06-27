@@ -1,9 +1,10 @@
+const { spawn } = require('child_process');
 const https = require('https');
 const fs = require('original-fs');
 const { createWriteStream } = require('original-fs');
 const path = require('path');
-const { spawn } = require('child_process');
-const { validPR, validBuildId, rmDir, extractZip, execFileAsync, getDirSize } = require('./fs-utils');
+
+const { validPR, validBuildId, extractZip, execFileAsync, getDirSize } = require('./fs-utils');
 const { patchBuildUrls, buildLaunchEnv } = require('./patching');
 
 // ── Download helpers ────────────────────────────────────────────────────────
@@ -30,7 +31,9 @@ function downloadAsset(assetUrl, destPath, token, onProgress) {
         const url = new URL(assetUrl);
 
         const req = https.get(
-            { hostname: url.hostname, path: url.pathname + url.search, headers },
+            { hostname: url.hostname,
+                path: url.pathname + url.search,
+                headers },
             res => {
                 // GitHub redirects to S3 — follow the redirect
                 if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -64,7 +67,7 @@ function downloadAsset(assetUrl, destPath, token, onProgress) {
                     resolve();
                 });
                 file.on('error', err => {
-                    fs.unlink(destPath, () => {});
+                    fs.unlink(destPath, () => { /* best-effort cleanup */ });
                     reject(err);
                 });
             }
@@ -115,7 +118,7 @@ function downloadUrl(url, destPath, onProgress) {
                 resolve();
             });
             file.on('error', err => {
-                fs.unlink(destPath, () => {});
+                fs.unlink(destPath, () => { /* best-effort cleanup */ });
                 reject(err);
             });
         });
@@ -149,7 +152,8 @@ async function downloadBuild({ prNumber, buildId, assetUrl, sha, token, cacheDir
         if (process.platform === 'win32') {
             await execFileAsync('cmd', [ '/c', 'rd', '/s', '/q', prCacheDir ]);
         } else {
-            fs.rmSync(prCacheDir, { recursive: true, force: true });
+            fs.rmSync(prCacheDir, { recursive: true,
+                force: true });
         }
     }
 
@@ -160,7 +164,8 @@ async function downloadBuild({ prNumber, buildId, assetUrl, sha, token, cacheDir
 
     await downloadAsset(assetUrl, zipPath, token, progress => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('download-progress', { prNumber: progressKey, progress });
+            mainWindow.webContents.send('download-progress', { prNumber: progressKey,
+                progress });
         }
     });
 
@@ -173,7 +178,8 @@ async function downloadBuild({ prNumber, buildId, assetUrl, sha, token, cacheDir
     // Write meta
     fs.writeFileSync(
         path.join(prCacheDir, 'meta.json'),
-        JSON.stringify({ sha, downloadedAt: new Date().toISOString() })
+        JSON.stringify({ sha,
+            downloadedAt: new Date().toISOString() })
     );
 
     return { success: true };
@@ -225,7 +231,7 @@ async function launchBuild({ prNumber, buildId, cacheDir, loadSettings }) {
     // Security note: --ignore-certificate-errors is intentional here. The staging
     // launcher's UI shows a visible ".has-override" indicator when custom URLs are
     // active, making it clear to the user that cert validation is relaxed.
-    const hasOverrides = !!(overrides.landingUrl || overrides.meetUrl);
+    const hasOverrides = Boolean(overrides.landingUrl || overrides.meetUrl);
     const launchArgs = hasOverrides ? [ '--ignore-certificate-errors' ] : [];
 
     if (process.platform === 'darwin') {
@@ -234,6 +240,7 @@ async function launchBuild({ prNumber, buildId, cacheDir, loadSettings }) {
         // Launch the inner binary directly so env vars are forwarded.
         // `open -a` doesn't pass environment variables to the child process.
         const macOSDir = path.join(appPath, 'Contents', 'MacOS');
+
         // Electron's main binary has no extension; helper executables and
         // libraries (crash reporter, etc.) do.  Prefer the extensionless entry
         // so we don't accidentally launch a helper if one is ever added.
@@ -260,7 +267,10 @@ async function launchBuild({ prNumber, buildId, cacheDir, loadSettings }) {
 
         const exePath = path.join(extractDir, exe);
 
-        spawn(exePath, launchArgs, { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
+        spawn(exePath, launchArgs, { detached: true,
+            stdio: 'ignore',
+            cwd: extractDir,
+            env }).unref();
     } else {
         // Linux — look for the main executable (no extension, executable bit set)
         const entries = fs.readdirSync(extractDir);
@@ -275,7 +285,10 @@ async function launchBuild({ prNumber, buildId, cacheDir, loadSettings }) {
         // Ensure the binary is executable (ZIP extraction may not preserve mode bits)
         await execFileAsync('chmod', [ '+x', binPath ]);
 
-        spawn(binPath, launchArgs, { detached: true, stdio: 'ignore', cwd: extractDir, env }).unref();
+        spawn(binPath, launchArgs, { detached: true,
+            stdio: 'ignore',
+            cwd: extractDir,
+            env }).unref();
     }
 
     return { success: true };
@@ -321,7 +334,8 @@ async function clearCache({ prNumber, prNumbers, buildId, cacheDir }) {
             if (process.platform === 'win32') {
                 await execFileAsync('cmd', [ '/c', 'rd', '/s', '/q', target ]);
             } else {
-                fs.rmSync(target, { recursive: true, force: true });
+                fs.rmSync(target, { recursive: true,
+                    force: true });
             }
         } catch (err) {
             errors.push(err.message);
@@ -329,7 +343,8 @@ async function clearCache({ prNumber, prNumbers, buildId, cacheDir }) {
     }
 
     if (errors.length > 0) {
-        return { success: false, error: errors.join('\n') };
+        return { success: false,
+            error: errors.join('\n') };
     }
 
     return { success: true };
@@ -341,7 +356,8 @@ async function clearCache({ prNumber, prNumbers, buildId, cacheDir }) {
  */
 function getCacheInfo(cacheDir) {
     if (!fs.existsSync(cacheDir)) {
-        return { totalSize: 0, entries: [] };
+        return { totalSize: 0,
+            entries: [] };
     }
 
     const entries = [];
@@ -358,10 +374,15 @@ function getCacheInfo(cacheDir) {
         const size = getDirSize(dirPath);
 
         totalSize += size;
-        entries.push({ tag: dir, size });
+        entries.push({ tag: dir,
+            size });
     }
 
-    return { totalSize, entries };
+    return { totalSize,
+        entries };
 }
 
-module.exports = { downloadBuild, launchBuild, clearCache, getCacheInfo };
+module.exports = { downloadBuild,
+    launchBuild,
+    clearCache,
+    getCacheInfo };

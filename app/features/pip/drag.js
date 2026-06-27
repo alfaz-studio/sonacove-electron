@@ -6,6 +6,7 @@
  */
 
 const { ipcMain, screen } = require('electron');
+
 const { IPC } = require('./constants');
 
 let _getWindow = null;
@@ -65,7 +66,7 @@ function setupDragHandlers(getWindow) {
                 x: Math.round(pos.x - _offsetX),
                 y: Math.round(pos.y - _offsetY),
                 width: dragWidth,
-                height: dragHeight,
+                height: dragHeight
             });
         }, 16);
     });
@@ -98,5 +99,5 @@ function cleanup() {
 module.exports = {
     isDragging,
     setupDragHandlers,
-    cleanup,
+    cleanup
 };

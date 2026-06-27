@@ -1,10 +1,8 @@
-'use strict';
-
-const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const test = require('node:test');
 
 const { openExclusiveWriteStream, openExclusiveFileHandle, MAX_FILENAME_COLLISIONS }
     = require('../app/features/fileWriters');
@@ -18,10 +16,17 @@ async function withTempDir(body) {
     try {
         await body(dir);
     } finally {
-        await fs.rm(dir, { recursive: true, force: true });
+        await fs.rm(dir, { recursive: true,
+            force: true });
     }
 }
 
+/**
+ * Closes a writable stream and resolves once it has finished flushing.
+ *
+ * @param {import('node:fs').WriteStream} stream - The stream to close.
+ * @returns {Promise<void>} Resolves when the stream has ended.
+ */
 function closeStream(stream) {
     return new Promise(resolve => stream.end(resolve));
 }
@@ -74,7 +79,13 @@ test('openExclusiveWriteStream creates the file atomically (writable)', async ()
         const { stream, filePath } = await openExclusiveWriteStream(dir, 'recording', '.webm');
 
         await new Promise((resolve, reject) => {
-            stream.write('hello', err => err ? reject(err) : resolve());
+            stream.write('hello', err => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
         });
         await closeStream(stream);
 
@@ -101,7 +112,9 @@ test('openExclusiveWriteStream throws after MAX_FILENAME_COLLISIONS exhausted', 
 
 test('openExclusiveWriteStream propagates non-EEXIST errors', async () => {
     await assert.rejects(
-        () => openExclusiveWriteStream(path.join(os.tmpdir(), 'this-dir-definitely-does-not-exist-xyz'), 'recording', '.webm'),
+        () => openExclusiveWriteStream(
+            path.join(os.tmpdir(), 'this-dir-definitely-does-not-exist-xyz'), 'recording', '.webm'
+        ),
         err => err.code === 'ENOENT'
     );
 });
@@ -114,6 +127,7 @@ test('openExclusiveFileHandle uses the base filename when there is no collision'
 
         try {
             assert.equal(path.basename(filePath), 'shot.png');
+
             // FileHandle from fs.promises.open exposes a fd-bearing object;
             // a quick writeFile + readFile round-trip proves it's open.
             await handle.writeFile(Buffer.from('png-bytes'));
@@ -173,7 +187,9 @@ test('openExclusiveFileHandle throws after MAX_FILENAME_COLLISIONS exhausted', a
 
 test('openExclusiveFileHandle propagates non-EEXIST errors', async () => {
     await assert.rejects(
-        () => openExclusiveFileHandle(path.join(os.tmpdir(), 'this-dir-definitely-does-not-exist-xyz2'), 'shot', '.png'),
+        () => openExclusiveFileHandle(
+            path.join(os.tmpdir(), 'this-dir-definitely-does-not-exist-xyz2'), 'shot', '.png'
+        ),
         err => err.code === 'ENOENT'
     );
 });
