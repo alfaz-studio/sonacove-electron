@@ -23,6 +23,7 @@ const {
 const POLL_INTERVAL_MS = 1000;
 
 let _pollTimer = null;
+
 // Set while `startSystemVolumeWatcher` is awaiting its initial probe but
 // before `_pollTimer` is a real `setInterval` handle. Lets a re-entrant
 // start call bail at the guard, and lets the post-probe race check detect
@@ -32,25 +33,31 @@ let _last = {
     volume: null,
     muted: null
 };
+
 // Bumped by every optimistic write (setSystemMuted / setSystemVolume). A
 // poll tick captures this at the start of its read and discards the result
 // if the version changed mid-flight — prevents a stale OS reading from
 // clobbering a fresh optimistic update.
 let _version = 0;
+
 // Guard against overlapping ticks when a single read takes longer than the
 // interval (common on Windows PowerShell cold start). Without this, slow
 // reads queue up and the spawn rate grows unbounded.
 let _inFlight = false;
+
 // Cleared at startup if `loudness.getVolume()` throws or returns garbage —
 // e.g. PulseAudio/PipeWire-only Linux systems where amixer no-ops silently.
 // When false, the watcher never starts and set* calls early-return.
 let _supported = true;
+
 // Set on watcher start. Broadcasts target only this window so PiP/overlay
 // renderers — which don't consume system-volume-changed — aren't paged.
 let _targetWindow = null;
+
 // Suppress repeated warnings while reads are failing back-to-back (broken
 // amixer, locked-down PowerShell policy). Flips back when a read recovers.
 let _readFailing = false;
+
 // Set during stopSystemVolumeWatcher() so any IPC request arriving in the
 // narrow window between stop and full IPC-listener teardown can't trigger
 // a `_read()` spawn — `stop` resets `_supported = true` (for dev hot-reload
@@ -175,10 +182,12 @@ async function startSystemVolumeWatcher(targetWindow) {
         return;
     }
     _stopped = false;
+
     // Claim the slot before awaiting the probe so a re-entrant call that
     // arrives during `_read()` bails out at the guard above instead of
     // racing a second OS probe + duplicate setInterval.
     _starting = true;
+
     // `_targetWindow` is fixed for the lifetime of the watcher. If the main
     // BrowserWindow is ever destroyed and recreated (dev reload, error
     // recovery), broadcasts will silently no-op against the destroyed-window
@@ -226,7 +235,8 @@ function stopSystemVolumeWatcher() {
         _pollTimer = null;
     }
     _starting = false;
-    _last = { volume: null, muted: null };
+    _last = { volume: null,
+        muted: null };
     _version = 0;
     _inFlight = false;
     _supported = true;
@@ -252,7 +262,8 @@ async function setSystemMuted(muted) {
     try {
         await loudness.setMuted(Boolean(muted));
         _version++;
-        _last = { volume: _last.volume, muted: Boolean(muted) };
+        _last = { volume: _last.volume,
+            muted: Boolean(muted) };
         _broadcast(_last);
     } catch (err) {
         console.warn('⚠️ system-volume setMuted failed:', err?.message || err);
@@ -301,11 +312,15 @@ async function setSystemVolume(volume) {
             // Unmute is a courtesy follow-up; the volume change is still
             // valid and the renderer needs to see it. The next poll tick
             // will reconcile the actual muted state.
-            console.warn('⚠️ system-volume setMuted(false) failed after setVolume succeeded:', innerErr?.message || innerErr);
+            console.warn(
+                '⚠️ system-volume setMuted(false) failed after setVolume succeeded:',
+                innerErr?.message || innerErr
+            );
         }
     }
     _version++;
-    _last = { volume: clamped, muted };
+    _last = { volume: clamped,
+        muted };
     _broadcast(_last);
 }
 
@@ -339,7 +354,8 @@ async function sendCurrentSystemVolume(webContents) {
     // waiting — `_send` bakes in `supported: _supported` (false here), so
     // the hook learns the capability state and hides the feature UI.
     if (!_supported) {
-        _send(webContents, { volume: null, muted: false });
+        _send(webContents, { volume: null,
+            muted: false });
 
         return;
     }
@@ -367,7 +383,8 @@ async function sendCurrentSystemVolume(webContents) {
     }
 
     if (!webContents.isDestroyed()) {
-        _send(webContents, payload || { volume: null, muted: false });
+        _send(webContents, payload || { volume: null,
+            muted: false });
     }
 }
 

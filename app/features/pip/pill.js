@@ -6,6 +6,7 @@
  */
 
 const { ipcMain, screen } = require('electron');
+
 const { PILL_SIZE, PILL_HINT_HEADROOM, PILL_HINT_SIDEROOM, MARGIN, IPC } = require('./constants');
 const { getMainWindowExcludingPip: getMainWindow } = require('./helpers');
 const { getCardPosition } = require('./sizing');
@@ -93,7 +94,7 @@ function shrinkToPill() {
             x: Math.max(0, pillX),
             y: Math.max(0, pillY),
             width: pillW,
-            height: pillH,
+            height: pillH
         });
     }, 220);
 }
@@ -125,7 +126,10 @@ function expandFromPill(size) {
     // pinned min/max to PILL_SIZE — clear it before resizing.
     win.setMaximumSize(0, 0); // 0 = no limit
     win.setMinimumSize(1, 1);
-    win.setBounds({ x: posX, y: posY, width: W, height: H });
+    win.setBounds({ x: posX,
+        y: posY,
+        width: W,
+        height: H });
 
     win.webContents.send(IPC.ENTER_PANEL_MODE);
 
@@ -165,5 +169,5 @@ module.exports = {
     shrinkToPill,
     expandFromPill,
     setupPillHandlers,
-    cleanup,
+    cleanup
 };

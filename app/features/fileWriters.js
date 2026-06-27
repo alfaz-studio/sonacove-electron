@@ -1,5 +1,3 @@
-'use strict';
-
 const fs = require('fs');
 const path = require('path');
 
@@ -39,11 +37,13 @@ async function openFileExclusive(dir, baseName, ext, opener) {
         try {
             const handle = await opener(filePath);
 
-            return { handle, filePath };
+            return { handle,
+                filePath };
         } catch (err) {
             if (err.code !== 'EEXIST') {
                 throw err;
             }
+
             // collision — try next suffix
         }
     }
@@ -68,20 +68,24 @@ async function openFileExclusive(dir, baseName, ext, opener) {
  *   attempts, or if a non-EEXIST fs error occurs.
  */
 async function openExclusiveWriteStream(dir, baseName, ext) {
-    const { handle, filePath } = await openFileExclusive(dir, baseName, ext, filePath => {
-        const stream = fs.createWriteStream(filePath, { flags: 'wx' });
+    const { handle, filePath } = await openFileExclusive(dir, baseName, ext, targetPath => {
+        const stream = fs.createWriteStream(targetPath, { flags: 'wx' });
 
         return new Promise((resolve, reject) => {
             // We must remove both listeners on either outcome — otherwise the
             // unused one stays attached and a later 'error' on a successfully
             // opened stream would reject this promise after we've already
             // returned the stream to the caller (unhandled rejection).
+            // onError is forward-declared so onOpen can detach it; assigned below.
+            let onError = null;
             const onOpen = () => {
                 stream.removeListener('error', onError);
                 resolve(stream);
             };
-            const onError = err => {
+
+            onError = err => {
                 stream.removeListener('open', onOpen);
+
                 // For EEXIST, the WriteStream auto-destroys; for other errors
                 // we also want to free the descriptor so it can't leak.
                 if (!stream.destroyed) {
@@ -95,7 +99,8 @@ async function openExclusiveWriteStream(dir, baseName, ext) {
         });
     });
 
-    return { stream: handle, filePath };
+    return { stream: handle,
+        filePath };
 }
 
 /**
@@ -111,8 +116,8 @@ async function openExclusiveWriteStream(dir, baseName, ext) {
  * @param {string} ext - Extension including the leading dot, e.g. '.png'.
  * @returns {Promise<{ handle: import('fs').promises.FileHandle, filePath: string }>}
  */
-async function openExclusiveFileHandle(dir, baseName, ext) {
-    return openFileExclusive(dir, baseName, ext, filePath => fs.promises.open(filePath, 'wx'));
+function openExclusiveFileHandle(dir, baseName, ext) {
+    return openFileExclusive(dir, baseName, ext, targetPath => fs.promises.open(targetPath, 'wx'));
 }
 
 module.exports = {

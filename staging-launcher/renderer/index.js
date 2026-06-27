@@ -2,13 +2,13 @@
 let prs = [];
 let mainBuild = null; // { buildId, title, sha, commitMessage, ... }
 let token = null;
-let downloading = {}; // { prNumber|buildId: progress% }
-let launching = {};   // { prNumber|buildId: true }
+const downloading = {}; // { prNumber|buildId: progress% }
+const launching = {}; // { prNumber|buildId: true }
 let closedExpanded = false;
 let repoBaseUrl = 'https://github.com/alfaz-studio/sonacove-electron'; // fallback
 
 // ── DOM refs ────────────────────────────────────────────────────────────────
-let prOverrides = {};  // { prNumber: { landingUrl, meetUrl } }
+let prOverrides = {}; // { prNumber: { landingUrl, meetUrl } }
 const listItems = document.getElementById('pr-list-items');
 const listLoading = document.getElementById('pr-list-loading');
 const listEmpty = document.getElementById('pr-list-empty');
@@ -27,7 +27,35 @@ const toggleClosedBtn = document.getElementById('btn-toggle-closed');
 const mainBuildSection = document.getElementById('main-build-section');
 const mainBuildCard = document.getElementById('main-build-card');
 
+// ── Icons (SVG markup extracted so it lives in a single place) ───────────────
+const COMMIT_ICON_SVG
+    = '<svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">'
+    + '<path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 '
+    + '4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 '
+    + '0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/></svg>';
+
+const LINK_ICON_SVG
+    = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">'
+    + '<path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 '
+    + '8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 '
+    + '2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>'
+    + '<path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 '
+    + '3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0'
+    + '-4.243-4.243L6.586 4.672z"/></svg>';
+
+const MAIN_AVATAR_SVG
+    = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">'
+    + '<path d="M5 3.254V3.25v.005a.75.75 0 1 1 0-.005zm.45 1.9a2.25 2.25 0 1 0-1.95.218'
+    + 'v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 '
+    + '0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 '
+    + '1.5zm-8.5 4.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z"/></svg>';
+
 // ── Init ────────────────────────────────────────────────────────────────────
+/**
+ * Load settings, fetch repo info, wire the progress listener, and do the
+ * initial PR + cache refresh.
+ * @returns {Promise<void>}
+ */
 async function init() {
     const settings = await window.stagingAPI.getSettings();
 
@@ -61,6 +89,10 @@ async function init() {
 }
 
 // ── Fetch PRs ───────────────────────────────────────────────────────────────
+/**
+ * Fetch staging PR builds and the main build, then re-render the lists.
+ * @returns {Promise<void>}
+ */
 async function refreshPRs() {
     const refreshBtn = document.getElementById('btn-refresh');
 
@@ -72,21 +104,23 @@ async function refreshPRs() {
 
         const [ result, mainResult ] = await Promise.all([
             window.stagingAPI.getStagingPRs(token),
-            window.stagingAPI.getMainBuild(token).catch(() => ({ build: null }))
+            window.stagingAPI.getMainBuild(token).catch(() => {
+                return { build: null };
+            })
         ]);
 
         prs = result.prs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
         mainBuild = mainResult.build;
 
         if (result.rateLimit) {
-            rateLimitEl.textContent =
-                `API: ${result.rateLimit.remaining}/${result.rateLimit.limit} requests remaining`;
+            rateLimitEl.textContent
+                = `API: ${result.rateLimit.remaining}/${result.rateLimit.limit} requests remaining`;
         }
 
         const openCount = prs.filter(p => p.state === 'open').length;
         const totalCount = openCount + (mainBuild ? 1 : 0);
 
-        statusBadge.textContent = `${totalCount} build${totalCount !== 1 ? 's' : ''}`;
+        statusBadge.textContent = `${totalCount} build${totalCount === 1 ? '' : 's'}`;
         statusBadge.className = 'badge online';
 
         renderMainBuild();
@@ -100,6 +134,10 @@ async function refreshPRs() {
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
+/**
+ * Render the open and closed/merged PR lists into the DOM.
+ * @returns {void}
+ */
 function renderList() {
     const openPRs = prs.filter(pr => pr.state === 'open');
     const closedPRs = prs.filter(pr => pr.state === 'closed');
@@ -150,6 +188,10 @@ function renderList() {
 }
 
 // ── Main Build ──────────────────────────────────────────────────────────────
+/**
+ * Render (or hide) the main-branch build card.
+ * @returns {void}
+ */
 function renderMainBuild() {
     if (!mainBuild) {
         mainBuildSection.classList.add('hidden');
@@ -162,6 +204,11 @@ function renderMainBuild() {
     attachMainCardListeners();
 }
 
+/**
+ * Build the HTML markup for the main-branch build card.
+ * @param {object} build  Main build descriptor
+ * @returns {string} HTML string
+ */
 function buildMainCardHTML(build) {
     const isDownloading = downloading[build.buildId] !== undefined;
     const isLaunching = launching[build.buildId];
@@ -210,26 +257,24 @@ function buildMainCardHTML(build) {
 
     const commitHTML = build.commitMessage
         ? `<div class="pr-commit">
-               <svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                   <path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/>
-               </svg>
-               <a class="ext-link commit-link" href="#" data-url="${repoBaseUrl}/commit/${escapeHtml(build.sha)}">${escapeHtml(build.sha.substring(0, 7))}</a>
+               ${COMMIT_ICON_SVG}
+               <a class="ext-link commit-link" href="#"
+                  data-url="${repoBaseUrl}/commit/${escapeHtml(build.sha)}">${escapeHtml(build.sha.substring(0, 7))}</a>
                <span class="commit-msg">${escapeHtml(build.commitMessage)}</span>
            </div>`
         : '';
 
     // Per-build URL override toggle + config panel
-    const hasOverride = !!(prOverrides.main
+    const hasOverride = Boolean(prOverrides.main
         && (prOverrides.main.landingUrl || prOverrides.main.meetUrl));
     const override = prOverrides.main || {};
 
     if (build.hasAsset && !isDownloading && !isLaunching && actionsHTML) {
         actionsHTML += `
-            <button class="url-config-toggle${hasOverride ? ' has-override' : ''}" data-main-action="toggle-urls" title="${hasOverride ? 'Custom URLs active' : 'Custom preview URLs'}">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
-                    <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
-                </svg>
+            <button class="url-config-toggle${hasOverride ? ' has-override' : ''}"
+                    data-main-action="toggle-urls"
+                    title="${hasOverride ? 'Custom URLs active' : 'Custom preview URLs'}">
+                ${LINK_ICON_SVG}
             </button>`;
     }
 
@@ -249,7 +294,9 @@ function buildMainCardHTML(build) {
             </div>
             <div class="url-config-actions">
                 <button class="btn btn-sm btn-primary" data-main-action="save-urls">Save URLs</button>
-                ${hasOverride ? '<button class="btn btn-sm btn-secondary" data-main-action="clear-urls">Reset</button>' : ''}
+                ${hasOverride
+        ? '<button class="btn btn-sm btn-secondary" data-main-action="clear-urls">Reset</button>'
+        : ''}
             </div>
         </div>` : '';
 
@@ -257,9 +304,7 @@ function buildMainCardHTML(build) {
         <div class="pr-card ${accentClass}" id="main-build-inner-card">
             <div class="pr-card-header">
                 <div class="pr-avatar pr-avatar-fallback main-avatar">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M5 3.254V3.25v.005a.75.75 0 1 1 0-.005zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm-8.5 4.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z"/>
-                    </svg>
+                    ${MAIN_AVATAR_SVG}
                 </div>
                 <div class="pr-info">
                     <div class="pr-title-row">
@@ -279,6 +324,10 @@ function buildMainCardHTML(build) {
         </div>`;
 }
 
+/**
+ * Wire click handlers for the main build card's action buttons.
+ * @returns {void}
+ */
 function attachMainCardListeners() {
     const card = document.getElementById('main-build-inner-card');
 
@@ -291,6 +340,11 @@ function attachMainCardListeners() {
     }
 }
 
+/**
+ * Handle an action button click on the main build card.
+ * @param {string} action  Action name from the button's data attribute
+ * @returns {Promise<void>}
+ */
 async function handleMainAction(action) {
     if (!mainBuild) {
         return;
@@ -319,7 +373,7 @@ async function handleMainAction(action) {
             await window.stagingAPI.launchBuild({ buildId });
             await new Promise(r => setTimeout(r, 3000));
         } catch (err) {
-            alert(`Launch failed: ${err.message}`);
+            notify(`Launch failed: ${err.message}`);
         }
 
         delete launching[buildId];
@@ -330,7 +384,7 @@ async function handleMainAction(action) {
         const result = await window.stagingAPI.clearCache({ buildId });
 
         if (result && !result.success) {
-            alert(result.error || 'Failed to clear cache.');
+            notify(result.error || 'Failed to clear cache.');
             break;
         }
 
@@ -363,7 +417,8 @@ async function handleMainAction(action) {
         }
 
         if (landingUrl || meetUrl) {
-            prOverrides.main = { landingUrl: landingUrl || null, meetUrl: meetUrl || null };
+            prOverrides.main = { landingUrl: landingUrl || null,
+                meetUrl: meetUrl || null };
         } else {
             delete prOverrides.main;
         }
@@ -379,12 +434,19 @@ async function handleMainAction(action) {
 
     case 'clear-urls':
         delete prOverrides.main;
-        await window.stagingAPI.savePROverride({ buildId: 'main', landingUrl: null, meetUrl: null });
+        await window.stagingAPI.savePROverride({ buildId: 'main',
+            landingUrl: null,
+            meetUrl: null });
         renderMainBuild();
         break;
     }
 }
 
+/**
+ * Re-render a single PR card in place and re-attach its listeners.
+ * @param {number} prNumber  PR number to re-render
+ * @returns {void}
+ */
 function renderPRCard(prNumber) {
     const card = document.getElementById(`pr-card-${prNumber}`);
 
@@ -402,6 +464,11 @@ function renderPRCard(prNumber) {
     attachCardListeners(prNumber);
 }
 
+/**
+ * Build the HTML markup for a single PR card.
+ * @param {object} pr  PR descriptor
+ * @returns {string} HTML string
+ */
 function buildPRCardHTML(pr) {
     const isDownloading = downloading[pr.prNumber] !== undefined;
     const isLaunching = launching[pr.prNumber];
@@ -431,19 +498,25 @@ function buildPRCardHTML(pr) {
         accentClass = 'accent-warning';
         statusHTML = '<span class="status-tag update">Update Available</span>';
         actionsHTML = `
-            <button class="btn btn-primary btn-action" data-action="update" data-pr="${pr.prNumber}">Update & Launch</button>
-            <button class="btn btn-secondary btn-action" data-action="launch" data-pr="${pr.prNumber}">Launch Cached</button>
-            <button class="delete-cache-btn btn-action" data-action="delete" data-pr="${pr.prNumber}">Clear cache</button>`;
+            <button class="btn btn-primary btn-action" data-action="update"
+                data-pr="${pr.prNumber}">Update & Launch</button>
+            <button class="btn btn-secondary btn-action" data-action="launch"
+                data-pr="${pr.prNumber}">Launch Cached</button>
+            <button class="delete-cache-btn btn-action" data-action="delete"
+                data-pr="${pr.prNumber}">Clear cache</button>`;
     } else if (pr.cached) {
         accentClass = 'accent-success';
         statusHTML = '<span class="status-tag cached">Cached</span>';
         actionsHTML = `
-            <button class="btn btn-primary btn-action" data-action="launch" data-pr="${pr.prNumber}">Launch</button>
-            <button class="delete-cache-btn btn-action" data-action="delete" data-pr="${pr.prNumber}">Clear cache</button>`;
+            <button class="btn btn-primary btn-action" data-action="launch"
+                data-pr="${pr.prNumber}">Launch</button>
+            <button class="delete-cache-btn btn-action" data-action="delete"
+                data-pr="${pr.prNumber}">Clear cache</button>`;
     } else {
         statusHTML = '<span class="status-tag not-cached">Not Downloaded</span>';
         actionsHTML = `
-            <button class="btn btn-primary btn-action" data-action="download" data-pr="${pr.prNumber}">Download & Launch</button>`;
+            <button class="btn btn-primary btn-action" data-action="download"
+                data-pr="${pr.prNumber}">Download & Launch</button>`;
     }
 
     const initial = (pr.author || '?')[0].toUpperCase();
@@ -458,26 +531,24 @@ function buildPRCardHTML(pr) {
 
     const commitHTML = pr.commitMessage
         ? `<div class="pr-commit">
-               <svg class="commit-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                   <path d="M10.5 7.75a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm1.43.75a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32z"/>
-               </svg>
-               <a class="ext-link commit-link" href="#" data-url="${repoBaseUrl}/commit/${escapeHtml(pr.sha)}">${escapeHtml(pr.sha.substring(0, 7))}</a>
+               ${COMMIT_ICON_SVG}
+               <a class="ext-link commit-link" href="#"
+                  data-url="${repoBaseUrl}/commit/${escapeHtml(pr.sha)}">${escapeHtml(pr.sha.substring(0, 7))}</a>
                <span class="commit-msg">${escapeHtml(pr.commitMessage)}</span>
            </div>`
         : '';
 
     // Per-PR URL override toggle + config panel
-    const hasOverride = !!(prOverrides[pr.prNumber]
+    const hasOverride = Boolean(prOverrides[pr.prNumber]
         && (prOverrides[pr.prNumber].landingUrl || prOverrides[pr.prNumber].meetUrl));
     const override = prOverrides[pr.prNumber] || {};
 
     if (pr.hasAsset && !isDownloading && !isLaunching && actionsHTML) {
         actionsHTML += `
-            <button class="url-config-toggle${hasOverride ? ' has-override' : ''}" data-action="toggle-urls" data-pr="${pr.prNumber}" title="${hasOverride ? 'Custom URLs active' : 'Custom preview URLs'}">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
-                    <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
-                </svg>
+            <button class="url-config-toggle${hasOverride ? ' has-override' : ''}"
+                    data-action="toggle-urls" data-pr="${pr.prNumber}"
+                    title="${hasOverride ? 'Custom URLs active' : 'Custom preview URLs'}">
+                ${LINK_ICON_SVG}
             </button>`;
     }
 
@@ -496,8 +567,11 @@ function buildPRCardHTML(pr) {
                        placeholder="https://example.com/meet">
             </div>
             <div class="url-config-actions">
-                <button class="btn btn-sm btn-primary" data-action="save-urls" data-pr="${pr.prNumber}">Save URLs</button>
-                ${hasOverride ? `<button class="btn btn-sm btn-secondary" data-action="clear-urls" data-pr="${pr.prNumber}">Reset</button>` : ''}
+                <button class="btn btn-sm btn-primary" data-action="save-urls"
+                    data-pr="${pr.prNumber}">Save URLs</button>
+                ${hasOverride
+        ? `<button class="btn btn-sm btn-secondary" data-action="clear-urls" data-pr="${pr.prNumber}">Reset</button>`
+        : ''}
             </div>
         </div>` : '';
 
@@ -528,6 +602,11 @@ function buildPRCardHTML(pr) {
         </div>`;
 }
 
+/**
+ * Wire click handlers for a PR card's action buttons and links.
+ * @param {number} prNumber  PR number whose card to wire up
+ * @returns {void}
+ */
 function attachCardListeners(prNumber) {
     const card = document.getElementById(`pr-card-${prNumber}`);
 
@@ -580,7 +659,8 @@ function attachCardListeners(prNumber) {
             }
 
             if (landingUrl || meetUrl) {
-                prOverrides[prNumber] = { landingUrl: landingUrl || null, meetUrl: meetUrl || null };
+                prOverrides[prNumber] = { landingUrl: landingUrl || null,
+                    meetUrl: meetUrl || null };
             } else {
                 delete prOverrides[prNumber];
             }
@@ -600,20 +680,30 @@ function attachCardListeners(prNumber) {
     if (clearUrlsBtn) {
         clearUrlsBtn.addEventListener('click', async () => {
             delete prOverrides[prNumber];
-            await window.stagingAPI.savePROverride({ prNumber, landingUrl: null, meetUrl: null });
+            await window.stagingAPI.savePROverride({ prNumber,
+                landingUrl: null,
+                meetUrl: null });
             renderPRCard(prNumber);
         });
     }
 }
 
 // ── Shared download + launch ─────────────────────────────────────────────────
+/**
+ * Download a build (with live progress) and then launch it.
+ * @param {string|number} id  'main' or a PR number
+ * @param {string} assetUrl  GitHub asset URL to download
+ * @param {string} sha  Commit SHA being downloaded
+ * @param {Function} render  Re-render callback for the relevant card
+ * @returns {Promise<boolean>} true if the download succeeded
+ */
 async function downloadAndLaunch(id, assetUrl, sha, render) {
     downloading[id] = 0;
     render();
 
     try {
         await window.stagingAPI.downloadBuild({
-            ...(id === 'main' ? { buildId: id } : { prNumber: id }),
+            ...id === 'main' ? { buildId: id } : { prNumber: id },
             assetUrl,
             sha,
             token
@@ -621,7 +711,7 @@ async function downloadAndLaunch(id, assetUrl, sha, render) {
     } catch (err) {
         delete downloading[id];
         render();
-        alert(`Download failed: ${err.message}`);
+        notify(`Download failed: ${err.message}`);
 
         return false;
     }
@@ -639,7 +729,7 @@ async function downloadAndLaunch(id, assetUrl, sha, render) {
         );
         await new Promise(r => setTimeout(r, 3000));
     } catch (err) {
-        alert(`Launch failed: ${err.message}`);
+        notify(`Launch failed: ${err.message}`);
     }
 
     delete launching[id];
@@ -649,6 +739,12 @@ async function downloadAndLaunch(id, assetUrl, sha, render) {
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
+/**
+ * Handle an action button click on a PR card.
+ * @param {string} action  Action name (download/update/launch/delete)
+ * @param {number} prNumber  Target PR number
+ * @returns {Promise<void>}
+ */
 async function handleAction(action, prNumber) {
     const pr = prs.find(p => p.prNumber === prNumber);
 
@@ -678,7 +774,7 @@ async function handleAction(action, prNumber) {
             await window.stagingAPI.launchBuild({ prNumber: pr.prNumber });
             await new Promise(r => setTimeout(r, 3000));
         } catch (err) {
-            alert(`Launch failed: ${err.message}`);
+            notify(`Launch failed: ${err.message}`);
         }
 
         delete launching[prNumber];
@@ -689,7 +785,7 @@ async function handleAction(action, prNumber) {
         const result = await window.stagingAPI.clearCache({ prNumber: pr.prNumber });
 
         if (result && !result.success) {
-            alert(result.error || 'Failed to clear cache.');
+            notify(result.error || 'Failed to clear cache.');
             break;
         }
 
@@ -703,11 +799,19 @@ async function handleAction(action, prNumber) {
 }
 
 // ── Settings ────────────────────────────────────────────────────────────────
+/**
+ * Open the settings overlay and refresh the cache size display.
+ * @returns {void}
+ */
 function openSettings() {
     settingsOverlay.classList.remove('hidden');
     refreshCacheInfo();
 }
 
+/**
+ * Close the settings overlay.
+ * @returns {void}
+ */
 function closeSettings() {
     settingsOverlay.classList.add('hidden');
 }
@@ -768,7 +872,7 @@ document.getElementById('btn-clear-cache').addEventListener('click', async () =>
     const result = await window.stagingAPI.clearCache({});
 
     if (result && !result.success) {
-        alert(result.error || 'Failed to clear cache.');
+        notify(result.error || 'Failed to clear cache.');
 
         return;
     }
@@ -783,19 +887,19 @@ document.getElementById('btn-clear-closed-cache').addEventListener('click', asyn
         .map(pr => pr.prNumber);
 
     if (closedPRNumbers.length === 0) {
-        alert('No closed/merged PR caches to clear.');
+        notify('No closed/merged PR caches to clear.');
 
         return;
     }
 
-    if (!confirm(`Clear cached builds for ${closedPRNumbers.length} closed/merged PR(s)?`)) {
+    if (!confirmDialog(`Clear cached builds for ${closedPRNumbers.length} closed/merged PR(s)?`)) {
         return;
     }
 
     const result = await window.stagingAPI.clearClosedCache({ closedPRNumbers });
 
     if (result && !result.success) {
-        alert(result.error || 'Failed to clear unused cache.');
+        notify(result.error || 'Failed to clear unused cache.');
 
         return;
     }
@@ -820,6 +924,10 @@ document.getElementById('btn-refresh').addEventListener('click', async () => {
 document.getElementById('btn-retry').addEventListener('click', refreshPRs);
 
 // ── Cache ───────────────────────────────────────────────────────────────────
+/**
+ * Refresh the cache size indicators from the main process.
+ * @returns {Promise<void>}
+ */
 async function refreshCacheInfo() {
     const info = await window.stagingAPI.getCacheInfo();
 
@@ -828,14 +936,49 @@ async function refreshCacheInfo() {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+/**
+ * Show a blocking alert dialog. Centralizes the no-alert disable: the renderer
+ * has no IPC-based dialog bridge, so the native dialog is the only option.
+ * @param {string} message  Text to display
+ * @returns {void}
+ */
+function notify(message) {
+    // eslint-disable-next-line no-alert -- no dialog IPC exposed to the renderer
+    window.alert(message);
+}
+
+/**
+ * Show a blocking confirm dialog and return the user's choice.
+ * @param {string} message  Question to display
+ * @returns {boolean} true if the user confirmed
+ */
+function confirmDialog(message) {
+    // eslint-disable-next-line no-alert -- no dialog IPC exposed to the renderer
+    return window.confirm(message);
+}
+
+/**
+ * Toggle the PR list loading indicator.
+ * @param {boolean} visible  Whether the indicator should be shown
+ * @returns {void}
+ */
 function showLoading(visible) {
     listLoading.classList.toggle('hidden', !visible);
 }
 
+/**
+ * Hide the PR list loading indicator.
+ * @returns {void}
+ */
 function hideLoading() {
     listLoading.classList.add('hidden');
 }
 
+/**
+ * Display an error state in the PR list area.
+ * @param {string} msg  Error message to show
+ * @returns {void}
+ */
 function showError(msg) {
     errorMessage.textContent = msg;
     listError.classList.remove('hidden');
@@ -845,10 +988,19 @@ function showError(msg) {
     statusBadge.className = 'badge';
 }
 
+/**
+ * Hide the PR list error state.
+ * @returns {void}
+ */
 function hideError() {
     listError.classList.add('hidden');
 }
 
+/**
+ * Escape a string for safe insertion as HTML text content.
+ * @param {string} str  Raw string
+ * @returns {string} HTML-escaped string
+ */
 function escapeHtml(str) {
     const div = document.createElement('div');
 
@@ -857,6 +1009,11 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+/**
+ * Format a byte count as a human-readable size.
+ * @param {number} bytes  Size in bytes
+ * @returns {string} Formatted size (e.g. "1.5 MB")
+ */
 function formatBytes(bytes) {
     if (bytes === 0) {
         return '0 B';
@@ -897,6 +1054,11 @@ function normalizeMeetUrl(url) {
     }
 }
 
+/**
+ * Format an ISO date string as a relative "time ago" label.
+ * @param {string} dateStr  ISO date string
+ * @returns {string} Relative time (e.g. "5m ago")
+ */
 function formatTimeAgo(dateStr) {
     const date = new Date(dateStr);
     const now = new Date();
@@ -937,7 +1099,7 @@ window.stagingAPI.getAppVersion().then(version => {
     appVersionEl.textContent = `v${version}`;
 });
 
-window.stagingAPI.onUpdaterStatus(({ status, version, percent, error }) => {
+window.stagingAPI.onUpdaterStatus(({ status, version, percent }) => {
     updaterStatusItem.style.display = '';
 
     switch (status) {

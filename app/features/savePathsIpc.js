@@ -1,5 +1,3 @@
-'use strict';
-
 const { BrowserWindow, dialog } = require('electron');
 
 const { handle } = require('./ipcHelpers');
@@ -20,14 +18,16 @@ const { getAllowedSavePathRoots, getSavePathsInfo, saveSettings } = require('./s
  * @param {Electron.IpcMain} ipcMain
  */
 function setupSavePathsIPC(ipcMain) {
-    ipcMain.handle('sonacove:get-save-paths', handle('sonacove:get-save-paths', async () => getSavePathsInfo()));
+    ipcMain.handle('sonacove:get-save-paths', handle('sonacove:get-save-paths', () => getSavePathsInfo()));
 
     ipcMain.handle('sonacove:set-save-paths', handle('sonacove:set-save-paths', async (_event, params) => {
         const next = {};
         const allowedRoots = getAllowedSavePathRoots();
 
         for (const key of [ 'recordings', 'screenshots' ]) {
-            if (!(key in params)) continue;
+            if (!(key in params)) {
+                continue;
+            }
             const v = sanitizeOverride(params[key]);
 
             if (v === undefined) {

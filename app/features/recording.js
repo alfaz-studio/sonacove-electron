@@ -1,7 +1,5 @@
-'use strict';
-
-const fs = require('fs');
 const crypto = require('crypto');
+const fs = require('fs');
 
 const { openExclusiveWriteStream } = require('./fileWriters');
 const { handle } = require('./ipcHelpers');
@@ -100,12 +98,17 @@ function endStream(stream) {
 
             return;
         }
+
+        // onError is forward-declared so onFinish can detach it; assigned below.
+        let onError = null;
         const onFinish = () => {
             stream.removeListener('error', onError);
             resolve();
         };
-        const onError = err => {
+
+        onError = err => {
             stream.removeListener('finish', onFinish);
+
             // Force the stream into a terminal state so a second endStream call
             // (e.g. from disposeSession after we reject) hits the short-circuit
             // at the top of endStream instead of registering new listeners on a
@@ -122,6 +125,16 @@ function endStream(stream) {
     });
 }
 
+/**
+ * Tears down an active write session: removes it from the registry, detaches
+ * its per-session cleanup listener, ends the underlying stream, and optionally
+ * unlinks the partial file.
+ *
+ * @param {string} sessionId - Key of the session to dispose.
+ * @param {boolean} [unlink=false] - When true, delete the partial file on disk
+ *   after the stream is ended (cancel path / oversized-chunk path).
+ * @returns {Promise<void>}
+ */
 async function disposeSession(sessionId, unlink = false) {
     const session = sessions.get(sessionId);
 
@@ -204,8 +217,8 @@ function setupRecordingIPC(ipcMain) {
             // Electron at this point, so the error return is mostly for
             // completeness.
             if (sender.isDestroyed()) {
-                await endStream(stream).catch(() => {});
-                await fs.promises.unlink(filePath).catch(() => {});
+                await endStream(stream).catch(() => { /* best-effort close */ });
+                await fs.promises.unlink(filePath).catch(() => { /* best-effort cleanup */ });
 
                 return { error: 'Renderer destroyed before session was established' };
             }
@@ -224,7 +237,8 @@ function setupRecordingIPC(ipcMain) {
                 }
             });
 
-            return { sessionId, filePath };
+            return { sessionId,
+                filePath };
         } finally {
             // Release the reservation regardless of success/failure. On success
             // the live session is now in `sessions` and will be counted by
@@ -299,14 +313,23 @@ function setupRecordingIPC(ipcMain) {
             // listener, an unexpected destroy would hang the IPC forever.
             await new Promise((resolve, reject) => {
                 const stream = session.stream;
+
+                // `removeListeners` and the three handlers reference each other;
+                // the handlers are reached through `listeners` so none is used
+                // before it is defined.
+                const listeners = {};
                 const removeListeners = () => {
-                    stream.removeListener('drain', onDrain);
-                    stream.removeListener('error', onError);
-                    stream.removeListener('close', onClose);
+                    stream.removeListener('drain', listeners.onDrain);
+                    stream.removeListener('error', listeners.onError);
+                    stream.removeListener('close', listeners.onClose);
                 };
-                const onDrain = () => { removeListeners(); resolve(); };
+                const onDrain = () => {
+                    removeListeners();
+                    resolve();
+                };
                 const onError = err => {
                     removeListeners();
+
                     // Fire-and-forget: dispose frees resources so subsequent
                     // writes from a renderer that ignored the error get a
                     // clean "Unknown session" instead of repeated failures.
@@ -319,6 +342,9 @@ function setupRecordingIPC(ipcMain) {
                     reject(new Error('Recording stream closed unexpectedly'));
                 };
 
+                listeners.onDrain = onDrain;
+                listeners.onError = onError;
+                listeners.onClose = onClose;
                 stream.once('drain', onDrain);
                 stream.once('error', onError);
                 stream.once('close', onClose);

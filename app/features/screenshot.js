@@ -1,5 +1,3 @@
-'use strict';
-
 const { BrowserWindow, desktopCapturer, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +18,7 @@ function setupScreenshotIPC(ipcMain) {
     // Full-screen screenshot (for annotation overlay).
     // Captures the screen the calling window is on (multi-monitor aware).
     // Falls back to primary display if the sender window can't be determined.
-    ipcMain.handle('capture-screenshot', async (event) => {
+    ipcMain.handle('capture-screenshot', async event => {
         try {
             const senderWindow = BrowserWindow.fromWebContents(event.sender);
             const targetDisplay = senderWindow && !senderWindow.isDestroyed()
@@ -114,8 +112,18 @@ function setupScreenshotIPC(ipcMain) {
     });
 }
 
+/**
+ * Reveals a saved file in the OS file manager, but only if it resolves to a
+ * location inside one of the allowed reveal directories. Silently ignores
+ * empty input, realpath failures, and out-of-allowlist targets.
+ *
+ * @param {string} filePath - Absolute path of the file to reveal.
+ * @returns {Promise<void>}
+ */
 async function handleShowInFolder(filePath) {
-    if (typeof filePath !== 'string' || !filePath) return;
+    if (typeof filePath !== 'string' || !filePath) {
+        return;
+    }
 
     // Resolve the real path of the target. If it doesn't exist yet
     // (showInFolder is sometimes called for an in-flight file), fall back
@@ -152,7 +160,7 @@ async function handleShowInFolder(filePath) {
     // Windows paths are case-insensitive — compare lowercased to avoid
     // false negatives if a renderer sends a differently-cased path.
     const isWindows = process.platform === 'win32';
-    const norm = s => (isWindows ? s.toLowerCase() : s);
+    const norm = isWindows ? s => s.toLowerCase() : s => s;
     const target = norm(realTarget);
 
     // Allow either the dir itself or any descendant of it. The `+ path.sep`

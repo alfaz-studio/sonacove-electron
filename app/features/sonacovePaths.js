@@ -1,5 +1,3 @@
-'use strict';
-
 const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -52,10 +50,23 @@ function getAllowedSavePathRoots() {
 /** @type {{ recordings: string|null, screenshots: string|null } | null} */
 let cachedSettings = null;
 
+/**
+ * Absolute path of the JSON file backing the persisted save-path settings.
+ *
+ * @returns {string} Path inside the Electron `userData` directory.
+ */
 function getSettingsFilePath() {
     return path.join(app.getPath('userData'), SETTINGS_FILENAME);
 }
 
+/**
+ * Loads the persisted save-path settings, validating stored paths against the
+ * allowed-roots allowlist. Reads from disk once per process and caches the
+ * result; falls back to `{ recordings: null, screenshots: null }` on a missing,
+ * unparseable, version-mismatched, or rejected file.
+ *
+ * @returns {{ recordings: string|null, screenshots: string|null }}
+ */
 function loadSettings() {
     // Cache-first: the sync readFileSync below only runs on the first call
     // per process lifetime — subsequent calls return the in-memory object.
@@ -75,7 +86,8 @@ function loadSettings() {
             console.warn(
                 `⚠️ sonacovePaths: settings version ${parsed.version} != expected ${SETTINGS_VERSION}, using defaults`
             );
-            cachedSettings = { recordings: null, screenshots: null };
+            cachedSettings = { recordings: null,
+                screenshots: null };
 
             return cachedSettings;
         }
@@ -86,12 +98,15 @@ function loadSettings() {
         // fs.promises.mkdir() via getRecordingsDir()/getScreenshotsDir().
         const allowedRoots = getAllowedSavePathRoots();
         const validateStored = v => {
-            if (typeof v !== 'string') return null;
+            if (typeof v !== 'string') {
+                return null;
+            }
             const check = validateUserPath(v, allowedRoots);
 
             if ('error' in check) {
                 console.warn(
-                    `⚠️ sonacovePaths: stored path rejected by validateUserPath (${check.error}); falling back to default`
+                    `⚠️ sonacovePaths: stored path rejected by validateUserPath (${check.error}); `
+                    + 'falling back to default'
                 );
 
                 return null;
@@ -108,7 +123,8 @@ function loadSettings() {
         if (err.code !== 'ENOENT') {
             console.warn('⚠️ sonacovePaths: failed to load settings, falling back to defaults:', err.message);
         }
-        cachedSettings = { recordings: null, screenshots: null };
+        cachedSettings = { recordings: null,
+            screenshots: null };
     }
 
     return cachedSettings;
@@ -137,16 +153,18 @@ let saveQueue = Promise.resolve();
 function saveSettings(next) {
     const run = saveQueue.then(async () => {
         const current = loadSettings();
+
         // `?? null` (not `|| null`): we only want to coerce nullish values to
         // null, not falsy ones. `sanitizeOverride` already maps empty/whitespace
         // strings to null, so anything truthy that survives here is a real path
         // (and even if it weren't, `|| null` would have wrongly clobbered
         // legitimate values that happened to be falsy in some future schema).
         const merged = {
-            recordings: 'recordings' in next ? (next.recordings ?? null) : current.recordings,
-            screenshots: 'screenshots' in next ? (next.screenshots ?? null) : current.screenshots
+            recordings: 'recordings' in next ? next.recordings ?? null : current.recordings,
+            screenshots: 'screenshots' in next ? next.screenshots ?? null : current.screenshots
         };
-        const onDisk = { version: SETTINGS_VERSION, ...merged };
+        const onDisk = { version: SETTINGS_VERSION,
+            ...merged };
         const target = getSettingsFilePath();
         const tmp = `${target}.tmp`;
 
@@ -157,7 +175,7 @@ function saveSettings(next) {
             // Best-effort cleanup; we don't actually need the .tmp gone for
             // correctness (the next successful save will overwrite it), but
             // leaving stray files in userData is a minor hygiene win.
-            await fs.promises.unlink(tmp).catch(() => {});
+            await fs.promises.unlink(tmp).catch(() => { /* best-effort cleanup */ });
             throw err;
         }
         cachedSettings = merged;
@@ -167,23 +185,44 @@ function saveSettings(next) {
 
     // Don't let one rejection poison the queue for later callers. The
     // returned promise still surfaces the error to the original caller.
-    saveQueue = run.catch(() => {});
+    saveQueue = run.catch(() => { /* keep queue alive; error surfaced via run */ });
 
     return run;
 }
 
+/**
+ * Default Sonacove root directory under the user's Documents folder.
+ *
+ * @returns {string} Absolute directory path.
+ */
 function getDefaultSonacoveDir() {
     return path.join(app.getPath('documents'), DEFAULT_ROOT_NAME);
 }
 
+/**
+ * Default recordings directory (Documents/Sonacove/Recordings).
+ *
+ * @returns {string} Absolute directory path.
+ */
 function getDefaultRecordingsDir() {
     return path.join(getDefaultSonacoveDir(), RECORDINGS_SUBDIR);
 }
 
+/**
+ * Default screenshots directory (Documents/Sonacove/Screenshots).
+ *
+ * @returns {string} Absolute directory path.
+ */
 function getDefaultScreenshotsDir() {
     return path.join(getDefaultSonacoveDir(), SCREENSHOTS_SUBDIR);
 }
 
+/**
+ * Resolves the effective recordings directory (user override or default) and
+ * ensures it exists on disk.
+ *
+ * @returns {Promise<string>} Absolute path of the created/ensured directory.
+ */
 async function getRecordingsDir() {
     const settings = loadSettings();
     const dir = settings.recordings ?? getDefaultRecordingsDir();
@@ -193,6 +232,12 @@ async function getRecordingsDir() {
     return dir;
 }
 
+/**
+ * Resolves the effective screenshots directory (user override or default) and
+ * ensures it exists on disk.
+ *
+ * @returns {Promise<string>} Absolute path of the created/ensured directory.
+ */
 async function getScreenshotsDir() {
     const settings = loadSettings();
     const dir = settings.screenshots ?? getDefaultScreenshotsDir();
@@ -205,10 +250,24 @@ async function getScreenshotsDir() {
 // Legacy ~/Pictures/Sonacove Screenshots dir from older builds — kept allowlisted
 // for show-in-folder so users can still reveal screenshots saved before the
 // move to Documents/Sonacove/Screenshots.
+/**
+ * Legacy ~/Pictures/Sonacove Screenshots directory from older builds, kept so
+ * show-in-folder can still reveal screenshots saved before the move to
+ * Documents/Sonacove/Screenshots.
+ *
+ * @returns {string} Absolute directory path.
+ */
 function getLegacyScreenshotsDir() {
     return path.join(app.getPath('pictures'), 'Sonacove Screenshots');
 }
 
+/**
+ * Directories the renderer is permitted to reveal in the OS file manager:
+ * the default recordings/screenshots dirs, the legacy screenshots dir, and any
+ * active user overrides.
+ *
+ * @returns {string[]} Deduplicated list of absolute directory paths.
+ */
 function getAllowedRevealDirs() {
     const settings = loadSettings();
     const dirs = new Set([
@@ -227,6 +286,16 @@ function getAllowedRevealDirs() {
     return Array.from(dirs);
 }
 
+/**
+ * Builds the save-paths summary returned to the renderer: for both recordings
+ * and screenshots, the currently effective path, the user override (or null),
+ * and the built-in default.
+ *
+ * @returns {{
+ *   recordings: { current: string, override: string|null, default: string },
+ *   screenshots: { current: string, override: string|null, default: string }
+ * }}
+ */
 function getSavePathsInfo() {
     const settings = loadSettings();
 

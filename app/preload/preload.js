@@ -125,9 +125,11 @@ window.sonacoveElectronAPI = {
     // buffering the whole recording in memory or relying on showSaveFilePicker.
     recording: {
         startWrite: filename => ipcRenderer.invoke('recording:start-write', { filename }),
-        writeChunk: (sessionId, chunk) => ipcRenderer.invoke('recording:write-chunk', { sessionId, chunk }),
+        writeChunk: (sessionId, chunk) => ipcRenderer.invoke('recording:write-chunk', { sessionId,
+            chunk }),
         finishWrite: (sessionId, firstChunkOverride) =>
-            ipcRenderer.invoke('recording:finish-write', { sessionId, firstChunkOverride }),
+            ipcRenderer.invoke('recording:finish-write', { sessionId,
+                firstChunkOverride }),
         cancelWrite: sessionId => ipcRenderer.invoke('recording:cancel-write', { sessionId })
     },
 
@@ -141,7 +143,11 @@ window.sonacoveElectronAPI = {
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel) && !receiveOnlyIpcChannels.includes(channel)) {
-                return () => {};
+                // Channel not allowed: return a no-op unsubscribe so callers
+                // can always invoke the returned function safely.
+                return () => {
+                    // Nothing was registered, so there is nothing to remove.
+                };
             }
             const cb = (_event, ...args) => listener(...args);
 

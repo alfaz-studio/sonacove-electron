@@ -1,6 +1,6 @@
+const { execFile } = require('child_process');
 const fs = require('original-fs');
 const path = require('path');
-const { execFile } = require('child_process');
 
 /**
  * Validate PR number to prevent path traversal.
@@ -40,7 +40,8 @@ async function rmDir(dirPath) {
     if (process.platform === 'win32') {
         await execFileAsync('cmd', [ '/c', 'rd', '/s', '/q', dirPath ]);
     } else {
-        fs.rmSync(dirPath, { recursive: true, force: true });
+        fs.rmSync(dirPath, { recursive: true,
+            force: true });
     }
 }
 
@@ -69,12 +70,16 @@ function extractZip(zipPath, destDir) {
             });
         } else {
             // Use PowerShell on Windows
+            const psZip = zipPath.replace(/'/g, '\'\'');
+            const psDest = destDir.replace(/'/g, '\'\'');
+
             execFile(
                 'powershell',
                 [
                     '-NoProfile',
                     '-Command',
-                    `Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`
+                    `Expand-Archive -LiteralPath '${psZip}' `
+                        + `-DestinationPath '${psDest}' -Force`
                 ],
                 err => {
                     err ? reject(err) : resolve();
@@ -108,4 +113,9 @@ function getDirSize(dirPath) {
     return size;
 }
 
-module.exports = { validPR, validBuildId, rmDir, execFileAsync, extractZip, getDirSize };
+module.exports = { validPR,
+    validBuildId,
+    rmDir,
+    execFileAsync,
+    extractZip,
+    getDirSize };

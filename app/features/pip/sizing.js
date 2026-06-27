@@ -14,7 +14,7 @@
 
 const {
     TILE_W, H_TILE_H, V_TILE_H, TILE_GAP, TILE_PAD,
-    HEADER_H, BORDER, MARGIN, WINDOW_PAD,
+    HEADER_H, BORDER, MARGIN, WINDOW_PAD
 } = require('./constants');
 
 /**
@@ -46,10 +46,12 @@ function windowFromMainExtent(mainExtent, orientation) {
     const main = Math.max(0, Math.round(mainExtent)) + chromeMain(orientation);
 
     if (orientation === 'horizontal') {
-        return { width: main, height: H_TILE_H + pad2 + HEADER_H + bdr2 + win2 };
+        return { width: main,
+            height: H_TILE_H + pad2 + HEADER_H + bdr2 + win2 };
     }
 
-    return { width: TILE_W + pad2 + bdr2 + win2, height: main };
+    return { width: TILE_W + pad2 + bdr2 + win2,
+        height: main };
 }
 
 /**
@@ -99,13 +101,13 @@ function getWindowPosition(W, H, orientation, workArea) {
     if (orientation === 'horizontal') {
         return {
             x: workArea.x + workArea.width - W - MARGIN + WINDOW_PAD,
-            y: workArea.y + workArea.height - H - MARGIN + WINDOW_PAD,
+            y: workArea.y + workArea.height - H - MARGIN + WINDOW_PAD
         };
     }
 
     return {
         x: workArea.x + workArea.width - W - MARGIN + WINDOW_PAD,
-        y: workArea.y + Math.round((workArea.height - H) / 2),
+        y: workArea.y + Math.round((workArea.height - H) / 2)
     };
 }
 

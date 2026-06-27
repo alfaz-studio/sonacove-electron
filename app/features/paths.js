@@ -1,9 +1,7 @@
-'use strict';
-
 const { app } = require('electron');
+const isDev = require('electron-is-dev');
 const fs = require('fs');
 const path = require('path');
-const isDev = require('electron-is-dev');
 
 /**
  * Returns the project root, stripping the trailing 'build' directory

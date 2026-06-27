@@ -1,5 +1,3 @@
-'use strict';
-
 const { shell } = require('electron');
 
 /**

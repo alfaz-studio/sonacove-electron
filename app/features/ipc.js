@@ -2,28 +2,6 @@ const { BrowserWindow, shell } = require('electron');
 const isDev = require('electron-is-dev');
 
 const config = require('./config');
-const { IPC_OVERLAY_THEME_REQUEST } = require('./overlay/constants');
-const { restoreMainWindow, getMainWindow } = require('./overlay/helpers');
-const {
-    toggleOverlay,
-    getOverlayWindow,
-    setOverlayIgnoreState,
-    sendOverlayTheme,
-    closeViewersWhiteboards
-} = require('./overlay/overlay-window');
-const {
-    openParticipantWindow,
-    sendParticipantFrame,
-    sendParticipantsUpdate,
-    setParticipantTheme,
-    getLastTheme,
-    closeParticipantWindow,
-    shrinkToPill,
-    suppressUnreadChatCount,
-    getCurrentState,
-} = require('./pip/participant-window');
-const { IPC } = require('./pip/constants');
-const { getParticipantWindow } = require('./pip/helpers');
 const {
     openControlsBarWindow,
     closeControlsBarWindow,
@@ -37,6 +15,28 @@ const {
     sendControlsBarTheme,
     showToast
 } = require('./controls-bar/controls-bar-window');
+const { IPC_OVERLAY_THEME_REQUEST } = require('./overlay/constants');
+const { restoreMainWindow, getMainWindow } = require('./overlay/helpers');
+const {
+    toggleOverlay,
+    getOverlayWindow,
+    setOverlayIgnoreState,
+    sendOverlayTheme,
+    closeViewersWhiteboards
+} = require('./overlay/overlay-window');
+const { IPC } = require('./pip/constants');
+const { getParticipantWindow } = require('./pip/helpers');
+const {
+    openParticipantWindow,
+    sendParticipantFrame,
+    sendParticipantsUpdate,
+    setParticipantTheme,
+    getLastTheme,
+    closeParticipantWindow,
+    shrinkToPill,
+    suppressUnreadChatCount,
+    getCurrentState
+} = require('./pip/participant-window');
 const {
     openShareBorderWindow,
     closeShareBorderWindow,
@@ -190,7 +190,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
     });
 
     // Custom window controls (frame:false on Windows)
-    register('titlebar-minimize', (event) => {
+    register('titlebar-minimize', event => {
         const win = BrowserWindow.fromWebContents(event.sender);
 
         if (win && !win.isDestroyed()) {
@@ -198,7 +198,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
-    register('titlebar-maximize', (event) => {
+    register('titlebar-maximize', event => {
         const win = BrowserWindow.fromWebContents(event.sender);
 
         if (win && !win.isDestroyed()) {
@@ -210,7 +210,7 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
         }
     });
 
-    register('titlebar-close', (event) => {
+    register('titlebar-close', event => {
         const win = BrowserWindow.fromWebContents(event.sender);
 
         if (win && !win.isDestroyed()) {
@@ -518,8 +518,9 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
             return;
         }
+
         // Fire-and-forget: errors are caught and logged inside setSystemMuted.
-        void setSystemMuted(muted);
+        setSystemMuted(muted);
     });
 
     // Renderer "fix-it" quick action on the low-volume warning — bumps
@@ -539,8 +540,9 @@ function setupSonacoveIPC(ipcMain, mainWindow, handlers = {}) {
 
             return;
         }
+
         // Fire-and-forget: errors are caught and logged inside setSystemVolume.
-        void setSystemVolume(volume);
+        setSystemVolume(volume);
     });
 }
 

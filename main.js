@@ -1,11 +1,8 @@
-/* global __dirname */
-
 const {
     BrowserWindow,
     Menu,
     app,
     ipcMain,
-    screen,
     shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
@@ -18,15 +15,35 @@ const process = require('process');
 const nodeURL = require('url');
 
 const { setupWindowOpenHandler, setupPowerMonitorMain } = require('./app/electron-native');
-const { setupPictureInPicture } = require('./app/features/pip/main');
-const { setupScreenSharingMain } = require('./app/features/screen-sharing/main');
-const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
+const config = require('./app/features/config');
+const { setupCrossWindowNotifications } = require('./app/features/cross-window-notifications/main');
+const {
+    registerProtocol,
+    navigateDeepLink,
+    takeDeeplinkNavigating,
+    isDeeplinkPending,
+    completeDeeplinkNavigation,
+    cleanupDeeplinkState
+} = require('./app/features/deep-link');
 const { initI18n, t } = require('./app/features/i18n');
 const {
     showUpdateToast, showLeaveModal, showInfoToast, showAboutPanel
 } = require('./app/features/in-app-dialogs');
+const { setupSonacoveIPC } = require('./app/features/ipc');
+const { openExternalLink } = require('./app/features/openExternalLink');
+const { closeOverlay } = require('./app/features/overlay/overlay-window');
 const { getIconPath, getSplashPath, getErrorPath } = require('./app/features/paths');
+const { setupPictureInPicture } = require('./app/features/pip/main');
+const { closeParticipantWindow } = require('./app/features/pip/participant-window');
+const { setupRecordingIPC } = require('./app/features/recording');
+const { setupSavePathsIPC } = require('./app/features/savePathsIpc');
+const { setupScreenSharingMain } = require('./app/features/screen-sharing/main');
+const { setupScreenshotIPC } = require('./app/features/screenshot');
+const {
+    startSystemVolumeWatcher,
+    stopSystemVolumeWatcher
+} = require('./app/features/system-volume');
 const { setupTitlebar, notifyUpdateAvailable } = require('./app/features/titlebar/main');
 
 // Track the time the app process started for session duration calculation.
@@ -42,27 +59,6 @@ if (process.platform === 'win32') {
         _appNameLower.includes('staging') ? 'com.sonacove.staging' : 'com.sonacove.meet'
     );
 }
-
-const config = require('./app/features/config');
-const { setupCrossWindowNotifications } = require('./app/features/cross-window-notifications/main');
-const {
-    registerProtocol,
-    navigateDeepLink,
-    takeDeeplinkNavigating,
-    isDeeplinkPending,
-    completeDeeplinkNavigation,
-    cleanupDeeplinkState
-} = require('./app/features/deep-link');
-const { setupSonacoveIPC } = require('./app/features/ipc');
-const { closeOverlay } = require('./app/features/overlay/overlay-window');
-const { setupScreenshotIPC } = require('./app/features/screenshot');
-const { setupRecordingIPC } = require('./app/features/recording');
-const { setupSavePathsIPC } = require('./app/features/savePathsIpc');
-const {
-    startSystemVolumeWatcher,
-    stopSystemVolumeWatcher
-} = require('./app/features/system-volume');
-const { openExternalLink } = require('./app/features/openExternalLink');
 
 // Staging builds have their package.json name/productName set to include "staging" by CI.
 // Check case-insensitively since app.name may return name or productName.
@@ -233,11 +229,15 @@ function checkForUpdatesManually() {
  */
 function platformWindowChrome() {
     if (process.platform === 'darwin') {
-        return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 12, y: 8 } };
+        return { titleBarStyle: 'hiddenInset',
+            trafficLightPosition: { x: 12,
+                y: 8 } };
     }
     if (process.platform === 'win32') {
-        return { frame: false, thickFrame: true };
+        return { frame: false,
+            thickFrame: true };
     }
+
     return {};
 }
 
@@ -275,11 +275,14 @@ function setApplicationMenu() {
         {
             label: app.name,
             submenu: [
-                { label: t('menu.about', { appName: app.name }), click: showAboutDialog },
+                { label: t('menu.about', { appName: app.name }),
+                    click: showAboutDialog },
                 { type: 'separator' },
-                { label: t('menu.checkForUpdates'), click: checkForUpdatesManually },
+                { label: t('menu.checkForUpdates'),
+                    click: checkForUpdatesManually },
                 { type: 'separator' },
-                { role: 'services', submenu: [] },
+                { role: 'services',
+                    submenu: [] },
                 { type: 'separator' },
                 { role: 'hide' },
                 { role: 'hideothers' },
@@ -411,7 +414,9 @@ function createJitsiMeetWindow() {
         autoUpdater.on('update-available', info => {
             console.log(`✅ Update available: ${info.version}`);
             capture('update_available', {
+                // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
                 new_version: info.version,
+                // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
                 current_version: app.getVersion()
             });
         });
@@ -421,6 +426,7 @@ function createJitsiMeetWindow() {
         });
 
         autoUpdater.on('update-downloaded', info => {
+            // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
             capture('update_downloaded', { new_version: info.version });
             pendingUpdateVersion = info.version;
 
@@ -439,6 +445,7 @@ function createJitsiMeetWindow() {
 
         autoUpdater.on('error', err => {
             console.error('Updater Error:', err);
+            // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
             capture('update_error', { error_message: err.message });
         });
 
@@ -482,7 +489,9 @@ function createJitsiMeetWindow() {
     let quitFallbackTimer = null;
 
     const onLeaveModal = (event, data) => {
-        if (event.sender !== mainWindow?.webContents) return;
+        if (event.sender !== mainWindow?.webContents) {
+            return;
+        }
         if (data && data.action === 'confirm' && mainWindow && !mainWindow.isDestroyed()) {
             // Trigger the same leaveConference() flow the PiP hangup button uses.
             // The renderer handles the clean XMPP leave, then navigates to
@@ -494,7 +503,9 @@ function createJitsiMeetWindow() {
             // Fallback: if the leave flow never triggers navigation (e.g. page
             // is unresponsive or not in a meeting), destroy after 5s.
             quitFallbackTimer = setTimeout(() => {
-                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.destroy();
+                }
             }, 5000);
         }
     };
@@ -504,11 +515,15 @@ function createJitsiMeetWindow() {
     // Handle update toast responses (placed here with other IPC handlers
     // rather than inside the updater block for consistent cleanup).
     const onUpdateToast = (event, data) => {
-        if (event.sender !== mainWindow?.webContents) return;
+        if (event.sender !== mainWindow?.webContents) {
+            return;
+        }
         if (data && data.action === 'install') {
+            // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
             capture('update_install_clicked', { new_version: pendingUpdateVersion });
             autoUpdater.quitAndInstall(false, true);
         } else {
+            // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
             capture('update_deferred', { new_version: pendingUpdateVersion });
         }
     };
@@ -520,8 +535,8 @@ function createJitsiMeetWindow() {
 
     // Participant PiP — open overlay when the main window loses focus
     // (minimize, alt-tab, click another app, etc.)
-    let pipMinimizedSent = false;  // idempotency guard — prevents repeated pip-window-minimized
-    let blurTimer = null;          // timer ref so focus/restore can cancel pending blur
+    let pipMinimizedSent = false; // idempotency guard — prevents repeated pip-window-minimized
+    let blurTimer = null; // timer ref so focus/restore can cancel pending blur
 
     mainWindow.on('minimize', () => {
         if (mainWindow && !mainWindow.isDestroyed() && !pipMinimizedSent) {
@@ -624,6 +639,7 @@ function createJitsiMeetWindow() {
                     clearTimeout(quitFallbackTimer);
                     quitting = false;
                 }
+
                 // Defer out of the will-navigate dispatch — loadURL inside
                 // the navigation handler re-enters Electron's navigation
                 // stack and causes unpredictable ordering.
@@ -645,7 +661,9 @@ function createJitsiMeetWindow() {
             if (quitting) {
                 clearTimeout(quitFallbackTimer);
                 setImmediate(() => {
-                    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.destroy();
+                    }
                 });
 
                 return;
@@ -654,11 +672,11 @@ function createJitsiMeetWindow() {
             const landingUrl = new URL(config.currentConfig.landing);
 
             // Remove trailing slash if present on landing pathname
-            const basePath = landingUrl.pathname.endsWith('/')
+            const landingBasePath = landingUrl.pathname.endsWith('/')
                 ? landingUrl.pathname.slice(0, -1)
                 : landingUrl.pathname;
 
-            const closePageUrl = `${landingUrl.origin}${basePath}/close`;
+            const closePageUrl = `${landingUrl.origin}${landingBasePath}/close`;
 
             console.log(`🔀 Hangup Detected. Redirecting to: ${closePageUrl}`);
 
@@ -707,7 +725,7 @@ function createJitsiMeetWindow() {
     // Linux both use the same renderer-forward → native toast path and are
     // enabled. Revisit mac once tested.
     const cleanupCrossWindowNotifications = process.platform === 'darwin'
-        ? () => {}
+        ? () => { /* no-op: cross-window notifications are disabled on macOS */ }
         : setupCrossWindowNotifications(ipcMain, mainWindow, { capture });
 
     windowState.manage(mainWindow);
@@ -874,7 +892,7 @@ function createJitsiMeetWindow() {
                     pointer-events: none;
                     opacity: 0.8;
                 }
-            `).catch(() => {});
+            `).catch(() => { /* ignore: CSS injection can fail during navigation */ });
             const bannerText = t('staging.banner', { version: app.getVersion() });
 
             mainWindow.webContents.executeJavaScript(`
@@ -885,12 +903,13 @@ function createJitsiMeetWindow() {
                     banner.textContent = ${JSON.stringify(bannerText)};
                     document.body.appendChild(banner);
                 })();
-            `).catch(() => {});
+            `).catch(() => { /* ignore: script injection can fail during navigation */ });
         });
     }
 
     // Show a branded error page instead of Chromium's default when the
     // remote URL fails to load (offline, DNS failure, server down, etc.).
+    // eslint-disable-next-line max-params -- signature fixed by Electron's did-fail-load event
     mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
         // Only handle main-frame failures; ignore sub-frames and aborted loads
         // (ERR_ABORTED fires when navigation is cancelled by a new one).
@@ -927,8 +946,10 @@ function createJitsiMeetWindow() {
     });
 
     // Allow the error page to trigger a reload of the remote dashboard.
-    const onRetryLoad = (event) => {
-        if (event.sender !== mainWindow?.webContents) return;
+    const onRetryLoad = event => {
+        if (event.sender !== mainWindow?.webContents) {
+            return;
+        }
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.loadURL(config.currentConfig.landing);
         }
@@ -999,7 +1020,9 @@ const setupChildWindowIcon = () => {
         // Skip the main window — it has its own windowOpenHandler that
         // decides allow/deny. Only override icon on child windows that
         // are already allowed to open (e.g. PiP panel, allowed-host popups).
-        if (!contents.opener) return;
+        if (!contents.opener) {
+            return;
+        }
 
         contents.setWindowOpenHandler(({ url }) => {
             // Child windows should open links in the external browser,
@@ -1047,6 +1070,7 @@ function handleProtocolCall(fullProtocolCall) {
     }
 
     navigateDeepLink(fullProtocolCall);
+    // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
     capture('deep_link_opened', { deep_link: fullProtocolCall });
 
     if (app.isReady() && mainWindow === null) {
@@ -1176,6 +1200,7 @@ app.on('before-quit', event => {
     stopSystemVolumeWatcher();
 
     capture('app_quit', {
+        // eslint-disable-next-line camelcase -- PostHog event property (external analytics contract)
         session_duration_s: Math.floor((Date.now() - appLaunchTime) / 1000)
     });
 
