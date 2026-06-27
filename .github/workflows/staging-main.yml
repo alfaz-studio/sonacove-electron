@@ -91,9 +91,8 @@ jobs:
       fail-fast: false
       # Dynamic matrix — only the requested platform(s) build. `os` is the
       # platform KEY for the `matrix.os == …` step conditions; `runner` is the
-      # Blacksmith machine. Blacksmith Windows Server 2025 ships VS Build Tools
-      # 2022, so the @jitsi/electron-sdk node-gyp rebuild still finds VS2022
-      # (GitHub's windows-2025 label is now VS2026, which node-gyp can't detect).
+      # Blacksmith machine. (The app no longer has native node-gyp deps, so the
+      # Windows runner no longer needs a specific VS Build Tools version.)
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     permissions:
       contents: write

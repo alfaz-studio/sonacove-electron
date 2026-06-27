@@ -48,10 +48,8 @@ jobs:
       matrix:
         # A release ships every platform. `os` stays as the platform KEY for the
         # downstream `matrix.os == …` step conditions; `runner` is the actual
-        # Blacksmith machine. Windows runs on Blacksmith Windows Server 2025,
-        # which ships VS Build Tools 2022 — so the @jitsi/electron-sdk node-gyp
-        # native rebuild still finds VS2022 (GitHub's windows-2025 label moved to
-        # VS2026, which node-gyp can't yet detect).
+        # Blacksmith machine. (The app no longer has native node-gyp deps, so the
+        # Windows runner no longer needs a specific VS Build Tools version.)
         include:
           - os: windows-2022
             runner: blacksmith-4vcpu-windows-2025

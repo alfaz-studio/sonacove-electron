@@ -1,11 +1,10 @@
-const {
-    initPopupsConfigurationRender,
-    setupPictureInPictureRender,
-    setupRemoteControlRender,
-    setupPowerMonitorRender
-} = require('@jitsi/electron-sdk');
 const { ipcRenderer } = require('electron');
 
+const {
+    setupScreenSharingPreload,
+    getLastScreenshareSourceId,
+    clearLastScreenshareSourceId
+} = require('../features/screen-sharing/preload');
 const {
     IPC_BROADCAST_CHANNEL,
     IPC_REQUEST_CHANNEL,
@@ -84,6 +83,7 @@ const whitelistedIpcChannels = [
     'leave-modal-action',
     'deeplink-modal-action',
     'cross-window-notification',
+    'power-monitor-event',
     IPC_REQUEST_CHANNEL,
     IPC_SET_MUTED_CHANNEL,
     IPC_SET_VOLUME_CHANNEL
@@ -110,68 +110,12 @@ function openExternalLink(url) {
     ipcRenderer.send('open-external', url);
 }
 
-/**
- * Setup the renderer process.
- *
- * @param {*} api - API object.
- * @param {*} options - Options for what to enable.
- * @returns {void}
- */
-function setupRenderer(api, options = {}) {
-    initPopupsConfigurationRender(api);
-    if (options.enableRemoteControl) {
-        setupRemoteControlRender(api);
-    }
-    if (options.enableAlwaysOnTopWindow) {
-        setupPictureInPictureRender(api);
-    }
-    setupPowerMonitorRender(api);
-}
-
-// Intercept getUserMedia to track the last selected screenshare source
-// navigator.mediaDevices may not be available at preload time, so defer the patch
-/**
- * Patches navigator.mediaDevices.getUserMedia to record the source id of the
- * last selected screenshare, so other features can detect window vs screen
- * sharing. No-op if mediaDevices is unavailable.
- *
- * @returns {void}
- */
-function patchGetUserMedia() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return;
-    }
-    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-
-    navigator.mediaDevices.getUserMedia = constraints => {
-        if (constraints && constraints.video && typeof constraints.video === 'object') {
-            let sourceId = null;
-
-            if (constraints.video.mandatory && constraints.video.mandatory.chromeMediaSourceId) {
-                sourceId = constraints.video.mandatory.chromeMediaSourceId;
-            } else if (constraints.video.chromeMediaSourceId) {
-                sourceId = constraints.video.chromeMediaSourceId;
-            }
-
-            if (sourceId) {
-                window._lastScreenshareSourceId = sourceId;
-            }
-        }
-
-        return originalGetUserMedia(constraints);
-    };
-}
-
-if (navigator.mediaDevices) {
-    patchGetUserMedia();
-} else {
-    window.addEventListener('DOMContentLoaded', patchGetUserMedia);
-}
-
+// Screen sharing: install the desktop-source picker bridge + getUserMedia
+// source-id tracking (app/features/screen-sharing).
+setupScreenSharingPreload();
 
 window.sonacoveElectronAPI = {
     openExternalLink,
-    setupRenderer,
     captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
     saveScreenshot: (base64Data, filename) => ipcRenderer.invoke('save-screenshot', base64Data, filename),
     showInFolder: filePath => ipcRenderer.send('show-in-folder', filePath),
@@ -234,14 +178,14 @@ window.sonacoveElectronAPI = {
             }
 
             if (channel === 'toggle-annotation' && args[0] && typeof args[0] === 'object') {
-                const sourceId = window._lastScreenshareSourceId;
+                const sourceId = getLastScreenshareSourceId();
                 const isWindow = sourceId ? sourceId.startsWith('window:') : false;
 
                 args[0].isWindowSharing = isWindow;
             }
 
             if (channel === 'screenshare-stop') {
-                window._lastScreenshareSourceId = null;
+                clearLastScreenshareSourceId();
             }
 
             ipcRenderer.send(channel, ...args);
@@ -249,51 +193,3 @@ window.sonacoveElectronAPI = {
     }
 };
 
-window.JitsiMeetElectron = {
-    /**
-     * Get sources available for desktop sharing.
-     *
-     * @param {Function} callback - Callback with sources.
-     * @param {Function} errorCallback - Callback for errors.
-     * @param {Object} options - Options for getting sources.
-     * @param {Array<string>} options.types - Types of sources ('screen', 'window').
-     * @param {Object} options.thumbnailSize - Thumbnail dimensions.
-     */
-    obtainDesktopStreams: (callback, errorCallback, options = {}) => {
-        ipcRenderer.invoke('jitsi-screen-sharing-get-sources', options)
-            .then(sources => {
-                callback(sources);
-            })
-            .catch(error => {
-                console.error('❌ Renderer: Error getting sources:', error);
-                if (errorCallback) {
-                    errorCallback(error);
-                }
-            });
-    }
-};
-
-window.addEventListener('DOMContentLoaded', () => {
-    // Ensure APP object exists
-    if (!window.APP) {
-        window.APP = {};
-    }
-
-    if (!window.APP.API) {
-        window.APP.API = {};
-    }
-
-    window.APP.API.requestDesktopSources = options => new Promise((resolve, reject) => {
-        window.JitsiMeetElectron.obtainDesktopStreams(
-                sources => {
-                    resolve({ sources });
-                },
-                error => {
-                    console.error('❌ APP.API: Error obtaining sources:', error);
-                    reject({ error });
-                },
-                options
-        );
-    });
-
-});

@@ -1,16 +1,8 @@
 const {
-    initPopupsConfigurationMain,
-    getPopupTarget,
-    setupPictureInPictureMain,
-    setupRemoteControlMain,
-    setupPowerMonitorMain
-} = require('@jitsi/electron-sdk');
-const {
     BrowserWindow,
     Menu,
     app,
     ipcMain,
-    desktopCapturer,
     shell
 } = require('electron');
 const contextMenu = require('electron-context-menu');
@@ -22,6 +14,7 @@ const path = require('path');
 const process = require('process');
 const nodeURL = require('url');
 
+const { setupWindowOpenHandler, setupPowerMonitorMain } = require('./app/electron-native');
 const { initAnalytics, capture, shutdownAnalytics } = require('./app/features/analytics');
 const config = require('./app/features/config');
 const { setupCrossWindowNotifications } = require('./app/features/cross-window-notifications/main');
@@ -45,6 +38,7 @@ const { setupPictureInPicture } = require('./app/features/pip/main');
 const { closeParticipantWindow } = require('./app/features/pip/participant-window');
 const { setupRecordingIPC } = require('./app/features/recording');
 const { setupSavePathsIPC } = require('./app/features/savePathsIpc');
+const { setupScreenSharingMain } = require('./app/features/screen-sharing/main');
 const { setupScreenshotIPC } = require('./app/features/screenshot');
 const {
     startSystemVolumeWatcher,
@@ -73,10 +67,6 @@ const isStaging = _appNameLower.includes('staging');
 if (!isStaging) {
     registerProtocol();
 }
-
-// Remote control is disabled. The feature requires renderer-side integration
-// that was removed with the local renderer app.
-const ENABLE_REMOTE_CONTROL = false;
 
 // Fix screen-sharing thumbnails being missing sometimes.
 // https://github.com/electron/electron/issues/44504
@@ -405,35 +395,6 @@ function createJitsiMeetWindow() {
         }
     };
 
-    const windowOpenHandler = ({ url, frameName }) => {
-        const target = getPopupTarget(url, frameName);
-
-        // Allow URLs on allowed hosts to open inside Electron instead of the browser
-        const allowedHosts = config.currentConfig.allowedHosts || [];
-
-        try {
-            const parsedUrl = new URL(url);
-
-            if (allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`))) {
-                return { action: 'allow' };
-            }
-        } catch (e) {
-            // ignore parse errors
-        }
-
-        if (!target || target === 'browser') {
-            openExternalLink(url);
-
-            return { action: 'deny' };
-        }
-
-        if (target === 'electron') {
-            return { action: 'allow' };
-        }
-
-        return { action: 'deny' };
-    };
-
     let pendingUpdateVersion = null;
 
     if (!process.mas && !isStaging) {
@@ -655,35 +616,8 @@ function createJitsiMeetWindow() {
         }
     });
 
-    // Enable Screen Sharing
-    ipcMain.handle('jitsi-screen-sharing-get-sources', async (event, sourceOptions) => {
-        const validOptions = {
-            types: sourceOptions?.types || [ 'screen', 'window' ],
-            thumbnailSize: sourceOptions?.thumbnailSize || { width: 300,
-                height: 300 },
-            fetchWindowIcons: true
-        };
-
-        try {
-            const sources = await desktopCapturer.getSources(validOptions);
-
-            const mappedSources = sources.map(source => {
-                return {
-                    id: source.id,
-                    name: source.name,
-                    thumbnail: {
-                        dataUrl: source.thumbnail.toDataURL()
-                    }
-                };
-            });
-
-            return mappedSources;
-        } catch (error) {
-            console.error('❌ Main: Error getting desktop sources:', error);
-
-            return [];
-        }
-    });
+    // Screen sharing: desktop source picker (app/features/screen-sharing).
+    const cleanupScreenSharing = setupScreenSharingMain();
 
     // Navigation Router (Dashboard -> Meeting)
     mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -926,12 +860,15 @@ function createJitsiMeetWindow() {
         callback(true);
     });
 
-    initPopupsConfigurationMain(mainWindow, windowOpenHandler);
-    setupPictureInPictureMain(mainWindow);
-    setupPowerMonitorMain(mainWindow);
-    if (ENABLE_REMOTE_CONTROL) {
-        setupRemoteControlMain(mainWindow);
-    }
+    setupWindowOpenHandler(mainWindow, {
+        getAllowedHosts: () => config.currentConfig.allowedHosts || [],
+        openExternalLink
+    });
+
+    // Power monitor (app/electron-native/power-monitor.js): the main side forwards
+    // OS power/presence events to the renderer over IPC. Currently inert — no
+    // renderer code subscribes yet (see the module's SCAFFOLD note).
+    const cleanupPowerMonitor = setupPowerMonitorMain(mainWindow);
 
     // Set up the custom in-page title bar (Windows + macOS).
     setupTitlebar(mainWindow);
@@ -1051,7 +988,8 @@ function createJitsiMeetWindow() {
         ipcMain.removeListener('retry-load', onRetryLoad);
         ipcMain.removeListener('update-toast-action', onUpdateToast);
         ipcMain.removeListener('leave-modal-action', onLeaveModal);
-        ipcMain.removeHandler('jitsi-screen-sharing-get-sources');
+        cleanupScreenSharing();
+        cleanupPowerMonitor();
         mainWindow = null;
     });
     mainWindow.once('ready-to-show', () => {

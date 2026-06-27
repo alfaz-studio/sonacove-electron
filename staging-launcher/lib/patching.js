@@ -21,6 +21,26 @@ const path = require('path');
 
 const { rmDir } = require('./fs-utils');
 
+// Default staging host(s) that may be baked into a downloaded build, depending
+// on when it was compiled. Builds from before the staj migration use the two
+// catfurr.workers.dev hosts (separate landing/meet hosts); newer builds use the
+// single-origin staj.sonacove.com for both. The launcher must patch WHICHEVER
+// the build actually contains, so all known defaults are matched here.
+// (The catfurr alternatives can be dropped once no catfurr-era builds remain.)
+//
+// The boundary class includes '.' so swapping in a dotted PR-preview host
+// (pr-N.staj.sonacove.com) doesn't re-match the staj.sonacove.com suffix and
+// corrupt it into pr-N.pr-N.staj.sonacove.com.
+const STAGING_HOST_PATTERNS = [
+    'sona-app\\.catfurr\\.workers\\.dev',
+    'sonacove\\.catfurr\\.workers\\.dev',
+    'staj\\.sonacove\\.com'
+];
+const STAGING_HOST_RE = new RegExp(
+    `(?<![a-zA-Z0-9.-])(?:${STAGING_HOST_PATTERNS.join('|')})(?![a-zA-Z0-9.-])`,
+    'g'
+);
+
 // ── Asar extraction helpers ─────────────────────────────────────────────────
 
 /**
@@ -103,57 +123,50 @@ function tryReplace(src, pattern, replacement, label) {
 }
 
 /**
+ * Swap any known default staging host (catfurr.workers.dev or staj.sonacove.com)
+ * for the hostname of `url` everywhere in `src` — landing, meetRoot, and
+ * allowedHosts. Only the hostname is replaced, never the /dashboard or /meet
+ * path. No-op on an invalid URL.
+ *
+ * @param {string} src - Source to patch.
+ * @param {string} url - Override URL whose hostname becomes the new host.
+ * @returns {string} The patched source.
+ */
+function swapStagingHost(src, url) {
+    try {
+        return src.replace(STAGING_HOST_RE, new URL(url).hostname);
+    } catch {
+        return src; // invalid URL — leave unchanged
+    }
+}
+
+/**
  * Patch the compiled build/main.js with URL overrides and layout fixes.
  *
- * ⚠ The URL strings and hostnames below must stay in sync with
- * app/features/config.js (staging block).
+ * ⚠ The staj.sonacove.com entries in STAGING_HOST_RE must stay in sync with
+ * app/features/config.js (staging block). The catfurr.workers.dev entries are
+ * legacy default hosts from builds compiled before the staj migration — they
+ * are intentionally NOT in config.js; keep them until no such builds remain.
  */
 function patchMainJs(mainJsPath, overrides) {
     let mainJs = fs.readFileSync(mainJsPath, 'utf-8');
 
+    // An override's hostname swaps the staging host everywhere — landing,
+    // meetRoot, allowedHosts — via swapStagingHost. Only the hostname is
+    // replaced, never the /dashboard or /meet path, so baked-in paths are
+    // preserved (an override URL with no path still works) and the
+    // will-navigate handler can't reconstruct meetRoot as /meet/meet/room.
+    // Works on both catfurr-era and staj.sonacove.com builds — see STAGING_HOST_RE.
+    //
+    // Under single-origin staging, landing and meet share one host, so
+    // landingUrl and meetUrl are expected to carry the SAME host. If both are
+    // set, landingUrl effectively wins (the host swap is global, so meetUrl's
+    // swap finds nothing left); meetUrl matters mainly as the sole override.
     if (overrides.landingUrl) {
-        // Replace the full landing URL first
-        mainJs = mainJs.replaceAll(
-            'https://sonacove.catfurr.workers.dev/dashboard',
-            overrides.landingUrl
-        );
-
-        // Replace the standalone hostname so allowedHosts, windowOpenHandler,
-        // Origin injection, and any other host-based checks use the new host.
-        // Use a word-boundary-aware regex to avoid double-replacing when the
-        // new hostname contains the old one as a substring (e.g. the custom
-        // host '404b3320-sona-app.catfurr.workers.dev' contains the default
-        // meet host 'sona-app.catfurr.workers.dev').
-        try {
-            const newHost = new URL(overrides.landingUrl).hostname;
-
-            mainJs = mainJs.replace(
-                /(?<![a-zA-Z0-9-])sonacove\.catfurr\.workers\.dev(?![a-zA-Z0-9-])/g,
-                newHost
-            );
-        } catch {
-            // ignore invalid URL
-        }
+        mainJs = swapStagingHost(mainJs, overrides.landingUrl);
     }
     if (overrides.meetUrl) {
-        // Only replace the hostname, NOT the full URL.  The meet config value
-        // is `https://sona-app.catfurr.workers.dev/meet` — if we replaced the
-        // full URL we'd clobber the `/meet` path, and the will-navigate handler
-        // in the app's main.js would reconstruct it as `/meet/meet/roomname`
-        // (it concatenates meetRoot + pathname, both starting with /meet).
-        // By swapping just the hostname, meetRoot stays as
-        // `https://<new-host>/meet` and the hostname check passes, so the
-        // handler never fires and the path stays correct.
-        try {
-            const newHost = new URL(overrides.meetUrl).hostname;
-
-            mainJs = mainJs.replace(
-                /(?<![a-zA-Z0-9-])sona-app\.catfurr\.workers\.dev(?![a-zA-Z0-9-])/g,
-                newHost
-            );
-        } catch {
-            // ignore invalid URL
-        }
+        mainJs = swapStagingHost(mainJs, overrides.meetUrl);
     }
 
     // Shrink the staging banner from a full-width bottom bar to a small

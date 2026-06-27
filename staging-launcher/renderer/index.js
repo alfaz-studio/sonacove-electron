@@ -284,13 +284,13 @@ function buildMainCardHTML(build) {
                 <label>Landing URL</label>
                 <input type="url" class="url-input" id="landing-main"
                        value="${escapeHtml(override.landingUrl || '')}"
-                       placeholder="https://example.com/dashboard">
+                       placeholder="https://staj.sonacove.com/dashboard">
             </div>
             <div class="url-field">
                 <label>Meet Root URL</label>
                 <input type="url" class="url-input" id="meet-main"
                        value="${escapeHtml(override.meetUrl || '')}"
-                       placeholder="https://example.com/meet">
+                       placeholder="https://staj.sonacove.com/meet">
             </div>
             <div class="url-config-actions">
                 <button class="btn btn-sm btn-primary" data-main-action="save-urls">Save URLs</button>
@@ -558,13 +558,13 @@ function buildPRCardHTML(pr) {
                 <label>Landing URL</label>
                 <input type="url" class="url-input" id="landing-${pr.prNumber}"
                        value="${escapeHtml(override.landingUrl || '')}"
-                       placeholder="https://example.com/dashboard">
+                       placeholder="https://staj.sonacove.com/dashboard">
             </div>
             <div class="url-field">
                 <label>Meet Root URL</label>
                 <input type="url" class="url-input" id="meet-${pr.prNumber}"
                        value="${escapeHtml(override.meetUrl || '')}"
-                       placeholder="https://example.com/meet">
+                       placeholder="https://staj.sonacove.com/meet">
             </div>
             <div class="url-config-actions">
                 <button class="btn btn-sm btn-primary" data-action="save-urls"
@@ -1027,7 +1027,7 @@ function formatBytes(bytes) {
 
 /**
  * Normalize a meet URL: if the user pastes a full URL like
- * "https://xyz.catfurr.workers.dev/meet/testroom", extract origin + /meet.
+ * "https://pr-153.staj.sonacove.com/meet/testroom", extract origin + /meet.
  * If it's already just the origin or origin/meet, return as-is.
  */
 function normalizeMeetUrl(url) {
