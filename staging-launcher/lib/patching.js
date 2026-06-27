@@ -9,14 +9,16 @@
 //
 // When no overrides are set, we restore the original asar.
 
-// Use original-fs to bypass Electron's asar patching.  The patched fs
+// Use original-fs (`fs`) to bypass Electron's asar patching.  The patched fs
 // opens .asar files transparently, which holds file handles and causes
 // EPERM when we later try to delete the cache directory.
-const fs = require('original-fs');
-// Electron-patched fs — reads asar archives transparently.  We use this
-// to extract files from app.asar when patching builds with custom URLs.
+//
+// `nodeFs` is Electron's patched fs — it reads asar archives transparently,
+// which we use to extract files from app.asar when patching builds.
 const nodeFs = require('fs');
+const fs = require('original-fs');
 const path = require('path');
+
 const { rmDir } = require('./fs-utils');
 
 // ── Asar extraction helpers ─────────────────────────────────────────────────
@@ -159,7 +161,8 @@ function patchMainJs(mainJsPath, overrides) {
     // for newlines, so we use \\n to match those, then \s* for indentation.
     mainJs = tryReplace(mainJs,
         /bottom: 0; left: 0; right: 0;\\n\s*height: 28px;\\n\s*background: #d97706;/,
-        'bottom:8px;right:8px;padding:2px 8px;border-radius:4px;pointer-events:none;opacity:.8;background:rgba(217,119,6,0.7);',
+        'bottom:8px;right:8px;padding:2px 8px;border-radius:4px;'
+            + 'pointer-events:none;opacity:.8;background:rgba(217,119,6,0.7);',
         'banner layout'
     );
     mainJs = tryReplace(mainJs,
@@ -181,6 +184,7 @@ function patchMainJs(mainJsPath, overrides) {
         '.currentConfig.meetRoot}${$1.pathname.replace(/^\\/meet/,"")}${$2.search}',
         'will-navigate template literal'
     );
+
     // Compiled string-concatenation form (terser may convert template literals):
     //   X.currentConfig.meetRoot+Y.pathname+Y.search
     mainJs = tryReplace(mainJs,
@@ -276,7 +280,7 @@ async function patchBuildUrls(extractDir, overrides) {
     const asarUnpackedBackup = path.join(resourcesDir, 'app-backup.asar.unpacked');
     const appDir = path.join(resourcesDir, 'app');
 
-    const hasOverrides = !!(overrides.landingUrl || overrides.meetUrl);
+    const hasOverrides = Boolean(overrides.landingUrl || overrides.meetUrl);
 
     if (process.platform === 'darwin') {
         console.log('[patcher] resourcesDir:', resourcesDir);
@@ -332,8 +336,8 @@ async function patchBuildUrls(extractDir, overrides) {
         };
 
         throw new Error(
-            'No app.asar backup found — cannot apply URL overrides\n'
-            + JSON.stringify(diag, null, 2)
+            `No app.asar backup found — cannot apply URL overrides\n${
+                JSON.stringify(diag, null, 2)}`
         );
     }
 
@@ -385,4 +389,9 @@ function buildLaunchEnv(prNumber, loadSettings) {
     return env;
 }
 
-module.exports = { copyFromAsar, copyDirReal, findResourcesDir, patchMainJs, patchBuildUrls, buildLaunchEnv };
+module.exports = { copyFromAsar,
+    copyDirReal,
+    findResourcesDir,
+    patchMainJs,
+    patchBuildUrls,
+    buildLaunchEnv };

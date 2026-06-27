@@ -11,16 +11,17 @@ const fs = require('fs');
 const path = require('path');
 
 const { CARD_W, CARD_H_DEFAULT, MARGIN, IPC } = require('./constants');
-const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
-const { getCardPosition } = require('./sizing');
 const { setupDragHandlers, isDragging } = require('./drag');
+const { setParticipantWindow, getMainWindowExcludingPip: getMainWindow, resolveFile } = require('./helpers');
 const { setupPillHandlers, isPillMode, shrinkToPill, reset: resetPill } = require('./pill');
+const { getCardPosition } = require('./sizing');
 
 // ── Settings persistence ─────────────────────────────────────────────────────
 
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'pip-settings.json');
 const VALID_LAYOUTS = [ 'single', 'split', 'grid' ];
-const DEFAULT_SETTINGS = { layout: 'single', auto: true };
+const DEFAULT_SETTINGS = { layout: 'single',
+    auto: true };
 
 /**
  * Reads persisted panel settings from disk, validating each field and
@@ -34,11 +35,14 @@ function loadSettings() {
         const layout = VALID_LAYOUTS.includes(data.layout) ? data.layout : DEFAULT_SETTINGS.layout;
         const auto = typeof data.auto === 'boolean' ? data.auto : DEFAULT_SETTINGS.auto;
 
-        return { layout, auto };
+        return { layout,
+            auto };
     } catch (_) { /* missing, corrupt, or unreadable — fall through */ }
 
     return { ...DEFAULT_SETTINGS };
 }
+
+let currentSettings = loadSettings();
 
 /**
  * Merges the given prefs into the current settings and writes them to disk.
@@ -62,12 +66,14 @@ function saveSettings(next) {
     }
 
     currentSettings = merged;
-    fs.writeFile(SETTINGS_FILE, JSON.stringify(merged), 'utf8', () => {});
+    fs.writeFile(SETTINGS_FILE, JSON.stringify(merged), 'utf8', () => {
+        /* best-effort write — ignore errors (next launch falls back to defaults) */
+    });
 }
 
 let participantWindow = null;
-let currentSettings = loadSettings();
-let currentSize = { width: CARD_W, height: CARD_H_DEFAULT };
+let currentSize = { width: CARD_W,
+    height: CARD_H_DEFAULT };
 let lastParticipantsData = null;
 let lastThemeData = null;
 
@@ -80,7 +86,9 @@ let suppressBaseline = 0;
 // ── Wire up drag and pill subsystems ─────────────────────────────────────────
 
 const getWindow = () => participantWindow;
-const getState = () => ({ size: currentSize });
+const getState = () => {
+    return { size: currentSize };
+};
 
 setupDragHandlers(getWindow);
 setupPillHandlers(getWindow, getState);
@@ -99,12 +107,13 @@ ipcMain.on(IPC.SET_SIZE, (_event, { width, height } = {}) => {
 
     // Clamp to sane bounds: a hard floor plus the display work area (minus
     // edge margins) as the ceiling, so a runaway measure can't exceed screen.
-    const maxW = Math.max(200, workArea.width - MARGIN * 2);
-    const maxH = Math.max(200, workArea.height - MARGIN * 2);
+    const maxW = Math.max(200, workArea.width - (MARGIN * 2));
+    const maxH = Math.max(200, workArea.height - (MARGIN * 2));
     const w = Math.round(Math.min(maxW, Math.max(200, Number(width) || CARD_W)));
     const h = Math.round(Math.min(maxH, Math.max(200, Number(height) || CARD_H_DEFAULT)));
 
-    currentSize = { width: w, height: h };
+    currentSize = { width: w,
+        height: h };
 
     if (!participantWindow || participantWindow.isDestroyed()
             || isPillMode() || isDragging()) {
@@ -120,7 +129,10 @@ ipcMain.on(IPC.SET_SIZE, (_event, { width, height } = {}) => {
     const x = Math.max(workArea.x, Math.min(b.x + b.width - w, workArea.x + workArea.width - w));
     const y = Math.max(workArea.y, Math.min(b.y + b.height - h, workArea.y + workArea.height - h));
 
-    participantWindow.setBounds({ x, y, width: w, height: h });
+    participantWindow.setBounds({ x,
+        y,
+        width: w,
+        height: h });
 });
 
 ipcMain.on(IPC.SAVE_SETTINGS, (_event, next) => saveSettings(next));
@@ -168,6 +180,7 @@ function openParticipantWindow() {
             transparent: true,
             frame: false,
             alwaysOnTop: true,
+
             // No OS window shadow. The window is transparent with rounded content
             // (the card, and the round pill in pill mode), so the native shadow
             // renders as a sharp-cornered square halo around the window rect — and
@@ -183,8 +196,8 @@ function openParticipantWindow() {
                 nodeIntegration: false,
                 contextIsolation: true,
                 sandbox: false,
-                preload: preloadPath,
-            },
+                preload: preloadPath
+            }
         });
     } catch (err) {
         console.error('❌ ParticipantPiP: Failed to create window:', err);
@@ -268,6 +281,12 @@ function openParticipantWindow() {
 
 // ── Data forwarding ──────────────────────────────────────────────────────────
 
+/**
+ * Forwards a rendered participant video frame to the PiP panel, if it's open.
+ *
+ * @param {*} frameData - The frame payload to relay to the panel renderer.
+ * @returns {void}
+ */
 function sendParticipantFrame(frameData) {
     if (!participantWindow || participantWindow.isDestroyed()) {
         return;
@@ -275,7 +294,16 @@ function sendParticipantFrame(frameData) {
     participantWindow.webContents.send(IPC.FRAME, frameData);
 }
 
+/**
+ * Caches and forwards a participants update to the PiP panel, applying the
+ * unread-chat suppression window (see suppressUnreadChatCount()).
+ *
+ * @param {Object} participants - The participants payload from the renderer.
+ * @returns {void}
+ */
 function sendParticipantsUpdate(participants) {
+    let outgoing = participants;
+
     if (suppressUnreadUntil > 0) {
         const incoming = participants?.unreadChatCount ?? 0;
         const expired = Date.now() >= suppressUnreadUntil;
@@ -286,19 +314,29 @@ function sendParticipantsUpdate(participants) {
             suppressUnreadUntil = 0;
             suppressBaseline = 0;
         } else {
-            participants = { ...participants, unreadChatCount: 0 };
+            outgoing = { ...participants,
+                unreadChatCount: 0 };
         }
     }
 
-    lastParticipantsData = participants;
+    lastParticipantsData = outgoing;
     if (!participantWindow || participantWindow.isDestroyed()) {
         return;
     }
-    participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, participants);
+    participantWindow.webContents.send(IPC.PARTICIPANTS_UPDATE, outgoing);
 }
 
+/**
+ * Closes the PiP panel, clearing cached participant data and optionally
+ * notifying the main window that the user dismissed the panel.
+ *
+ * @param {boolean} [notifyUserClosed] - When true, tells the main window the
+ *   panel was closed so it can update its own state.
+ * @returns {void}
+ */
 function closeParticipantWindow(notifyUserClosed = false) {
     lastParticipantsData = null;
+
     // suppressUnreadUntil intentionally survives close: the chat-click
     // closes the PiP ms later and reopens it when the user minimises.
     // Edge case: if a new meeting starts within the 15s window with
@@ -333,7 +371,8 @@ function closeParticipantWindow(notifyUserClosed = false) {
 function suppressUnreadChatCount() {
     suppressBaseline = lastParticipantsData?.unreadChatCount ?? 0;
     if (lastParticipantsData) {
-        lastParticipantsData = { ...lastParticipantsData, unreadChatCount: 0 };
+        lastParticipantsData = { ...lastParticipantsData,
+            unreadChatCount: 0 };
     }
     suppressUnreadUntil = Date.now() + UNREAD_SUPPRESS_MS;
 }
@@ -378,5 +417,5 @@ module.exports = {
     closeParticipantWindow,
     shrinkToPill,
     suppressUnreadChatCount,
-    getCurrentState: getState,
+    getCurrentState: getState
 };

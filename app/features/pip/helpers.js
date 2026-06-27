@@ -71,7 +71,7 @@ function resolveFile(filename, featureDir) {
         path.join(app.getAppPath(), 'build', filename),
         path.join(app.getAppPath(), filename),
         path.join(featureDir, filename),
-        path.join(featureDir, '../../../build', filename),
+        path.join(featureDir, '../../../build', filename)
     ];
 
     return candidates.find(p => fs.existsSync(p)) || null;
@@ -81,5 +81,5 @@ module.exports = {
     setParticipantWindow,
     getParticipantWindow,
     getMainWindowExcludingPip,
-    resolveFile,
+    resolveFile
 };

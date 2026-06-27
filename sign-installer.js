@@ -10,6 +10,12 @@ const AZURE_CONFIG = {
 
 const TIMESTAMP_URL = 'http://timestamp.acs.microsoft.com';
 
+/**
+ * Loads Azure Trusted Signing credentials from a JSON file (checked in several
+ * locations) or, failing that, from environment variables.
+ *
+ * @returns {Object} The Azure credentials.
+ */
 function loadAzureCredentials() {
     const possiblePaths = [
         path.join(__dirname, '.azure-credentials.json'),
@@ -36,7 +42,14 @@ function loadAzureCredentials() {
     throw new Error('Azure credentials not found!');
 }
 
-async function signWithAzure(filePath, credentials) {
+/**
+ * Signs a file with Azure Trusted Signing via the dotnet `sign` tool.
+ *
+ * @param {string} filePath - Path to the file to sign.
+ * @param {Object} credentials - Azure credentials.
+ * @returns {Promise<void>} Resolves when signing completes successfully.
+ */
+function signWithAzure(filePath, credentials) {
     return new Promise((resolve, reject) => {
         const args = [
             'code', 'trusted-signing',
@@ -72,6 +85,13 @@ async function signWithAzure(filePath, credentials) {
     });
 }
 
+/**
+ * Signs a single file if it exists, logging the outcome.
+ *
+ * @param {string} filePath - Path to the file to sign.
+ * @param {Object} credentials - Azure credentials.
+ * @returns {Promise<void>} Resolves when the file is signed or skipped.
+ */
 async function signFile(filePath, credentials) {
     if (!fs.existsSync(filePath)) {
         console.log(`   ⏭️  Skipped (not found): ${path.basename(filePath)}`);
@@ -86,6 +106,39 @@ async function signFile(filePath, credentials) {
         console.log(`   ✅ Signed: ${path.basename(filePath)}`);
     } catch (error) {
         throw new Error(`Failed to sign ${path.basename(filePath)}: ${error.message}`);
+    }
+}
+
+/**
+ * Finds installer/uninstaller executables in a directory and signs each one.
+ *
+ * @param {string} distDir - Directory to scan for installer artifacts.
+ * @param {Object} credentials - Azure credentials.
+ * @returns {Promise<void>} Resolves when all matched installers are signed.
+ */
+async function signInstallerFiles(distDir, credentials) {
+    if (!fs.existsSync(distDir)) {
+        return;
+    }
+
+    const distFiles = fs.readdirSync(distDir);
+    const installerFiles = distFiles.filter(f =>
+        f.endsWith('-Setup.exe')
+        || f.includes('uninstaller')
+        || (f.endsWith('.exe') && (f.includes('Setup') || f.includes('uninstaller')))
+    );
+
+    if (installerFiles.length === 0) {
+        return;
+    }
+
+    console.log(`Found ${installerFiles.length} installer file(s):`);
+    for (const file of installerFiles) {
+        const filePath = path.join(distDir, file);
+
+        if (fs.existsSync(filePath)) {
+            await signFile(filePath, credentials);
+        }
     }
 }
 
@@ -104,25 +157,7 @@ exports.default = async function(context) {
         // Sign files in the dist directory (installer, uninstaller)
         const distDir = context.outDir;
 
-        if (fs.existsSync(distDir)) {
-            const distFiles = fs.readdirSync(distDir);
-            const installerFiles = distFiles.filter(f =>
-                f.endsWith('-Setup.exe')
-        || f.includes('uninstaller')
-        || (f.endsWith('.exe') && (f.includes('Setup') || f.includes('uninstaller')))
-            );
-
-            if (installerFiles.length > 0) {
-                console.log(`Found ${installerFiles.length} installer file(s):`);
-                for (const file of installerFiles) {
-                    const filePath = path.join(distDir, file);
-
-                    if (fs.existsSync(filePath)) {
-                        await signFile(filePath, credentials);
-                    }
-                }
-            }
-        }
+        await signInstallerFiles(distDir, credentials);
 
         console.log('\n═══════════════════════════════════════════════════');
         console.log('      ✅ Installer Signing Completed');

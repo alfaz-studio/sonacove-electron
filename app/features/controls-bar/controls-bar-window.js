@@ -40,7 +40,9 @@ let introShown = loadIntroShown();
 /** Marks the first-run intro as shown and persists it (best-effort). */
 function markIntroShown() {
     introShown = true;
-    fs.writeFile(STATE_FILE, JSON.stringify({ introShown: true }), 'utf8', () => {});
+    fs.writeFile(STATE_FILE, JSON.stringify({ introShown: true }), 'utf8', () => {
+        // Best-effort persistence; ignore write errors.
+    });
 }
 
 let controlsBarWindow = null;

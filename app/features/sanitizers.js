@@ -1,5 +1,3 @@
-'use strict';
-
 const path = require('path');
 
 const MAX_FILENAME_BYTES = 255;
@@ -20,7 +18,9 @@ function truncateUtf8(s, maxBytes) {
     for (const ch of s) {
         const chBytes = Buffer.byteLength(ch, 'utf8');
 
-        if (bytes + chBytes > maxBytes) break;
+        if (bytes + chBytes > maxBytes) {
+            break;
+        }
         result += ch;
         bytes += chBytes;
     }
@@ -96,8 +96,12 @@ function sanitizeOutputFilename(filename, requiredExt) {
  * @returns {string|null|undefined}
  */
 function sanitizeOverride(value) {
-    if (value === null) return null;
-    if (typeof value !== 'string') return undefined;
+    if (value === null) {
+        return null;
+    }
+    if (typeof value !== 'string') {
+        return undefined;
+    }
 
     const trimmed = value.trim();
 
@@ -160,11 +164,13 @@ function validateUserPath(value, allowedRoots) {
     }
 
     const isWindows = process.platform === 'win32';
-    const norm = s => (isWindows ? s.toLowerCase() : s);
+    const norm = isWindows ? s => s.toLowerCase() : s => s;
     const target = norm(normalized);
 
     for (const root of allowedRoots) {
-        if (typeof root !== 'string' || !root) continue;
+        if (typeof root !== 'string' || !root) {
+            continue;
+        }
         const normalizedRoot = path.resolve(root);
         const rootNorm = norm(normalizedRoot);
 

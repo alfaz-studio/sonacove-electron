@@ -100,7 +100,8 @@ function setupAutoUpdater({ autoUpdater, ipcMain, app, getMainWindow, dialog }) 
                     && result.updateInfo.version !== app.getVersion()
             };
         } catch (err) {
-            return { updateAvailable: false, error: err.message };
+            return { updateAvailable: false,
+                error: err.message };
         }
     });
 

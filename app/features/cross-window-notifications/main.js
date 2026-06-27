@@ -1,5 +1,5 @@
 /* eslint-disable require-jsdoc */
-'use strict';
+
 
 const { Notification, app } = require('electron');
 

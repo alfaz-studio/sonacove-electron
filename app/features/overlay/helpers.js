@@ -96,7 +96,9 @@ function resolvePreloadPath() {
     const dirs = [
         path.join(app.getAppPath(), 'build'),
         app.getAppPath(),
-        path.join(__dirname, '..', '..', '..', '..', 'app', 'preload') // unbundled dev fallback — never reached in webpack builds
+
+        // unbundled dev fallback — never reached in webpack builds
+        path.join(__dirname, '..', '..', '..', '..', 'app', 'preload')
     ];
 
     for (const dir of dirs) {

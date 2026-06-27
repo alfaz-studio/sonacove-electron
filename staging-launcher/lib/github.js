@@ -20,7 +20,9 @@ function githubApi(apiPath, token) {
         }
 
         const req = https.get(
-            { hostname: 'api.github.com', path: apiPath, headers },
+            { hostname: 'api.github.com',
+                path: apiPath,
+                headers },
             res => {
                 let data = '';
 
@@ -181,29 +183,30 @@ async function fetchStagingPRs(token, { owner, repo, cacheDir }) {
         }
 
         const prState = pr ? pr.state : 'open'; // assume open if no PR metadata
-        const merged = pr ? !!pr.merged_at : false;
+        const merged = pr ? Boolean(pr.merged_at) : false;
 
         return {
             prNumber: prNum,
             title: pr ? pr.title : `PR #${prNum}`,
             author: pr ? pr.user.login : 'unknown',
             authorAvatar: pr ? pr.user.avatar_url : null,
-            draft: pr ? !!pr.draft : false,
+            draft: pr ? Boolean(pr.draft) : false,
             state: prState,
             merged,
             sha: headSha || release.target_commitish,
-            commitMessage: headSha ? (commitMap.get(headSha) || null) : null,
+            commitMessage: headSha ? commitMap.get(headSha) || null : null,
             updatedAt: release.published_at || release.created_at,
             assetName,
             assetUrl: asset ? asset.url : null,
             assetSize: asset ? asset.size : 0,
-            hasAsset: !!asset,
+            hasAsset: Boolean(asset),
             cached,
             updateAvailable: cached && cachedSha !== (headSha || release.target_commitish)
         };
     });
 
-    return { prs: results, rateLimit };
+    return { prs: results,
+        rateLimit };
 }
 
 /**
@@ -227,8 +230,13 @@ async function fetchMainBuild(token, { owner, repo, cacheDir }) {
         rateLimit = res.rateLimit;
     } catch (err) {
         // 404 means the release hasn't been created yet; re-throw other errors
-        if (err.message && !err.message.includes('404')) throw err;
-        return { build: null, rateLimit: { remaining: '?', limit: '?' } };
+        if (err.message && !err.message.includes('404')) {
+            throw err;
+        }
+
+        return { build: null,
+            rateLimit: { remaining: '?',
+                limit: '?' } };
     }
 
     // Determine platform asset (CI only builds for Windows and macOS)
@@ -241,7 +249,8 @@ async function fetchMainBuild(token, { owner, repo, cacheDir }) {
         assetName = 'sonacove-staging-win-x64.zip';
     } else {
         // No Linux builds are produced by CI
-        return { build: null, rateLimit };
+        return { build: null,
+            rateLimit };
     }
 
     const asset = release.assets.find(a => a.name === assetName);
@@ -289,7 +298,7 @@ async function fetchMainBuild(token, { owner, repo, cacheDir }) {
             assetName,
             assetUrl: asset ? asset.url : null,
             assetSize: asset ? asset.size : 0,
-            hasAsset: !!asset,
+            hasAsset: Boolean(asset),
             cached,
             updateAvailable: cached && cachedSha !== sha
         },
@@ -297,4 +306,6 @@ async function fetchMainBuild(token, { owner, repo, cacheDir }) {
     };
 }
 
-module.exports = { githubApi, fetchStagingPRs, fetchMainBuild };
+module.exports = { githubApi,
+    fetchStagingPRs,
+    fetchMainBuild };

@@ -1,6 +1,6 @@
+const CopyPlugin = require('copy-webpack-plugin');
 const path = require('path');
 const webpack = require('webpack');
-const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
     target: 'electron-main',
@@ -10,7 +10,7 @@ module.exports = {
         'overlay-preload': './app/preload/overlay-preload.js',
         'participant-panel-preload': './app/features/pip/participant-panel-preload.js',
         'controls-bar-preload': './app/features/controls-bar/controls-bar-preload.js',
-        'share-border-preload': './app/features/share-border/share-border-preload.js',
+        'share-border-preload': './app/features/share-border/share-border-preload.js'
     },
     output: {
         path: path.resolve('./build'),
@@ -27,18 +27,30 @@ module.exports = {
         // or it silently 404s in build/ and the window loads blank.
         new CopyPlugin({
             patterns: [
-                { from: 'app/splash.html', to: 'splash.html' },
-                { from: 'app/error.html', to: 'error.html' },
-                { from: 'app/features/pip/participant-panel.html', to: 'participant-panel.html' },
-                { from: 'app/features/pip/participant-panel.css', to: 'participant-panel.css' },
-                { from: 'app/features/pip/participant-panel.js', to: 'participant-panel.js' },
-                { from: 'app/features/controls-bar/controls-bar.html', to: 'controls-bar.html' },
-                { from: 'app/features/controls-bar/controls-bar.css', to: 'controls-bar.css' },
-                { from: 'app/features/controls-bar/controls-bar.js', to: 'controls-bar.js' },
-                { from: 'app/features/controls-bar/fonts', to: 'fonts' },
-                { from: 'app/features/share-border/share-border.html', to: 'share-border.html' },
-                { from: 'app/features/share-border/share-border.js', to: 'share-border.js' },
-                { from: 'app/locales', to: 'locales' }
+                { from: 'app/splash.html',
+                    to: 'splash.html' },
+                { from: 'app/error.html',
+                    to: 'error.html' },
+                { from: 'app/features/pip/participant-panel.html',
+                    to: 'participant-panel.html' },
+                { from: 'app/features/pip/participant-panel.css',
+                    to: 'participant-panel.css' },
+                { from: 'app/features/pip/participant-panel.js',
+                    to: 'participant-panel.js' },
+                { from: 'app/features/controls-bar/controls-bar.html',
+                    to: 'controls-bar.html' },
+                { from: 'app/features/controls-bar/controls-bar.css',
+                    to: 'controls-bar.css' },
+                { from: 'app/features/controls-bar/controls-bar.js',
+                    to: 'controls-bar.js' },
+                { from: 'app/features/controls-bar/fonts',
+                    to: 'fonts' },
+                { from: 'app/features/share-border/share-border.html',
+                    to: 'share-border.html' },
+                { from: 'app/features/share-border/share-border.js',
+                    to: 'share-border.js' },
+                { from: 'app/locales',
+                    to: 'locales' }
             ]
         })
     ],
@@ -47,6 +59,7 @@ module.exports = {
         'electron-context-menu': 'require(\'electron-context-menu\')',
         'electron-reload': 'require(\'electron-reload\')',
         'posthog-node': 'require(\'posthog-node\')',
+
         // Must stay external so its Windows impl's `__dirname` resolves at
         // runtime to the real on-disk loudness/impl/windows/ folder. Webpack
         // would otherwise inline `__dirname` as a compile-time relative path,

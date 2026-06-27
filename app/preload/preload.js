@@ -5,6 +5,7 @@ const {
     setupPowerMonitorRender
 } = require('@jitsi/electron-sdk');
 const { ipcRenderer } = require('electron');
+
 const {
     IPC_BROADCAST_CHANNEL,
     IPC_REQUEST_CHANNEL,
@@ -129,13 +130,20 @@ function setupRenderer(api, options = {}) {
 
 // Intercept getUserMedia to track the last selected screenshare source
 // navigator.mediaDevices may not be available at preload time, so defer the patch
+/**
+ * Patches navigator.mediaDevices.getUserMedia to record the source id of the
+ * last selected screenshare, so other features can detect window vs screen
+ * sharing. No-op if mediaDevices is unavailable.
+ *
+ * @returns {void}
+ */
 function patchGetUserMedia() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         return;
     }
     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
-    navigator.mediaDevices.getUserMedia = async constraints => {
+    navigator.mediaDevices.getUserMedia = constraints => {
         if (constraints && constraints.video && typeof constraints.video === 'object') {
             let sourceId = null;
 
@@ -173,9 +181,11 @@ window.sonacoveElectronAPI = {
     // buffering the whole recording in memory or relying on showSaveFilePicker.
     recording: {
         startWrite: filename => ipcRenderer.invoke('recording:start-write', { filename }),
-        writeChunk: (sessionId, chunk) => ipcRenderer.invoke('recording:write-chunk', { sessionId, chunk }),
+        writeChunk: (sessionId, chunk) => ipcRenderer.invoke('recording:write-chunk', { sessionId,
+            chunk }),
         finishWrite: (sessionId, firstChunkOverride) =>
-            ipcRenderer.invoke('recording:finish-write', { sessionId, firstChunkOverride }),
+            ipcRenderer.invoke('recording:finish-write', { sessionId,
+                firstChunkOverride }),
         cancelWrite: sessionId => ipcRenderer.invoke('recording:cancel-write', { sessionId })
     },
 
@@ -189,7 +199,11 @@ window.sonacoveElectronAPI = {
     ipc: {
         on: (channel, listener) => {
             if (!whitelistedIpcChannels.includes(channel) && !receiveOnlyIpcChannels.includes(channel)) {
-                return () => {};
+                // Channel not allowed: return a no-op unsubscribe so callers
+                // can always invoke the returned function safely.
+                return () => {
+                    // Nothing was registered, so there is nothing to remove.
+                };
             }
             const cb = (_event, ...args) => listener(...args);
 

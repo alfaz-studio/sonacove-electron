@@ -6,9 +6,9 @@ const { getIconBase64 } = require('./icon');
 const { getTitlebarJS, getMacTitlebarJS } = require('./renderer-script');
 
 /**
- * Injects the Windows custom title bar into the currently loaded page.
+ * Builds the HTML snippet for the app icon used in the title bar.
  *
- * @param {import('electron').BrowserWindow} mainWindow
+ * @returns {string} The icon div HTML, or an empty string if no icon is available.
  */
 function buildIconHtml() {
     const base64 = getIconBase64();
@@ -18,6 +18,12 @@ function buildIconHtml() {
         : '';
 }
 
+/**
+ * Injects the Windows custom title bar into the currently loaded page.
+ *
+ * @param {import('electron').BrowserWindow} mainWindow - The window to inject into.
+ * @returns {void}
+ */
 function injectTitlebar(mainWindow) {
     if (!mainWindow || mainWindow.isDestroyed()) {
         return;
@@ -114,4 +120,5 @@ function notifyUpdateAvailable(mainWindow, version) {
     }
 }
 
-module.exports = { setupTitlebar, notifyUpdateAvailable };
+module.exports = { setupTitlebar,
+    notifyUpdateAvailable };

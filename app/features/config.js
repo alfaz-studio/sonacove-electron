@@ -23,12 +23,20 @@ const URLS = {
         allowedHosts: [ 'sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
         defaultServerURL: 'https://sonacove.com'
     },
+
     // ⚠ staging-launcher/main.js patchMainJs() replaces these URL strings
     // directly in compiled builds — keep in sync with the patterns there.
     staging: {
         landing: 'https://sonacove.catfurr.workers.dev/dashboard',
         meetRoot: 'https://sona-app.catfurr.workers.dev/meet',
-        allowedHosts: [ 'sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        allowedHosts: [
+            'sona-app.catfurr.workers.dev',
+            'sonacove.catfurr.workers.dev',
+            'localhost',
+            'gravatar.com',
+            'sandbox-customer-portal.paddle.com',
+            'staj.sonacove.com'
+        ],
         defaultServerURL: 'https://sonacove.com'
     }
 };

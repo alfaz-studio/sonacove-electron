@@ -7,17 +7,17 @@
 
 // ── Tile sizing ──────────────────────────────────────────────────────────────
 
-const TILE_W = 250;   // tile width — same for both orientations
+const TILE_W = 250; // tile width — same for both orientations
 const H_TILE_H = 130; // tile height in horizontal mode (landscape)
 const V_TILE_H = 160; // tile height in vertical mode (squarish)
 const TILE_GAP = 8;
-const TILE_PAD = 8;   // padding inside the tiles container (each side)
+const TILE_PAD = 8; // padding inside the tiles container (each side)
 
 // ── Panel chrome ─────────────────────────────────────────────────────────────
 
-const HEADER_H = 32;  // control bar height
-const BORDER = 1;     // panel border width (each side)
-const MARGIN = 20;    // gap between panel and screen edges
+const HEADER_H = 32; // control bar height
+const BORDER = 1; // panel border width (each side)
+const MARGIN = 20; // gap between panel and screen edges
 
 // Transparent padding the window carries around the visible panel so the panel's
 // rounded CSS drop-shadow has room to render instead of being clipped to the
@@ -110,7 +110,7 @@ const IPC = {
     STAGE_CHANGED_RENDERER: 'pip-stage-changed',
     PANEL_CLOSED: 'pip-panel-closed',
     PANEL_REOPENED: 'pip-panel-reopened',
-    ORIENTATION_CHANGED_RENDERER: 'pip-orientation-changed',
+    ORIENTATION_CHANGED_RENDERER: 'pip-orientation-changed'
 };
 
 module.exports = {
@@ -129,5 +129,5 @@ module.exports = {
     CARD_W,
     CARD_H_DEFAULT,
     FILMSTRIP_VIDEO,
-    IPC,
+    IPC
 };
