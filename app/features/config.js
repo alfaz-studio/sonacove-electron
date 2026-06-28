@@ -23,12 +23,21 @@ const URLS = {
         allowedHosts: [ 'sonacove.com', 'gravatar.com', 'customer-portal.paddle.com' ],
         defaultServerURL: 'https://sonacove.com'
     },
-    // ⚠ staging-launcher/main.js patchMainJs() replaces these URL strings
+
+    // ⚠ staging-launcher/lib/patching.js patchMainJs() replaces these URL strings
     // directly in compiled builds — keep in sync with the patterns there.
+    // Single-origin staging: landing + meet are served from the same host
+    // (staj.sonacove.com); PR previews live at <slot>.staj.sonacove.com and are
+    // covered by the allowedHosts suffix match (hostname.endsWith('.' + host)).
     staging: {
-        landing: 'https://sonacove.catfurr.workers.dev/dashboard',
-        meetRoot: 'https://sona-app.catfurr.workers.dev/meet',
-        allowedHosts: [ 'sona-app.catfurr.workers.dev', 'sonacove.catfurr.workers.dev', 'localhost', 'gravatar.com', 'sandbox-customer-portal.paddle.com', 'staj.sonacove.com' ],
+        landing: 'https://staj.sonacove.com/dashboard',
+        meetRoot: 'https://staj.sonacove.com/meet',
+        allowedHosts: [
+            'staj.sonacove.com',
+            'localhost',
+            'gravatar.com',
+            'sandbox-customer-portal.paddle.com'
+        ],
         defaultServerURL: 'https://sonacove.com'
     }
 };

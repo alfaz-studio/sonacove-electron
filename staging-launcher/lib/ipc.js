@@ -1,8 +1,18 @@
 const { ipcMain, shell } = require('electron');
-const { GITHUB_OWNER, GITHUB_REPO, CACHE_DIR, loadSettings, saveSettings } = require('./config');
-const { fetchStagingPRs, fetchMainBuild } = require('./github');
+
 const { downloadBuild, launchBuild, clearCache, getCacheInfo } = require('./builds');
-const { validPR, validBuildId } = require('./fs-utils');
+const { GITHUB_OWNER, GITHUB_REPO, CACHE_DIR, loadSettings, saveSettings } = require('./config');
+const { validPR } = require('./fs-utils');
+const { fetchStagingPRs, fetchMainBuild } = require('./github');
+
+/**
+ * Throw if the given string is not a parseable absolute URL.
+ * `new URL()` rejects malformed input; we only care about the throw.
+ * @param {string} value  Candidate URL
+ */
+function assertValidUrl(value) {
+    return new URL(value);
+}
 
 /**
  * Register all IPC handlers.
@@ -11,32 +21,42 @@ const { validPR, validBuildId } = require('./fs-utils');
 function registerIpcHandlers({ getMainWindow }) {
     // Fetch list of staging PR builds
     ipcMain.handle('get-staging-prs', (_event, token) =>
-        fetchStagingPRs(token, { owner: GITHUB_OWNER, repo: GITHUB_REPO, cacheDir: CACHE_DIR })
+        fetchStagingPRs(token, { owner: GITHUB_OWNER,
+            repo: GITHUB_REPO,
+            cacheDir: CACHE_DIR })
     );
 
     // Fetch the latest main-branch staging build
     ipcMain.handle('get-main-build', (_event, token) =>
-        fetchMainBuild(token, { owner: GITHUB_OWNER, repo: GITHUB_REPO, cacheDir: CACHE_DIR })
+        fetchMainBuild(token, { owner: GITHUB_OWNER,
+            repo: GITHUB_REPO,
+            cacheDir: CACHE_DIR })
     );
 
     // Download a build
     ipcMain.handle('download-build', (_event, opts) =>
-        downloadBuild({ ...opts, cacheDir: CACHE_DIR, getMainWindow })
+        downloadBuild({ ...opts,
+            cacheDir: CACHE_DIR,
+            getMainWindow })
     );
 
     // Launch a cached build
     ipcMain.handle('launch-build', (_event, opts) =>
-        launchBuild({ ...opts, cacheDir: CACHE_DIR, loadSettings })
+        launchBuild({ ...opts,
+            cacheDir: CACHE_DIR,
+            loadSettings })
     );
 
     // Clear cache for a specific PR or all
     ipcMain.handle('clear-cache', (_event, opts) =>
-        clearCache({ ...opts, cacheDir: CACHE_DIR })
+        clearCache({ ...opts,
+            cacheDir: CACHE_DIR })
     );
 
     // Clear cache only for closed/merged PRs
     ipcMain.handle('clear-closed-cache', (_event, { closedPRNumbers }) =>
-        clearCache({ prNumbers: closedPRNumbers, cacheDir: CACHE_DIR })
+        clearCache({ prNumbers: closedPRNumbers,
+            cacheDir: CACHE_DIR })
     );
 
     // Get cache info
@@ -47,7 +67,8 @@ function registerIpcHandlers({ getMainWindow }) {
     ipcMain.handle('save-settings', (_event, settings) => {
         const current = loadSettings();
 
-        saveSettings({ ...current, ...settings });
+        saveSettings({ ...current,
+            ...settings });
 
         return { success: true };
     });
@@ -60,10 +81,10 @@ function registerIpcHandlers({ getMainWindow }) {
         // issues, but this prevents invalid strings from reaching config.js where
         // new URL() would throw and crash the launched app).
         if (landingUrl) {
-            new URL(landingUrl);
+            assertValidUrl(landingUrl);
         }
         if (meetUrl) {
-            new URL(meetUrl);
+            assertValidUrl(meetUrl);
         }
 
         const settings = loadSettings();
@@ -73,7 +94,8 @@ function registerIpcHandlers({ getMainWindow }) {
         }
 
         if (landingUrl || meetUrl) {
-            settings.prOverrides[key] = { landingUrl, meetUrl };
+            settings.prOverrides[key] = { landingUrl,
+                meetUrl };
         } else {
             delete settings.prOverrides[key];
         }
@@ -84,11 +106,13 @@ function registerIpcHandlers({ getMainWindow }) {
     });
 
     // Expose repo constants so the renderer has a single source of truth
-    ipcMain.handle('get-repo-info', () => ({
-        owner: GITHUB_OWNER,
-        repo: GITHUB_REPO,
-        baseUrl: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`
-    }));
+    ipcMain.handle('get-repo-info', () => {
+        return {
+            owner: GITHUB_OWNER,
+            repo: GITHUB_REPO,
+            baseUrl: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`
+        };
+    });
 
     // Open external link — restrict to http/https to prevent arbitrary scheme execution
     ipcMain.handle('open-external', (_event, url) => {

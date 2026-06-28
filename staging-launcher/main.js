@@ -12,6 +12,11 @@ const getMainWindow = () => mainWindow;
 
 // ── Window ──────────────────────────────────────────────────────────────────
 
+/**
+ * Resolve the window/app icon path, preferring the staging launcher's own
+ * color-shifted icon and falling back to the main app's icon.
+ * @returns {string|undefined} Absolute icon path, or undefined when packaged
+ */
 function getIconPath() {
     const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
 
@@ -33,6 +38,10 @@ function getIconPath() {
     return undefined;
 }
 
+/**
+ * Create the main launcher window and load the renderer.
+ * @returns {void}
+ */
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 960,
@@ -62,9 +71,7 @@ registerIpcHandlers({ getMainWindow });
 // Enforce single instance — focus existing window instead of opening a second
 const gotTheLock = app.requestSingleInstanceLock();
 
-if (!gotTheLock) {
-    app.quit();
-} else {
+if (gotTheLock) {
     app.on('second-instance', () => {
         if (mainWindow) {
             if (mainWindow.isMinimized()) {
@@ -77,8 +84,14 @@ if (!gotTheLock) {
     app.whenReady().then(() => {
         fs.mkdirSync(CACHE_DIR, { recursive: true });
         createWindow();
-        setupAutoUpdater({ autoUpdater, ipcMain, app, getMainWindow, dialog });
+        setupAutoUpdater({ autoUpdater,
+            ipcMain,
+            app,
+            getMainWindow,
+            dialog });
     });
+} else {
+    app.quit();
 }
 
 app.on('window-all-closed', () => app.quit());

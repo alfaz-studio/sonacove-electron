@@ -44,7 +44,9 @@ function attachCursorForward({ getWindow, isClickThrough }) {
     // unfocused window. On macOS the overlay still receives real OS moves while
     // click-through, so synthetic injection is redundant — skip the poll entirely.
     if (process.platform !== 'win32') {
-        return () => {};
+        // Non-Windows: nothing to detach — return an inert no-op so callers can
+        // always invoke the returned function unconditionally on window close.
+        return () => { /* no-op: poll never started on this platform */ };
     }
 
     const timer = setInterval(() => {

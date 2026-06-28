@@ -1,5 +1,7 @@
 const { BrowserWindow, app, globalShortcut, session } = require('electron');
 
+const { getIconPath } = require('../paths');
+
 const {
     ALWAYS_ON_TOP_LEVEL,
     TRANSPARENT_BG,
@@ -10,7 +12,6 @@ const {
     CLOSE_REASON_CRASHED,
     CLOSE_REASON_UNRESPONSIVE
 } = require('./constants');
-const { getIconPath } = require('../paths');
 
 /**
  * Per-attempt ceiling (ms) for the overlay page to make load progress. The page

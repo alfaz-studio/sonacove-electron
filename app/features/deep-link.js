@@ -91,7 +91,10 @@ function performDeeplinkLoad(win, targetUrl) {
     // Clearing here (instead of after a fixed timeout) prevents the flag
     // from lingering into an unrelated close attempt the user might make
     // a second or two later, which would silently bypass the leave-modal.
-    let safetyTimer;
+    // Forward-declared so clearFlag can clear it before the timer is assigned.
+    let safetyTimer = null;
+
+    // Clear the flag (and the safety timer) as soon as navigation starts.
     const clearFlag = () => {
         deeplinkNavigating = false;
         clearTimeout(safetyTimer);
@@ -293,7 +296,9 @@ async function navigateDeepLink(deepLink) {
                     resolve(data?.action);
                 };
 
-                pendingDeeplinkModal = { handler, cancelTimer, resolve };
+                pendingDeeplinkModal = { handler,
+                    cancelTimer,
+                    resolve };
                 ipcMain.once('deeplink-modal-action', handler);
             });
 
@@ -315,6 +320,7 @@ async function navigateDeepLink(deepLink) {
 
             pendingDeeplink = {
                 targetUrl,
+
                 // Known edge case: if the renderer sends /static/close at
                 // nearly the same millisecond this timer fires, the timer
                 // clears pendingDeeplink first and main.js's will-navigate

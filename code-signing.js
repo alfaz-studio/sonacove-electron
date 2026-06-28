@@ -10,6 +10,9 @@ const AZURE_CONFIG = {
 
 const TIMESTAMP_URL = 'http://timestamp.acs.microsoft.com';
 
+/**
+ * Load Azure Trusted Signing credentials from a local file or env vars.
+ */
 function loadAzureCredentials() {
     const possiblePaths = [
         path.join(__dirname, '.azure-credentials.json'),
@@ -40,7 +43,10 @@ function loadAzureCredentials() {
     throw new Error('Azure credentials not found!');
 }
 
-async function signWithAzure(filePath, credentials) {
+/**
+ * Sign one file via the Microsoft `sign` CLI (Azure Trusted Signing).
+ */
+function signWithAzure(filePath, credentials) {
     return new Promise((resolve, reject) => {
         const args = [
             'code', 'trusted-signing',
@@ -88,6 +94,9 @@ async function signWithAzure(filePath, credentials) {
     });
 }
 
+/**
+ * Sign an artifact if present, with friendly skip/error logging.
+ */
 async function signFile(filePath, credentials) {
     if (!fs.existsSync(filePath)) {
         console.log(`   ⏭️  Skipped (not found): ${path.basename(filePath)}`);
@@ -105,23 +114,30 @@ async function signFile(filePath, credentials) {
     }
 }
 
+/**
+ * Best-effort embed of the app icon into an executable via rcedit.
+ */
 async function embedIcon(exePath, iconPath) {
     try {
         let rcedit;
+
         try {
             rcedit = require('rcedit');
         } catch (e) {
-            console.warn(`   ⚠️  rcedit not available, skipping icon embedding`);
+            console.warn('   ⚠️  rcedit not available, skipping icon embedding');
+
             return;
         }
 
         if (!fs.existsSync(exePath)) {
             console.log(`   ⏭️  Skipped (exe not found): ${path.basename(exePath)}`);
+
             return;
         }
 
         if (!fs.existsSync(iconPath)) {
             console.log(`   ⏭️  Skipped (icon not found): ${path.basename(iconPath)}`);
+
             return;
         }
 
@@ -163,15 +179,16 @@ async function embedIcon(exePath, iconPath) {
         // Method 4: Try all properties that might be functions
         if (!success) {
             for (const key of Object.keys(rcedit)) {
-                if (typeof rcedit[key] === 'function') {
-                    try {
-                        await rcedit[key](exePath, { icon: iconPath });
-                        success = true;
-                        console.log(`   ✅ Icon embedded using method: ${key}`);
-                        break;
-                    } catch (e) {
-                        // Try next method
-                    }
+                if (typeof rcedit[key] !== 'function') {
+                    continue;
+                }
+                try {
+                    await rcedit[key](exePath, { icon: iconPath });
+                    success = true;
+                    console.log(`   ✅ Icon embedded using method: ${key}`);
+                    break;
+                } catch (e) {
+                    // Try next method
                 }
             }
         }
@@ -179,14 +196,17 @@ async function embedIcon(exePath, iconPath) {
         if (success) {
             console.log(`   ✅ Icon embedded: ${path.basename(exePath)}`);
         } else {
-            console.warn(`   ⚠️  Could not determine how to call rcedit - skipping icon embedding`);
+            console.warn('   ⚠️  Could not determine how to call rcedit - skipping icon embedding');
         }
     } catch (error) {
         console.warn(`   ⚠️  Could not embed icon: ${error.message}`);
     }
 }
 
-async function installSignTool() {
+/**
+ * Install or update the Microsoft `sign` global dotnet tool.
+ */
+function installSignTool() {
     return new Promise((resolve, reject) => {
         console.log('   📦 Installing Microsoft sign tool...');
 
@@ -227,6 +247,9 @@ async function installSignTool() {
     });
 }
 
+/**
+ * Verify the .NET SDK is available (required by the `sign` tool).
+ */
 function checkDotNetSdk() {
     return new Promise((resolve, reject) => {
         console.log('🔍 Checking .NET SDK...');
@@ -261,8 +284,11 @@ function checkDotNetSdk() {
 // (it calls the sign hook for both the installer and the uninstaller).
 let signingSetupPromise = null;
 
+/**
+ * Prepare the signing toolchain once per build (memoized).
+ */
 function ensureSigningSetup() {
-    if (signingSetupPromise == null) {
+    if (signingSetupPromise === null) {
         signingSetupPromise = (async () => {
             console.log('\n═══════════════════════════════════════════════════');
             console.log('   Azure Trusted Signing - Sonacove Meets');
@@ -270,6 +296,7 @@ function ensureSigningSetup() {
 
             console.log('📋 Loading Azure credentials...');
             const credentials = loadAzureCredentials();
+
             console.log('   ✅ Credentials loaded\n');
 
             await checkDotNetSdk();
@@ -347,9 +374,11 @@ exports.default = async function(context) {
     }
 
     const appOutDir = context.appOutDir;
+
     console.log(`\n📎 Embedding icon into executable in: ${appOutDir}`);
 
     const iconPath = path.join(__dirname, 'resources', 'icon.ico');
     const mainExePath = path.join(appOutDir, 'Sonacove Meets.exe');
+
     await embedIcon(mainExePath, iconPath);
 };

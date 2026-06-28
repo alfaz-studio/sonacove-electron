@@ -10,30 +10,30 @@
 const { ipcMain, screen } = require('electron');
 
 const {
-    TILE_W, TILE_GAP, TILE_PAD, HEADER_H, BORDER, WINDOW_PAD, IPC,
+    TILE_W, TILE_GAP, TILE_PAD, HEADER_H, BORDER, WINDOW_PAD, IPC
 } = require('./constants');
 const { computeWindowSize, windowFromMainExtent } = require('./sizing');
 
 let _getWindow = null;
 let _getState = null;
 let _restoreConstraints = null;
-let _onUserResize = null;   // called when the user resizes (turns off auto-sizing)
+let _onUserResize = null; // called when the user resizes (turns off auto-sizing)
 let _visibleTileCount = 4;
 
 // Edge-resize polling state.
 let _isResizing = false;
 let _pollInterval = null;
-let _startCursorPos = 0;   // cursor position along the resize axis at start
-let _startWindowX = 0;     // window x at start
-let _startWindowY = 0;     // window y at start
-let _startWindowSize = 0;  // window size along the resize axis at start
-let _resizeEdge = null;     // 'left' | 'right' | 'top' | 'bottom'
+let _startCursorPos = 0; // cursor position along the resize axis at start
+let _startWindowX = 0; // window x at start
+let _startWindowY = 0; // window y at start
+let _startWindowSize = 0; // window size along the resize axis at start
+let _resizeEdge = null; // 'left' | 'right' | 'top' | 'bottom'
 
 // Lerp animation state — smoothly transitions window bounds between snap points.
 const LERP_DURATION = 180; // ms
-let _targetBounds = null;  // { x, y, width, height } — where we're animating to
-let _lerpFrom = null;      // { x, y, width, height } — where we started
-let _lerpStart = 0;        // timestamp when lerp began
+let _targetBounds = null; // { x, y, width, height } — where we're animating to
+let _lerpFrom = null; // { x, y, width, height } — where we started
+let _lerpStart = 0; // timestamp when lerp began
 let _lerpInterval = null;
 
 /**
@@ -92,15 +92,23 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
 
         const { count, minTiles, orientation, tileMain, tileMains } = getState();
         const bounds = win.getBounds();
-        const { n } = snapToTileBoundary(
-            bounds.width, bounds.height, orientation, count, minTiles, tileMain, tileMains
-        );
+        const { n } = snapToTileBoundary({
+            proposedWidth: bounds.width,
+            proposedHeight: bounds.height,
+            orientation,
+            maxTiles: count,
+            minTiles,
+            tileMain,
+            tileMains
+        });
 
         if (n !== _visibleTileCount) {
             _visibleTileCount = n;
+
             // NB: don't treat this as a user resize — on a frameless window the
             // native 'resize' only fires from our own programmatic setBounds.
-            win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: n, edge: null });
+            win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, { count: n,
+                edge: null });
         }
     });
 
@@ -116,7 +124,10 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
         const { width, height } = computeWindowSize(_visibleTileCount, orientation, tileMain);
 
         if (bounds.width !== width || bounds.height !== height) {
-            win.setBounds({ x: bounds.x, y: bounds.y, width, height });
+            win.setBounds({ x: bounds.x,
+                y: bounds.y,
+                width,
+                height });
         }
     });
 }
@@ -125,8 +136,20 @@ function attachNativeResizeListener(win, getState, isExternalActive) {
  * Given a proposed window size, computes how many tiles fit and returns
  * the snapped dimensions. `minTiles` defaults to 1; pinning N participants
  * raises it to N so the panel can't be shrunk past the pinned slots.
+ *
+ * @param {Object} params - Snap parameters.
+ * @param {number} params.proposedWidth - Candidate window width.
+ * @param {number} params.proposedHeight - Candidate window height.
+ * @param {string} params.orientation - 'horizontal' | 'vertical'.
+ * @param {number} params.maxTiles - Upper bound on the visible tile count.
+ * @param {number} [params.minTiles] - Lower bound on the visible tile count.
+ * @param {number} params.tileMain - Uniform main-axis tile size estimate.
+ * @param {number[]} params.tileMains - Per-tile main-axis sizes, when known.
+ * @returns {{ n: number, width: number, height: number }} Snapped tile count and size.
  */
-function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1, tileMain, tileMains) {
+function snapToTileBoundary({
+    proposedWidth, proposedHeight, orientation, maxTiles, minTiles = 1, tileMain, tileMains
+}) {
     const pad2 = TILE_PAD * 2;
     const bdr2 = BORDER * 2;
     const win2 = WINDOW_PAD * 2;
@@ -145,7 +168,9 @@ function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles
             Math.round((availableMain + TILE_GAP) / (tm + TILE_GAP)), maxTiles));
         const { width, height } = computeWindowSize(n, orientation, tileMain);
 
-        return { n, width, height };
+        return { n,
+            width,
+            height };
     }
 
     // Snap by the real per-video tile sizes: a tile is added once the drag passes
@@ -182,7 +207,9 @@ function snapToTileBoundary(proposedWidth, proposedHeight, orientation, maxTiles
 
     const { width, height } = windowFromMainExtent(mainExtent, orientation);
 
-    return { n: clamped, width, height };
+    return { n: clamped,
+        width,
+        height };
 }
 
 /**
@@ -254,9 +281,15 @@ function startEdgeResize(edge) {
             proposedWidth = computeWindowSize(1, orientation, tileMain).width;
         }
 
-        const { n, width, height } = snapToTileBoundary(
-            proposedWidth, proposedHeight, orientation, count, minTiles, tileMain, tileMains
-        );
+        const { n, width, height } = snapToTileBoundary({
+            proposedWidth,
+            proposedHeight,
+            orientation,
+            maxTiles: count,
+            minTiles,
+            tileMain,
+            tileMains
+        });
 
         // Compute target position — anchor to opposite edge.
         let newX = _startWindowX;
@@ -268,14 +301,17 @@ function startEdgeResize(edge) {
             newY = _startWindowY + _startWindowSize - height;
         }
 
-        const target = { x: Math.round(newX), y: Math.round(newY), width, height };
+        const target = { x: Math.round(newX),
+            y: Math.round(newY),
+            width,
+            height };
 
         // If snap point changed, start a lerp animation to the new bounds.
         if (n !== _visibleTileCount) {
             _visibleTileCount = n;
             win.webContents.send(IPC.VISIBLE_COUNT_CHANGED, {
                 count: n,
-                edge: _resizeEdge,
+                edge: _resizeEdge
             });
             _startLerp(win, target);
         } else if (!_targetBounds
@@ -324,12 +360,15 @@ function _startLerp(win, target) {
         // Ease-out quart — smooth deceleration.
         const ease = 1 - Math.pow(1 - t, 4);
 
-        const x = Math.round(_lerpFrom.x + (_targetBounds.x - _lerpFrom.x) * ease);
-        const y = Math.round(_lerpFrom.y + (_targetBounds.y - _lerpFrom.y) * ease);
-        const w = Math.round(_lerpFrom.width + (_targetBounds.width - _lerpFrom.width) * ease);
-        const h = Math.round(_lerpFrom.height + (_targetBounds.height - _lerpFrom.height) * ease);
+        const x = Math.round(_lerpFrom.x + ((_targetBounds.x - _lerpFrom.x) * ease));
+        const y = Math.round(_lerpFrom.y + ((_targetBounds.y - _lerpFrom.y) * ease));
+        const w = Math.round(_lerpFrom.width + ((_targetBounds.width - _lerpFrom.width) * ease));
+        const h = Math.round(_lerpFrom.height + ((_targetBounds.height - _lerpFrom.height) * ease));
 
-        win.setBounds({ x, y, width: Math.max(1, w), height: Math.max(1, h) });
+        win.setBounds({ x,
+            y,
+            width: Math.max(1, w),
+            height: Math.max(1, h) });
 
         if (t >= 1) {
             _stopLerp();
@@ -419,5 +458,5 @@ module.exports = {
     isResizing,
     attachNativeResizeListener,
     setupResizeHandlers,
-    cleanup,
+    cleanup
 };
