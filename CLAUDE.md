@@ -159,30 +159,42 @@ Uses `@jitsi/eslint-config` with:
 
 ## Platform-Specific Notes
 
+Sonacove Meets ships for **Windows and macOS only** (no Linux release).
+
 ### macOS
 - Menu bar always visible (for copy/paste functionality)
 - Signing/notarization handled in CI via secrets
 - Universal binaries built (x86_64 + arm64)
-
-### Linux
-- AppImage and Deb packages for x86_64 and arm64
-- PipeWire support enabled for Wayland screen sharing
-- Requires libfuse2 on Ubuntu 22.04+
+- Artifacts: `Sonacove-Meets.dmg`, `Sonacove-Meets.zip` (+ blockmaps), `latest-mac.yml`
 
 ### Windows
 - Single instance lock enforced
 - Protocol handling via registry
+- Signed during the build via the electron-builder `win.signtoolOptions.sign`
+  hook (Azure Trusted Signing in `code-signing.js`), so `latest.yml` is
+  generated over the signed installer
+- Artifacts: `Sonacove-Meets-Setup.exe` (+ blockmap), `latest.yml`
+
+> Asset names are a **download contract** with the website (`../sonacove`).
+> They are pinned via `build.win`/`build.mac` `artifactName` in `package.json`
+> and enforced by the release workflow's verification gate.
 
 ## Release Process
 
-Documented in README.md Publishing section:
-1. Create release branch: `git checkout -b release-X-Y-Z`
-2. Version bump: `npm version [patch|minor|major]`
-3. Push and create PR: `gh pr create`
-4. Create draft release: `gh release create vX.Y.Z --draft --title X.Y.Z`
-5. Merge PR (triggers CI build)
-6. Test binaries from draft release
-7. Publish release when ready
+Releases are cut entirely by the **Release** workflow
+(`.github/workflows/release.yml`) — see the README "Publishing" section.
+
+1. Actions → **Release** → Run workflow → choose a bump (`patch`/`minor`/`major`)
+   or an explicit `version_override`.
+2. The workflow resolves+validates the version, creates the tag and a draft
+   release, builds/signs/notarizes both platforms (version injected from the tag
+   via `--config.extraMetadata.version`; `package.json` is never committed),
+   uploads all assets to the draft, verifies completeness, then flips it to
+   public **Latest** atomically, and smoke-tests the `/releases/latest` URLs.
+
+**Never create or publish releases from the GitHub UI and never hand-push tags.**
+The workflow is the only supported path; the release is invisible (a draft,
+excluded from `/releases/latest`) until every asset is present and verified.
 
 ## Key Dependencies
 

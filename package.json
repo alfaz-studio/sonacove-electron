@@ -53,7 +53,7 @@
       "category": "public.app-category.video-conferencing",
       "hardenedRuntime": true,
       "entitlements": "resources/entitlements.mac.plist",
-      "artifactName": "${productName}.${ext}",
+      "artifactName": "Sonacove-Meets.${ext}",
       "target": [
         {
           "target": "dmg",
@@ -79,7 +79,13 @@
       "target": "nsis",
       "icon": "resources/icon.ico",
       "artifactName": "Sonacove-Meets-Setup.${ext}",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "signtoolOptions": {
+        "sign": "code-signing.js",
+        "signingHashAlgorithms": [
+          "sha256"
+        ]
+      }
     },
     "nsis": {
       "oneClick": false,
@@ -92,7 +98,6 @@
       "uninstallerIcon": "resources/icon.ico"
     },
     "afterPack": "code-signing.js",
-    "afterAllArtifactBuild": "code-signing.js",
     "directories": {
       "buildResources": "resources"
     }
