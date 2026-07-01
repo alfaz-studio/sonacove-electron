@@ -11,7 +11,7 @@ jobs:
     name: Add issue or PR to project board
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
-      - uses: actions/add-to-project@v1.0.2
+      - uses: actions/add-to-project@v2.0.0
         with:
           project-url: https://github.com/orgs/alfaz-studio/projects/8
           github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
