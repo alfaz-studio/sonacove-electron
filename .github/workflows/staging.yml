@@ -182,19 +182,19 @@ jobs:
       contents: write
     steps:
       - name: Checkout PR code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.setup.outputs.head_sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           # Pinned patch for reproducible builds (was floating '22').
           node-version: '22.12.0'
           cache: 'npm'
 
       - name: Cache Electron binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/electron
@@ -341,7 +341,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Comment on PR with build links
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ needs.setup.outputs.pr_number }}
           HEAD_SHA: ${{ needs.setup.outputs.head_sha }}
