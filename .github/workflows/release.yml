@@ -238,6 +238,10 @@ jobs:
           # Blockmaps are optional (differential-update optimization); the
           # publish job's gate enforces the required core assets.
           if-no-files-found: warn
+          # Same-run hand-off to the publish job only; the released binaries
+          # live on the GitHub Release. Purge after a day instead of the
+          # default 90 days so they stop piling up against org storage.
+          retention-days: 1
           path: |
             dist/Sonacove-Meets.dmg
             dist/Sonacove-Meets.dmg.blockmap
@@ -252,6 +256,8 @@ jobs:
           name: release-windows
           # Blockmap is optional; the publish job's gate enforces the core assets.
           if-no-files-found: warn
+          # See release-macos above — same-run hand-off only, purge after a day.
+          retention-days: 1
           path: |
             dist/Sonacove-Meets-Setup.exe
             dist/Sonacove-Meets-Setup.exe.blockmap
